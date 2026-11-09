@@ -18,6 +18,7 @@ import { loadGatewayRuntimeConfig, type GatewayRuntimeConfig } from "./config.js
 import { discoverOpenRouterVoices, loadModelCatalog, mergePinnedModels } from "./models.js";
 import { hasFreshScoutCache, scoutModels } from "./scout.js";
 import { createRuntime } from "./runtime.js";
+import { createMeteredFetch } from "./metering/fetch.js";
 import type { ModelUpdate } from "./gateway.js";
 import { loadProjectEnvironment } from "./environment.js";
 import { createGatewayServer } from "./gateway.js";
@@ -70,6 +71,8 @@ async function main(): Promise<void> {
         strategy: config.modelStrategy,
         probe: config.scoutProbe,
         cacheFile: config.scoutCacheFile,
+        // Probes are real (tiny) paid requests: meter them as "scout".
+        fetchImpl: createMeteredFetch({ meter: runtime.meter, ownerId: runtime.ownerId }),
         probePrompts: {
           voice: buildVoicePrompt(config.assistantName),
           brain: buildBrainSystemPrompt(config.genUiEnabled, config.assistantName)

@@ -29,6 +29,7 @@ import {
 import { WebSocket, WebSocketServer } from "ws";
 import { hedgedStream } from "./hedge.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
+import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
 
 export const DEFAULT_MAX_AUDIO_TURN_BYTES = 25 * 1024 * 1024;
 
@@ -331,11 +332,17 @@ export async function createGatewayServer(
     }
   });
 
+  // Every model call through these providers is recorded on the usage meter.
+  const providers = meterProviders(options.providers, {
+    meter: config.runtime.meter,
+    ownerId: config.runtime.ownerId,
+    catalog: () => config.modelCatalog
+  });
   const connections = new Set<GatewayConnection>();
   webSocketServer.on("connection", (socket) => {
     const connection = new GatewayConnection(
       socket,
-      options.providers,
+      providers,
       config
     );
     connections.add(connection);
@@ -378,6 +385,8 @@ export async function createGatewayServer(
 class GatewayConnection {
   private readonly session: SessionState;
   private disposed = false;
+  /** Last budget check was close to a cap (cheaper models in use). */
+  private economyMode = false;
   private messageQueue = Promise.resolve();
 
   constructor(
@@ -553,7 +562,7 @@ class GatewayConnection {
 
       // ── metering ──
       case WS_EVENTS.USAGE_REQUEST:
-        this.notAvailable(message.type);
+        this.pushUsage();
         return;
 
       // ── server-side conversations ──
@@ -571,6 +580,59 @@ class GatewayConnection {
 
   private notAvailable(type: string): void {
     this.send({ type: "error", message: `${type} is not available on this gateway yet` });
+  }
+
+  private pushUsage(): void {
+    this.send({
+      type: WS_EVENTS.USAGE_UPDATE,
+      usage: buildUsageView({
+        meter: this.config.runtime.meter,
+        ownerId: this.config.runtime.ownerId,
+        sessionId: this.session.sessionId,
+        economyMode: this.economyMode
+      })
+    });
+  }
+
+  /** Labels for metered provider calls. */
+  private usageMeta(feature: string, requestId?: string): Record<string, string | undefined> {
+    return { feature, requestId, sessionId: this.session.sessionId };
+  }
+
+  /**
+   * Budget check before a voice turn or deep-brain run. Returns the model to
+   * use (the Cheapest preset's when close to a cap), or undefined when blocked
+   * (BUDGET_BLOCKED has been sent).
+   */
+  private budgetFor(
+    feature: "voice" | "brain",
+    model: string | undefined,
+    requestId: string
+  ): { model: string | undefined } | undefined {
+    const budget = checkTurnBudget({
+      meter: this.config.runtime.meter,
+      ownerId: this.config.runtime.ownerId,
+      feature,
+      model,
+      catalog: this.config.modelCatalog,
+      sessionId: this.session.sessionId,
+      requestId
+    });
+    if (!budget.allowed) {
+      this.config.logger.warn("budget.blocked", {
+        sessionId: this.session.sessionId,
+        requestId,
+        feature,
+        scope: budget.scope
+      });
+      this.send({ type: WS_EVENTS.BUDGET_BLOCKED, requestId, scope: budget.scope, message: budget.message });
+      return undefined;
+    }
+    if (budget.economy !== this.economyMode) {
+      this.economyMode = budget.economy;
+      this.pushUsage();
+    }
+    return { model: budget.model ?? model };
   }
 
   /** Re-resolve settings against a new catalog and tell the browser. */
@@ -1289,7 +1351,7 @@ class GatewayConnection {
         mimeType: normalized.mimeType,
         filename: filenameForMimeType(normalized.mimeType)
       },
-      { signal, model: this.session.settings.sttModel }
+      { signal, model: this.session.settings.sttModel, meta: this.usageMeta("stt", turn.requestId) }
     );
     return result.text.trim();
   }
@@ -1315,7 +1377,8 @@ class GatewayConnection {
           {
             signal: controller.signal,
             model,
-            extraBody: { ...this.llmParamsFor(model), max_tokens: 4 }
+            extraBody: { ...this.llmParamsFor(model), max_tokens: 4 },
+            meta: this.usageMeta("warmup")
           }
         )) {
           break;
@@ -1524,9 +1587,11 @@ class GatewayConnection {
   /** Background deep-brain run: reasoning + optional OpenUI visual, then a spoken gist. */
   private async runDeepBrain(parentRequestId: string, task: string): Promise<void> {
     const live = this.config.live;
-    const model = this.session.settings.llmModel;
-    if (!live || !model) return;
+    if (!live || !this.session.settings.llmModel) return;
     const brainId = this.config.createId();
+    const budget = this.budgetFor("brain", this.session.settings.llmModel, brainId);
+    if (!budget?.model) return;
+    const model = budget.model;
     const controller = new AbortController();
     this.session.brainRuns.set(brainId, controller);
     const startedTurn = this.session.turnCounter;
@@ -1583,7 +1648,7 @@ class GatewayConnection {
           ...this.conversation(),
           { role: "user", content: `Task from the voice: ${task}` }
         ],
-        { signal: controller.signal, model, extraBody: this.llmParamsFor(model) }
+        { signal: controller.signal, model, extraBody: this.llmParamsFor(model), meta: this.usageMeta("brain", brainId) }
       )) {
         if (controller.signal.aborted || this.disposed) return;
         emit(splitter ? splitter.push(chunk.delta) : { speech: chunk.delta, ui: "" });
@@ -1592,6 +1657,7 @@ class GatewayConnection {
       if (controller.signal.aborted || this.disposed) return;
 
       this.send({ type: WS_EVENTS.BRAIN_DONE, requestId: brainId, reason: "stop" });
+      this.pushUsage();
       const gist = speech.trim();
       this.session.history.push({
         role: "assistant",
@@ -1647,6 +1713,17 @@ class GatewayConnection {
     timing: RequestTiming,
     plan?: ResponsePlan
   ): Promise<void> {
+    const feature = plan?.parser === "voice" ? "voice" : "brain";
+    let model = plan ? plan.model : this.session.settings.llmModel;
+    if (plan?.speakOnly === undefined) {
+      const budget = this.budgetFor(feature, model, requestId);
+      if (!budget) {
+        // Settle the turn in the browser; the budget notice explains why.
+        this.send({ type: WS_EVENTS.LLM_DONE, requestId, reason: "error" });
+        return;
+      }
+      model = budget.model;
+    }
     timing.llmStartedAt = this.config.now();
     const run: ActiveRun = {
       requestId,
@@ -1742,8 +1819,8 @@ class GatewayConnection {
         this.send({ type: WS_EVENTS.UI_DELTA, requestId, delta: ui });
       }
     };
-    const model = plan ? plan.model : this.session.settings.llmModel;
-    const extraBody = plan ? plan.extraBody : this.llmParamsFor(model);
+    const extraBody =
+      plan && model === plan.model ? plan.extraBody : this.llmParamsFor(model);
     const messages = plan ? plan.messages : this.session.history;
     const hedgeAfterMs = this.config.hedge?.voiceAfterMs;
     let winningModel = model;
@@ -1757,6 +1834,7 @@ class GatewayConnection {
                 const params = this.llmParamsFor(attemptModel);
                 return this.providers.llm.streamText(messages, {
                   signal,
+                  meta: this.usageMeta(feature, requestId),
                   ...(attemptModel ? { model: attemptModel } : {}),
                   ...(params ? { extraBody: params } : {})
                 });
@@ -1785,6 +1863,7 @@ class GatewayConnection {
             )
           : this.providers.llm.streamText(messages, {
               signal: run.controller.signal,
+              meta: this.usageMeta(feature, requestId),
               ...(model ? { model } : {}),
               ...(extraBody ? { extraBody } : {})
             });
@@ -1959,7 +2038,7 @@ class GatewayConnection {
       ttsHedge !== undefined
         ? hedgedStream(
             // Same voice for the duplicate request, so the reply sounds the same.
-            (signal) => tts.synthesize(input, { signal, model: ttsModelId }),
+            (signal) => tts.synthesize(input, { signal, model: ttsModelId, meta: this.usageMeta("tts", run.requestId) }),
             {
               hedgeAfterMs: ttsHedge,
               signal: run.controller.signal,
@@ -1972,7 +2051,11 @@ class GatewayConnection {
                 })
             }
           )
-        : tts.synthesize(input, { signal: run.controller.signal, model: ttsModelId });
+        : tts.synthesize(input, {
+            signal: run.controller.signal,
+            model: ttsModelId,
+            meta: this.usageMeta("tts", run.requestId)
+          });
     for await (const chunk of chunks) {
       if (run.interrupted || run.controller.signal.aborted) {
         return undefined;
@@ -2070,6 +2153,7 @@ class GatewayConnection {
     if (this.session.current === run) {
       this.session.current = undefined;
     }
+    if (stage !== "interrupted") this.pushUsage();
     const pending = this.session.pendingSpeech;
     if (pending && pending.requestId !== run.requestId && !this.disposed) {
       this.session.pendingSpeech = undefined;

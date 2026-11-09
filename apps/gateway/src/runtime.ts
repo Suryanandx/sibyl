@@ -15,6 +15,7 @@ import {
   type ToolRegistry,
   type UsageMeter
 } from "@open-gpt-live/core";
+import { createUsageMeter } from "./metering/meter.js";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -32,7 +33,7 @@ export interface RuntimeOptions {
 export async function createRuntime(options: RuntimeOptions): Promise<GatewayRuntime> {
   const store = createMemoryStore();
   const tools = createToolRegistry();
-  const meter = createNoopMeter();
+  const meter = await createUsageMeter({ store, ownerId: DEFAULT_OWNER_ID, env: options.env, log: options.log });
   await installTools({ tools, store, meter, options });
   return {
     ownerId: DEFAULT_OWNER_ID,

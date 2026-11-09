@@ -25,6 +25,27 @@ export interface ProviderCallOptions {
    * e.g. OpenRouter's `{ reasoning: { effort: "low" } }` or `{ provider: {...} }`.
    */
   extraBody?: Record<string, unknown>;
+  /**
+   * Called with the usage the provider reports for this call (OpenRouter's
+   * final `usage` chunk with `cost`, or an STT response's `usage`). Not called
+   * when the provider reports nothing; callers then estimate.
+   */
+  onUsage?: (usage: ProviderUsage) => void;
+  /**
+   * Opaque caller labels (feature, request id, ...) for decorators such as
+   * cost metering. Never sent to the provider.
+   */
+  meta?: Record<string, string | undefined>;
+}
+
+/** Usage reported by a model call (same shape as core's ModelUsage, plus audio units). */
+export interface ProviderUsage {
+  /** Actual USD cost when the provider reports it (OpenRouter `usage.cost`). */
+  costUsd?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  /** Seconds of audio billed (transcription priced per duration). */
+  seconds?: number;
 }
 
 export interface STTAudioInput {
@@ -99,6 +120,30 @@ interface OpenAIChatCompletionChunk {
       content?: string;
     };
   }>;
+  usage?: unknown;
+}
+
+/** Normalize an OpenAI/OpenRouter `usage` object into ProviderUsage. */
+export function parseProviderUsage(value: unknown): ProviderUsage | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const num = (...keys: string[]): number | undefined => {
+    for (const key of keys) {
+      const candidate = raw[key];
+      if (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0) return candidate;
+    }
+    return undefined;
+  };
+  const usage: ProviderUsage = {};
+  const costUsd = num("cost");
+  const promptTokens = num("prompt_tokens", "input_tokens");
+  const completionTokens = num("completion_tokens", "output_tokens");
+  const seconds = num("seconds");
+  if (costUsd !== undefined) usage.costUsd = costUsd;
+  if (promptTokens !== undefined) usage.promptTokens = promptTokens;
+  if (completionTokens !== undefined) usage.completionTokens = completionTokens;
+  if (seconds !== undefined) usage.seconds = seconds;
+  return Object.keys(usage).length > 0 ? usage : undefined;
 }
 
 export class OpenAILLMProvider implements LLMProvider {
@@ -134,6 +179,8 @@ export class OpenAILLMProvider implements LLMProvider {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        // OpenRouter reports the real cost in the final chunk when asked.
+        ...(isOpenRouterUrl(this.baseUrl) ? { usage: { include: true } } : {}),
         ...options.extraBody,
         model: options.model ?? this.model,
         messages,
@@ -173,6 +220,10 @@ export class OpenAILLMProvider implements LLMProvider {
             }
 
             const parsed = JSON.parse(data) as OpenAIChatCompletionChunk;
+            const usage = parseProviderUsage(parsed.usage);
+            if (usage) {
+              options.onUsage?.(usage);
+            }
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
               yield { delta };
@@ -246,9 +297,13 @@ export class OpenAIWhisperProvider implements STTProvider {
       throw new Error(`OpenAI-compatible STT API error ${response.status}: ${body}`);
     }
 
-    const parsed = (await response.json()) as { text?: unknown };
+    const parsed = (await response.json()) as { text?: unknown; usage?: unknown };
     if (typeof parsed.text !== "string") {
       throw new Error("OpenAI-compatible STT API returned no text");
+    }
+    const usage = parseProviderUsage(parsed.usage);
+    if (usage) {
+      options.onUsage?.(usage);
     }
 
     return { text: parsed.text };

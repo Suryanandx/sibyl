@@ -86,7 +86,7 @@ export interface ScoutOptions {
 }
 
 /** Typical usage per turn, used to turn per-token prices into per-turn cost. */
-const USAGE = {
+export const USAGE = {
   voice: { prompt: 1_800, audio: 160, completion: 80, reasoning: 150 },
   llm: { prompt: 16_000, completion: 1_300, reasoning: 400 },
   sttSeconds: 6,
@@ -269,12 +269,12 @@ function isUsable(model: OpenRouterModel, options: { allowFree: boolean; now: nu
   return true;
 }
 
-function price(model: OpenRouterModel, key: string, fallback = 0): number {
+export function price(model: OpenRouterModel, key: string, fallback = 0): number {
   const value = Number(model.pricing?.[key]);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
-function voiceCost(model: OpenRouterModel, reasoning: boolean): number {
+export function voiceCost(model: OpenRouterModel, reasoning: boolean): number {
   const prompt = price(model, "prompt");
   const completion = price(model, "completion");
   return (
@@ -285,7 +285,7 @@ function voiceCost(model: OpenRouterModel, reasoning: boolean): number {
   );
 }
 
-function llmCost(model: OpenRouterModel, reasoning: boolean): number {
+export function llmCost(model: OpenRouterModel, reasoning: boolean): number {
   const completion = price(model, "completion");
   return (
     price(model, "prompt") * USAGE.llm.prompt +
@@ -294,7 +294,7 @@ function llmCost(model: OpenRouterModel, reasoning: boolean): number {
   );
 }
 
-function sttCost(model: OpenRouterModel): number {
+export function sttCost(model: OpenRouterModel): number {
   const completion = price(model, "completion");
   // Flat-priced transcription is billed per second of audio; token-priced
   // models (e.g. gpt-4o-mini-transcribe) bill audio input + text output tokens.
@@ -303,7 +303,7 @@ function sttCost(model: OpenRouterModel): number {
     : price(model, "prompt") * USAGE.sttTokens.prompt + completion * USAGE.sttTokens.completion;
 }
 
-function ttsCost(model: OpenRouterModel): number {
+export function ttsCost(model: OpenRouterModel): number {
   const completion = price(model, "completion");
   // Flat-priced voices bill per character; token-priced ones per audio token.
   return completion === 0
