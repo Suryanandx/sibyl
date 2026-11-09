@@ -140,6 +140,7 @@ async function main(): Promise<void> {
     port: config.port,
     host: config.host,
     allowedOrigins: config.allowedOrigins,
+    ...(process.env.SIBYL_OWNER_TOKEN?.trim() ? { ownerToken: process.env.SIBYL_OWNER_TOKEN.trim() } : {}),
     providers: {
       llm: new OpenAILLMProvider({
         ...config.llm,

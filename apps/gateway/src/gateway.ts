@@ -27,6 +27,8 @@ import {
   toSpeakableText
 } from "@open-gpt-live/genui";
 import { WebSocket, WebSocketServer } from "ws";
+import { isAuthorized } from "./auth.js";
+import { ConversationRecorder, historyFromMessages } from "./conversations.js";
 import { hedgedStream } from "./hedge.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
@@ -48,6 +50,8 @@ export interface GatewayServerOptions {
   port?: number;
   host?: string;
   allowedOrigins?: string[];
+  /** Single-owner login: WebSocket upgrades must carry `?token=<ownerToken>`. */
+  ownerToken?: string;
   maxAudioTurnBytes?: number;
   livePartialInitialIntervalMs?: number;
   livePartialLongTurnIntervalMs?: number;
@@ -308,11 +312,14 @@ export async function createGatewayServer(
         service: "open-gpt-live-gateway",
         uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
         connections: webSocketServer.clients.size,
-        ...options.healthDetails
+        ...options.healthDetails,
+        // Lets the web app tell "sign in" apart from "gateway down".
+        ownerLogin: Boolean(options.ownerToken)
       });
       response.writeHead(200, {
         "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store"
+        "cache-control": "no-store",
+        "access-control-allow-origin": "*"
       });
       response.end(body);
       return;
@@ -323,7 +330,11 @@ export async function createGatewayServer(
   const allowedOrigins = new Set(options.allowedOrigins ?? []);
   const webSocketServer = new WebSocketServer({
     server: httpServer,
-    verifyClient: ({ origin }, done) => {
+    verifyClient: ({ origin, req }, done) => {
+      if (!isAuthorized(options.ownerToken, req.url)) {
+        done(false, 401, "Unauthorized");
+        return;
+      }
       if (allowedOrigins.size === 0 || !origin || allowedOrigins.has(origin)) {
         done(true);
         return;
@@ -388,6 +399,7 @@ class GatewayConnection {
   /** Last budget check was close to a cap (cheaper models in use). */
   private economyMode = false;
   private messageQueue = Promise.resolve();
+  private readonly conversations: ConversationRecorder;
 
   constructor(
     private readonly socket: WebSocket,
@@ -403,6 +415,13 @@ class GatewayConnection {
       turnCounter: 0,
       userChosen: new Set()
     };
+    this.conversations = new ConversationRecorder({
+      store: config.runtime.store,
+      ownerId: config.runtime.ownerId,
+      createId: config.createId,
+      log: (event, fields) => config.logger.warn(event, { sessionId: this.session.sessionId, ...fields }),
+      onListChanged: (items) => this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items })
+    });
   }
 
   start(): void {
@@ -446,7 +465,7 @@ class GatewayConnection {
     });
   }
 
-  private handleRawMessage(raw: string): void {
+  private handleRawMessage(raw: string): void | Promise<void> {
     if (this.disposed) {
       return;
     }
@@ -468,10 +487,10 @@ class GatewayConnection {
       return;
     }
 
-    this.handleMessage(result.data);
+    return this.handleMessage(result.data);
   }
 
-  private handleMessage(message: ClientMessage): void {
+  private handleMessage(message: ClientMessage): void | Promise<void> {
     if (message.type === WS_EVENTS.SESSION_START) {
       if (message.sessionId) {
         this.session.sessionId = message.sessionId;
@@ -539,8 +558,9 @@ class GatewayConnection {
     }
 
     if (message.type !== WS_EVENTS.AUDIO_CHUNK) {
-      this.handleV03Message(message);
-      return;
+      // Awaited by the message queue: a conversation.open must restore the
+      // history before the next user message is handled.
+      return this.handleV03Message(message);
     }
 
     void this.handleAudioChunk(message);
@@ -551,9 +571,9 @@ class GatewayConnection {
    * conversations). Each capability owns its own case; unhandled ones are
    * acknowledged with an error so the browser never waits silently.
    */
-  private handleV03Message(
+  private async handleV03Message(
     message: Exclude<ClientMessage, AudioChunkMessage | { type: "session.start" | "session.update" | "interrupt" | "playback.ack" | "vad.speech_start" | "vad.speech_end" | "user.text" }>
-  ): void {
+  ): Promise<void> {
     switch (message.type) {
       // ── approvals (brain tool loop) ──
       case WS_EVENTS.APPROVAL_DECISION:
@@ -567,15 +587,48 @@ class GatewayConnection {
 
       // ── server-side conversations ──
       case WS_EVENTS.CONVERSATIONS_REQUEST:
-        this.notAvailable(message.type);
+        this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items: await this.conversations.list() });
         return;
       case WS_EVENTS.CONVERSATION_OPEN:
-        this.notAvailable(message.type);
+        await this.openConversation(message.conversationId);
         return;
       case WS_EVENTS.CONVERSATION_DELETE:
-        this.notAvailable(message.type);
+        if (await this.conversations.remove(message.conversationId)) {
+          // The live conversation is gone: continue in a fresh one.
+          await this.openConversation();
+        }
+        this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items: await this.conversations.list() });
         return;
     }
+  }
+
+  /** Start a new conversation (no id) or resume a stored one with its context. */
+  private async openConversation(conversationId?: string): Promise<void> {
+    const record = conversationId ? await this.conversations.open(conversationId) : undefined;
+    if (conversationId && !record) {
+      this.send({ type: "error", message: "Conversation not found" });
+      return;
+    }
+    if (!record) this.conversations.startNew();
+    this.interruptCurrentRun("conversation switched");
+    for (const controller of this.session.brainRuns.values()) controller.abort("conversation switched");
+    this.session.brainRuns.clear();
+    this.session.pendingSpeech = undefined;
+    this.session.lastUtterance = undefined;
+    this.session.history.splice(1, Infinity, ...historyFromMessages(record?.messages ?? []));
+    this.send({
+      type: WS_EVENTS.CONVERSATION_STATE,
+      conversationId: this.conversations.conversationId,
+      title: record?.title ?? "New conversation",
+      messages: record?.messages ?? []
+    });
+  }
+
+  /** Remember a user turn so it is saved with its reply. */
+  private beginStoredTurn(requestId: string, entry: LLMMessage, timing: RequestTiming): void {
+    this.conversations.beginTurn(requestId, entry, timing.kind === "text" ? "text" : "audio", (item) =>
+      this.session.history.includes(item)
+    );
   }
 
   private notAvailable(type: string): void {
@@ -765,7 +818,9 @@ class GatewayConnection {
       return;
     }
 
-    this.session.history.push({ role: "user", content: text });
+    const entry: LLMMessage = { role: "user", content: text };
+    this.session.history.push(entry);
+    this.beginStoredTurn(requestId, entry, timing);
     await this.streamAssistantResponse(requestId, timing);
   }
 
@@ -873,6 +928,7 @@ class GatewayConnection {
     }
     const index = this.session.history.lastIndexOf(last.userEntry);
     if (index >= 0) this.session.history.splice(index, index === this.session.history.length - 1 ? 1 : 2);
+    this.conversations.retract(last.requestId);
     // ~250 ms of silence between the fragments keeps the pause audible.
     const rate = sampleRateFromMime(last.mimeType);
     const gap = Buffer.alloc(Math.round(rate * 0.25) * 2);
@@ -1534,6 +1590,7 @@ class GatewayConnection {
     this.session.pendingSpeech = undefined;
     const previous = this.conversation();
     this.session.history.push(userEntry);
+    this.beginStoredTurn(requestId, userEntry, timing);
     const voiceModel = this.pickVoiceModel();
     await this.streamAssistantResponse(requestId, timing, {
       parser: "voice",
@@ -1559,6 +1616,7 @@ class GatewayConnection {
           // Not speech for us: drop the turn from history.
           const index = this.session.history.lastIndexOf(userEntry);
           if (index >= 0) this.session.history.splice(index, 1);
+          this.conversations.dropTurn(requestId);
           return;
         }
         // Some voice models promise to look into something but forget the
@@ -1577,6 +1635,11 @@ class GatewayConnection {
             ? `${spoken}\n(Asked the deep brain: ${brainTask})`
             : spoken
         });
+        this.conversations.completeReply(
+          requestId,
+          { content: spoken, ...(voiceModel ? { model: voiceModel } : {}) },
+          timing.kind === "text" ? undefined : this.session.transcriptReady
+        );
         if (brainTask) {
           void this.runDeepBrain(requestId, brainTask);
         }
@@ -1663,6 +1726,7 @@ class GatewayConnection {
         role: "assistant",
         content: `[deep brain] ${gist}${ui.trim() ? " (A visual with the details is on the user's screen.)" : ""}`
       });
+      this.conversations.brainResult(brainId, parentRequestId, { content: gist, ui, task, model });
       this.config.logger.info("brain.finished", {
         sessionId: this.session.sessionId,
         requestId: brainId,
@@ -1921,6 +1985,11 @@ class GatewayConnection {
         }
         if (!plan && run.text) {
           this.session.history.push({ role: "assistant", content: run.text });
+          this.conversations.completeReply(requestId, {
+            content: speechText,
+            ui: uiText,
+            ...(winningModel ? { model: winningModel } : {})
+          });
         }
         const silent = Boolean(voiceParser?.isSilence) && !speechText.trim();
         plan?.onText?.({
