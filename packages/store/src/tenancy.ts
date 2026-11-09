@@ -77,7 +77,12 @@ export const TENANCY_MIGRATION = `
 
 type Row = Record<string, SQLInputValue>;
 
-export function createSqliteTenancyStores(db: DatabaseSync): { organizations: OrganizationStore; credits: CreditStore } {
+export function createSqliteTenancyStores(db: DatabaseSync): {
+  organizations: OrganizationStore;
+  credits: CreditStore;
+  /** Synchronous append, for use inside the caller's transaction (usage event + its charge). */
+  appendCredit(entry: CreditEntry): boolean;
+} {
   const sql = {
     orgInsert: db.prepare("INSERT INTO organizations (id, created_at, data) VALUES (?, ?, ?)"),
     orgGet: db.prepare("SELECT data FROM organizations WHERE id = ?"),
@@ -90,7 +95,13 @@ export function createSqliteTenancyStores(db: DatabaseSync): { organizations: Or
     creditList: db.prepare("SELECT data FROM credit_entries WHERE org_id = ? ORDER BY seq DESC LIMIT ?")
   };
   const parse = <T>(row: Row | undefined): T | undefined => (row ? (JSON.parse(String(row.data)) as T) : undefined);
+  const appendCredit = (entry: CreditEntry): boolean => {
+    if (!Number.isSafeInteger(entry.amountMicros)) throw new Error("credit amounts are whole micro-USD");
+    const result = sql.creditInsert.run(entry.orgId, entry.idempotencyKey, entry.amountMicros, entry.at, JSON.stringify(entry));
+    return Number(result.changes) > 0;
+  };
   return {
+    appendCredit,
     organizations: {
       async create(record) {
         sql.orgInsert.run(record.id, record.createdAt, JSON.stringify(record));
@@ -114,9 +125,7 @@ export function createSqliteTenancyStores(db: DatabaseSync): { organizations: Or
     },
     credits: {
       async append(entry: CreditEntry) {
-        if (!Number.isSafeInteger(entry.amountMicros)) throw new Error("credit amounts are whole micro-USD");
-        const result = sql.creditInsert.run(entry.orgId, entry.idempotencyKey, entry.amountMicros, entry.at, JSON.stringify(entry));
-        return Number(result.changes) > 0;
+        return appendCredit(entry);
       },
       async balance(orgId) {
         return Number((sql.creditBalance.get(orgId) as Row).total);

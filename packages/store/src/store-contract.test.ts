@@ -375,6 +375,18 @@ for (const harness of harnesses) {
         expect(await store.kv.get("bob", "prefs")).toBe(42);
       });
 
+      it("lists one key across owners", async () => {
+        await store.kv.set("alice", "wake", { at: 1 });
+        await store.kv.set("bob", "wake", { at: 2 });
+        await store.kv.set("bob", "other", { at: 3 });
+        expect((await store.kv.listByKey("wake")).sort((a, b) => a.ownerId.localeCompare(b.ownerId))).toEqual([
+          { ownerId: "alice", value: { at: 1 } },
+          { ownerId: "bob", value: { at: 2 } }
+        ]);
+        await store.kv.delete("alice", "wake");
+        expect(await store.kv.listByKey("wake")).toEqual([{ ownerId: "bob", value: { at: 2 } }]);
+      });
+
       it("returns copies of stored values", async () => {
         await store.kv.set("alice", "obj", { n: 1 });
         const value = await store.kv.get<{ n: number }>("alice", "obj");

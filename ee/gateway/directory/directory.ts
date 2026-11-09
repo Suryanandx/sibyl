@@ -12,14 +12,20 @@
  * `store.kv` entry (`ee.directory.v1`):
  *
  * - settings: where new people land (workspace + role), just-in-time
- *   creation at SSO sign-in, and group → role rules;
+ *   creation at SSO sign-in, and group → role rules. Workspace and role are
+ *   kept only when set here explicitly; otherwise they follow Admin →
+ *   Organization ("New people also join" / "Default role"), read live, so a
+ *   later change there reaches SSO and SCIM accounts too;
  * - per user: SCIM externalId, provider links (provider id + subject), the
  *   groups the last SSO sign-in reported, and the workspace roles group
  *   rules granted (so a later change can take exactly those back);
  * - SCIM groups (display name, members).
  *
  * Accounts created here have no password (`passwordHash` "!external"); they
- * sign in through SSO.
+ * sign in through SSO. Someone removed from the organization (Admin → Users)
+ * who comes back through SSO or SCIM gets their old account id back as a
+ * fresh account — nothing of the old access, links or groups — exactly like
+ * an invitation does.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -70,8 +76,17 @@ export interface DirectoryGroup {
   updatedAt: number;
 }
 
+/** What is stored: the explicit choices only (workspace and role absent: follow the organization's defaults). */
+interface StoredSettings {
+  version?: 2;
+  defaultWorkspaceId?: string;
+  defaultRole?: Role;
+  jitProvisioning: boolean;
+  groupRoles: GroupRoleRule[];
+}
+
 interface DirectoryData {
-  settings: DirectorySettings;
+  settings: StoredSettings;
   users: Record<string, DirectoryUser>;
   groups: Record<string, DirectoryGroup>;
 }
@@ -89,6 +104,26 @@ export class DirectoryError extends Error {
 }
 
 const DEFAULT_SETTINGS: DirectorySettings = { defaultWorkspaceId: DEFAULT_WORKSPACE_ID, defaultRole: "member", jitProvisioning: true, groupRoles: [] };
+
+/**
+ * Stored settings from before version 2 saved the workspace and role every
+ * time, also when they only repeated the defaults. Keep a value only when it
+ * differs from both the built-in default and the organization's default:
+ * that one was chosen here.
+ */
+function migrateSettings(stored: Partial<DirectorySettings> & { version?: number }, org: { defaultWorkspaceId?: string; defaultRole: Role }): StoredSettings {
+  const out: StoredSettings = {
+    version: 2,
+    jitProvisioning: stored.jitProvisioning ?? DEFAULT_SETTINGS.jitProvisioning,
+    groupRoles: Array.isArray(stored.groupRoles) ? stored.groupRoles : []
+  };
+  const explicit = stored.version === 2;
+  const workspace = stored.defaultWorkspaceId;
+  if (typeof workspace === "string" && (explicit || (workspace !== DEFAULT_SETTINGS.defaultWorkspaceId && workspace !== org.defaultWorkspaceId))) out.defaultWorkspaceId = workspace;
+  const role = stored.defaultRole;
+  if (isRole(role) && role !== "owner" && (explicit || (role !== DEFAULT_SETTINGS.defaultRole && role !== org.defaultRole))) out.defaultRole = role;
+  return out;
+}
 
 export interface DirectoryOptions {
   store: Store;
@@ -121,12 +156,12 @@ export class Directory {
 
   private async load(): Promise<DirectoryData> {
     if (!this.data) {
-      const stored = await this.options.store.kv.get<Partial<DirectoryData>>(this.options.orgId, DIRECTORY_KV_KEY);
-      // Until set here, people from the identity provider land where Admin → Organization sends new people.
-      const org = await readOrgSettings(this.options.store, this.options.orgId);
-      const orgDefaults = { ...(org.defaultWorkspaceId ? { defaultWorkspaceId: org.defaultWorkspaceId } : {}), defaultRole: org.defaultRole };
+      const stored = await this.options.store.kv.get<{ settings?: Partial<DirectorySettings> & { version?: number }; users?: DirectoryData["users"]; groups?: DirectoryData["groups"] }>(
+        this.options.orgId,
+        DIRECTORY_KV_KEY
+      );
       this.data = {
-        settings: { ...DEFAULT_SETTINGS, ...orgDefaults, ...(stored?.settings ?? {}) },
+        settings: migrateSettings(stored?.settings ?? { version: 2 }, await readOrgSettings(this.options.store, this.options.orgId)),
         users: stored?.users ?? {},
         groups: stored?.groups ?? {}
       };
@@ -148,26 +183,48 @@ export class Directory {
 
   /* ───────────── settings ───────────── */
 
+  /** The settings in force: what was chosen here, else the organization's defaults (read now), else the built-in ones. */
   async settings(): Promise<DirectorySettings> {
-    return structuredClone((await this.load()).settings);
+    const stored = (await this.load()).settings;
+    const org = await this.orgDefaults();
+    return {
+      defaultWorkspaceId: stored.defaultWorkspaceId ?? org.defaultWorkspaceId,
+      defaultRole: stored.defaultRole ?? org.defaultRole,
+      jitProvisioning: stored.jitProvisioning,
+      groupRoles: structuredClone(stored.groupRoles)
+    };
+  }
+
+  private async orgDefaults(): Promise<{ defaultWorkspaceId: string; defaultRole: Role }> {
+    const org = await readOrgSettings(this.options.store, this.options.orgId);
+    return { defaultWorkspaceId: org.defaultWorkspaceId ?? DEFAULT_SETTINGS.defaultWorkspaceId, defaultRole: org.defaultRole };
   }
 
   async settingsView(): Promise<DirectorySettingsView> {
     const settings = await this.settings();
+    const stored = (await this.load()).settings;
     const workspaces = (await this.options.store.workspaces.list(this.options.orgId)).map((w) => ({ id: w.id, name: w.name }));
-    return { ...settings, workspaces };
+    return {
+      ...settings,
+      workspaces,
+      followsOrganization: { workspace: stored.defaultWorkspaceId === undefined, role: stored.defaultRole === undefined },
+      organizationDefaults: await this.orgDefaults()
+    };
   }
 
   async updateSettings(input: Record<string, unknown>): Promise<DirectorySettingsView> {
     const workspaces = new Set((await this.options.store.workspaces.list(this.options.orgId)).map((w) => w.id));
     workspaces.add(DEFAULT_WORKSPACE_ID);
     await this.mutate((data) => {
-      const next = { ...data.settings };
-      if (input.defaultWorkspaceId !== undefined) {
+      const next: StoredSettings = { ...data.settings, version: 2 };
+      // null: follow Admin → Organization again.
+      if (input.defaultWorkspaceId === null) delete next.defaultWorkspaceId;
+      else if (input.defaultWorkspaceId !== undefined) {
         if (typeof input.defaultWorkspaceId !== "string" || !workspaces.has(input.defaultWorkspaceId)) throw new DirectoryError(400, "invalid_workspace", "Choose an existing workspace.");
         next.defaultWorkspaceId = input.defaultWorkspaceId;
       }
-      if (input.defaultRole !== undefined) {
+      if (input.defaultRole === null) delete next.defaultRole;
+      else if (input.defaultRole !== undefined) {
         // New people never start as owners.
         if (!isRole(input.defaultRole) || input.defaultRole === "owner") throw new DirectoryError(400, "invalid_role", "Choose admin, member or viewer.");
         next.defaultRole = input.defaultRole;
@@ -205,7 +262,9 @@ export class Directory {
   async findByLink(providerId: string, subject: string): Promise<UserRecord | undefined> {
     const users = (await this.load()).users;
     const id = Object.keys(users).find((key) => users[key]!.links?.some((link) => link.providerId === providerId && link.subject === subject));
-    return id ? this.identity.users.get(this.options.orgId, id) : undefined;
+    const user = id ? await this.identity.users.get(this.options.orgId, id) : undefined;
+    // A removed account is no longer anyone's: it comes back only through provisioning.
+    return user && user.removedAt === undefined ? user : undefined;
   }
 
   async link(userId: string, providerId: string, subject: string): Promise<void> {
@@ -224,10 +283,13 @@ export class Directory {
   async provision(input: { email: string; name?: string; createdBy: string; externalId?: string; givenName?: string; familyName?: string; active?: boolean }): Promise<UserRecord> {
     const email = normalizeEmail(input.email);
     if (!/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{1,63}$/.test(email) || email.length > 254) throw new DirectoryError(400, "invalid_email", "A valid email address is needed.");
-    if (await this.identity.users.getByEmail(this.options.orgId, email)) throw new DirectoryError(409, "account_exists", "An account with this email already exists.");
+    const existing = await this.identity.users.getByEmail(this.options.orgId, email);
+    if (existing && existing.removedAt === undefined) throw new DirectoryError(409, "account_exists", "An account with this email already exists.");
+    // Removed from the organization earlier: the same id comes back as a fresh account, without the old access, links or groups.
+    if (existing) await this.forget(existing.id);
     const name = (input.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || email.split("@")[0]!;
     const user: UserRecord = {
-      id: this.createId(),
+      id: existing?.id ?? this.createId(),
       orgId: this.options.orgId,
       email,
       name,
@@ -247,9 +309,28 @@ export class Directory {
       ...(input.givenName ? { givenName: input.givenName } : {}),
       ...(input.familyName ? { familyName: input.familyName } : {})
     });
-    this.options.log("directory.user_created", { userId: user.id, by: input.createdBy });
+    this.options.log("directory.user_created", { userId: user.id, by: input.createdBy, ...(existing ? { returning: true } : {}) });
     this.options.changed({ kind: "user", userId: user.id });
     return user;
+  }
+
+  /** A live account (not removed from the organization) with this e-mail. */
+  async activeByEmail(email: string): Promise<UserRecord | undefined> {
+    const user = await this.identity.users.getByEmail(this.options.orgId, normalizeEmail(email));
+    return user && user.removedAt === undefined ? user : undefined;
+  }
+
+  /** Drop what the directory kept about a removed account (and any memberships left), before it is provisioned again. */
+  private async forget(userId: string): Promise<void> {
+    for (const membership of await this.identity.memberships.listForUser(this.options.orgId, userId)) {
+      await this.identity.memberships.remove(this.options.orgId, userId, membership.scope);
+    }
+    await this.mutate((data) => {
+      delete data.users[userId];
+      for (const group of Object.values(data.groups)) {
+        if (group.members.includes(userId)) group.members = group.members.filter((id) => id !== userId);
+      }
+    });
   }
 
   /** Turn an account off: no sign-in, every session ends, open connections close. */
@@ -358,6 +439,9 @@ export class Directory {
    * take back roles the rules granted earlier that no longer match.
    */
   async syncRoles(userId: string): Promise<void> {
+    // Removed from the organization: no rule gives them anything back.
+    const account = await this.identity.users.get(this.options.orgId, userId);
+    if (!account || account.removedAt !== undefined) return;
     const data = await this.load();
     const entry = data.users[userId] ?? {};
     const groups = new Set((entry.ssoGroups ?? []).map((g) => g.toLowerCase()));

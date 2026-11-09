@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createMemoryStore, DEFAULT_WORKSPACE_ID, type IdentityBridge } from "../../../packages/core/src/index";
+import { createMemoryStore, DEFAULT_WORKSPACE_ID, ORG_SETTINGS_KV_KEY, type IdentityBridge, type Store } from "../../../packages/core/src/index";
 import { afterEach, describe, expect, it } from "vitest";
 import { identityContext } from "../directory/context";
 import { scimRoutes } from "./http";
@@ -8,6 +8,7 @@ import { parseFilter } from "./service";
 import { ScimTokens } from "./tokens";
 
 const ORG = "owner";
+const setupContext = async (store: Store) => ({ context: identityContext({ store, ownerId: ORG, log: () => undefined, env: {} }) });
 const servers: Server[] = [];
 afterEach(() => {
   for (const server of servers.splice(0)) server.close();
@@ -106,6 +107,58 @@ describe("SCIM 2.0", () => {
     expect((await scim("GET", "/Users/nope")).status).toBe(404);
     // The last owner can't be turned off.
     expect((await scim("DELETE", "/Users/boss")).status).toBe(409);
+  });
+
+  it("provisions someone removed from the organization again: same id, a fresh account", async () => {
+    const { scim, store } = await setup();
+    const first = await scim("POST", "/Users", { schemas: [USER], userName: "carl@acme.test", externalId: "old-ext" });
+    const id = first.body.id as string;
+    await scim("POST", "/Groups", { schemas: [GROUP], displayName: "Engineers", members: [{ value: id }] });
+    // Admin → Users → Remove (what the open-source org service does).
+    for (const m of await store.identity.memberships.listForUser(ORG, id)) await store.identity.memberships.remove(ORG, id, m.scope);
+    await store.identity.users.upsert({ ...(await store.identity.users.get(ORG, id))!, disabledAt: 5, removedAt: 5 });
+    expect((await scim("GET", `/Users/${id}`)).status).toBe(404);
+    expect((await scim("GET", `/Users?filter=${encodeURIComponent('userName eq "carl@acme.test"')}`)).body.totalResults).toBe(0);
+
+    const again = await scim("POST", "/Users", { schemas: [USER], userName: "carl@acme.test", externalId: "new-ext" });
+    expect(again.status).toBe(201);
+    expect(again.body).toMatchObject({ id, userName: "carl@acme.test", active: true, externalId: "new-ext", groups: [] });
+    const user = (await store.identity.users.get(ORG, id))!;
+    expect(user.removedAt).toBeUndefined();
+    expect(user.disabledAt).toBeUndefined();
+    // Only the default access, nothing of the old group's admin role.
+    expect((await store.identity.memberships.listForUser(ORG, id)).map((m) => (m.scope === "org" ? "org" : m.scope.workspaceId)).sort()).toEqual([DEFAULT_WORKSPACE_ID, "org"]);
+    expect((await scim("GET", `/Users?filter=${encodeURIComponent('externalId eq "old-ext"')}`)).body.totalResults).toBe(0);
+    // A live account still can't be created twice.
+    expect((await scim("POST", "/Users", { schemas: [USER], userName: "carl@acme.test" })).status).toBe(409);
+  });
+
+  it("new accounts follow Admin → Organization's defaults until the directory sets its own", async () => {
+    const { scim, store } = await setup();
+    const landing = async (email: string) => {
+      const id = (await scim("POST", "/Users", { schemas: [USER], userName: email })).body.id as string;
+      return (await store.identity.memberships.listForUser(ORG, id)).filter((m) => m.scope !== "org").map((m) => [(m.scope as { workspaceId: string }).workspaceId, m.role]);
+    };
+    expect(await landing("d1@acme.test")).toEqual([[DEFAULT_WORKSPACE_ID, "member"]]);
+    // Changed later in Admin → Organization: SCIM accounts follow.
+    await store.kv.set(ORG, ORG_SETTINGS_KV_KEY, { defaultWorkspaceId: "ws_eng", defaultRole: "viewer" });
+    expect(await landing("d2@acme.test")).toEqual([["ws_eng", "viewer"]]);
+    const { context } = await setupContext(store);
+    expect(await context.directory.settingsView()).toMatchObject({ defaultWorkspaceId: "ws_eng", defaultRole: "viewer", followsOrganization: { workspace: true, role: true } });
+    // The directory's own choice wins, until it is set back to follow (null).
+    await context.directory.updateSettings({ defaultRole: "admin" });
+    expect(await landing("d3@acme.test")).toEqual([["ws_eng", "admin"]]);
+    await context.directory.updateSettings({ defaultRole: null });
+    expect(await landing("d4@acme.test")).toEqual([["ws_eng", "viewer"]]);
+  });
+
+  it("older saved settings keep only what differs from the defaults", async () => {
+    const store = createMemoryStore();
+    // Saved before: the workspace and role were written every time.
+    await store.kv.set(ORG, "ee.directory.v1", { settings: { defaultWorkspaceId: DEFAULT_WORKSPACE_ID, defaultRole: "admin", jitProvisioning: false, groupRoles: [] }, users: {}, groups: {} });
+    await store.kv.set(ORG, ORG_SETTINGS_KV_KEY, { defaultWorkspaceId: "ws_eng", defaultRole: "viewer" });
+    const { context } = await setupContext(store);
+    expect(await context.directory.settingsView()).toMatchObject({ defaultWorkspaceId: "ws_eng", defaultRole: "admin", jitProvisioning: false, followsOrganization: { workspace: true, role: false } });
   });
 
   it("groups map to workspace roles", async () => {

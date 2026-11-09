@@ -25,6 +25,7 @@ import { SecretVault } from "../secrets/vault.js";
 import { installPresence } from "./index.js";
 import type { PresenceService } from "./service.js";
 import { slackSignature } from "./slack.js";
+import { PresenceStore } from "./store.js";
 
 const SIGNING_SECRET = "test-signing-secret-0123456789abcdef";
 const OWNER = "owner";
@@ -103,7 +104,18 @@ async function start(env: NodeJS.ProcessEnv = {}) {
   });
   const slackOk = (extra: Record<string, unknown> = {}) => ({ json: { ok: true, ...extra } });
   slack.route("GET", "/api/auth.test", () => slackOk({ team: "Acme", url: "https://acme.slack.com/", user: "sibyl" }));
-  slack.route("GET", "/api/users.info", (r) => slackOk({ user: { id: r.query.get("user"), real_name: r.query.get("user") === "U1" ? "Maria" : "Tom" } }));
+  slack.route("GET", "/api/users.info", (r) => {
+    const maria = r.query.get("user") === "U1";
+    return slackOk({ user: { id: r.query.get("user"), real_name: maria ? "Maria" : "Tom", profile: { email: maria ? "maria@acme.test" : "tom@acme.test" } } });
+  });
+  slack.route("GET", "/api/conversations.history", () =>
+    slackOk({
+      messages: [
+        { ts: "1700000501.000100", user: "UBOT", bot_id: "B1", username: "Research", text: "Hello again." },
+        { ts: "1700000500.000100", user: "U1", text: "hi" }
+      ]
+    })
+  );
   slack.route("GET", "/api/conversations.replies", () =>
     slackOk({
       messages: [
@@ -187,9 +199,9 @@ async function connectSlack(base: string, slack: FakeVendor) {
   return slack.issued.at(-1)!.access;
 }
 
-async function connectMicrosoft(base: string, graph: FakeVendor) {
+async function connectMicrosoft(base: string, graph: FakeVendor, groups = ["teams_read", "teams_messages_read", "teams_post"]) {
   await http(base, "/api/connectors/apps/microsoft", { method: "PUT", body: { clientId: "ms-client", clientSecret: "ms-client-secret" } });
-  const begun = await http(base, "/api/connectors/microsoft/connect", { method: "POST", body: { scope: "workspace", groups: ["teams_read", "teams_messages_read", "teams_post"] } });
+  const begun = await http(base, "/api/connectors/microsoft/connect", { method: "POST", body: { scope: "workspace", groups } });
   expect(begun.status).toBe(200);
   const params = authorizeParams(begun.body.authorizeUrl);
   const code = graph.approve(params.challenge);
@@ -475,9 +487,10 @@ describe("Teams: agents answer through Graph change notifications", () => {
     await store.agents.upsert(agent("agent-1", "Research"));
     const state = await http(base, "/api/presence/agents/agent-1");
     expect(state.body.providers).toEqual([
-      { provider: "slack", available: false, reason: expect.stringContaining("Connect Slack") },
-      { provider: "teams", available: false, reason: expect.stringContaining("Connect Microsoft 365") }
+      { provider: "slack", available: false, reason: expect.stringContaining("Connect Slack"), direct: { available: false, reason: expect.stringContaining("Connect Slack") } },
+      { provider: "teams", available: false, reason: expect.stringContaining("Connect Microsoft 365"), direct: { available: false, reason: expect.stringContaining("Connect Microsoft 365") } }
     ]);
+    expect((await http(base, "/api/presence/agents/agent-1/direct/slack", { method: "PUT", body: {} })).status).toBe(409);
     const refused = await http(base, "/api/presence/agents/agent-1/bindings", { method: "POST", body: { provider: "slack", channelId: "C123", respond: "mentions" } });
     expect(refused.status).toBe(409);
     expect((await http(base, "/api/presence/agents/agent-1/bindings", { method: "POST", body: { provider: "slack", channelId: "nope!", respond: "mentions" } })).status).toBe(400);
@@ -485,5 +498,166 @@ describe("Teams: agents answer through Graph change notifications", () => {
     // Slack events without a signing secret configured: 503, nothing processed.
     const ev = signed({ type: "url_verification", challenge: "x" });
     expect((await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers })).status).toBe(503);
+  });
+});
+
+describe("Direct messages: Slack DMs and Teams chats", () => {
+  const im = (id: string, user: string, text: string, ts: string, extra: Record<string, unknown> = {}) =>
+    signed(slackEvent(id, { type: "message", channel_type: "im", channel: "D1", user, text, ts, ...extra }));
+
+  it("answers Slack DMs from workspace members (by e-mail), picks agents by name and keeps the conversation, and refuses everyone else", async () => {
+    // Without accounts, the owner is reached at SIBYL_NOTIFY_EMAIL: Maria (U1) is the owner here.
+    const { base, store, slack, presence } = await start({ SIBYL_NOTIFY_EMAIL: "maria@acme.test" });
+    await connectSlack(base, slack);
+    await store.agents.upsert(agent("agent-1", "Research"));
+    await store.agents.upsert(agent("agent-2", "Sales Buddy"));
+    const brain = scriptedBrain([say("Here is what's new."), say("Drafted."), say("Still me."), say("Group answer.")]);
+    presence.configure({ provider: brain.provider, model: () => "test/model", systemPrompt: "S" });
+
+    const on = await http(base, "/api/presence/agents/agent-1/direct/slack", { method: "PUT", body: { respond: "all", allow: "members" } });
+    expect(on.status).toBe(200);
+    expect(on.body.direct).toEqual([expect.objectContaining({ provider: "slack", respond: "all", allow: "members", status: "active", canEdit: true })]);
+    expect(on.body.bindings).toEqual([]);
+    expect(on.body.providers[0]).toMatchObject({ provider: "slack", direct: { available: true } });
+    expect((await http(base, "/api/presence/agents/agent-2/direct/slack", { method: "PUT", body: { respond: "mentions" } })).body.direct[0]).toMatchObject({ respond: "mentions", allow: "members" });
+    expect((await http(base, "/api/presence/agents/agent-2/direct/slack", { method: "PUT", body: { allow: "everyone" } })).status).toBe(400);
+    expect((await http(base, "/api/presence/agents/agent-2/direct/zoom", { method: "PUT", body: {} })).status).toBe(404);
+
+    // Maria writes to the app: the "all" agent answers in the DM itself (no thread), with the DM so far as context.
+    let ev = im("Ev1", "U1", "what's new?", "1700000502.000100");
+    expect((await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers })).status).toBe(200);
+    await presence.settle();
+    const first = JSON.parse(posts(slack, "chat.postMessage")[0]!.body);
+    expect(first).toEqual(expect.objectContaining({ channel: "D1", text: "Here is what's new.", username: "Research" }));
+    expect(first.thread_ts).toBeUndefined();
+    expect(brain.calls[0]!.slice(1)).toEqual([
+      { role: "user", content: "Maria: hi" },
+      { role: "assistant", content: "Hello again." },
+      { role: "user", content: "Maria: what's new?" }
+    ]);
+
+    // Tom isn't in the Sibyl workspace: a polite refusal, no model call.
+    ev = im("Ev2", "U2", "hello", "1700000503.000100", { channel: "D2" });
+    await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers });
+    await presence.settle();
+    expect(JSON.parse(posts(slack, "chat.postMessage")[1]!.body)).toMatchObject({ channel: "D2", text: expect.stringMatching(/only answer people of this Sibyl workspace/) });
+    expect(brain.calls).toHaveLength(1);
+
+    // Tom gets an account in the workspace: he may write now. Naming an agent picks it; the conversation stays with it.
+    await store.identity.users.upsert({ id: "tom", orgId: OWNER, email: "tom@acme.test", name: "Tom", passwordHash: "!external", createdAt: 1 });
+    await store.identity.memberships.upsert(OWNER, { userId: "tom", scope: { workspaceId: "default" }, role: "member" });
+    ev = im("Ev3", "U2", "Sales Buddy, draft a follow-up", "1700000504.000100", { channel: "D2" });
+    await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers });
+    await presence.settle();
+    ev = im("Ev4", "U2", "make it shorter", "1700000505.000100", { channel: "D2" });
+    await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers });
+    await presence.settle();
+    expect(posts(slack, "chat.postMessage").slice(2).map((r) => JSON.parse(r.body))).toEqual([
+      expect.objectContaining({ channel: "D2", username: "Sales Buddy", text: "Drafted." }),
+      expect.objectContaining({ channel: "D2", username: "Sales Buddy", text: "Still me." })
+    ]);
+    expect(brain.calls[1]!.at(-1)).toEqual({ role: "user", content: "Tom: draft a follow-up" });
+
+    // A group DM: plain chatter is ignored; an @mention of the app gets the default agent, in a thread.
+    for (const [id, text, ts] of [["Ev5", "lunch?", "1700000600.000100"], ["Ev6", "<@UBOT> summarise this", "1700000601.000100"]] as const) {
+      ev = signed(slackEvent(id, { type: "message", channel_type: "mpim", channel: "G7", user: "U1", text, ts }));
+      await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers });
+    }
+    // Slack also sends the mention as app_mention; it must not answer twice.
+    ev = signed(slackEvent("Ev6b", { type: "app_mention", channel: "G7", user: "U1", text: "<@UBOT> summarise this", ts: "1700000601.000100" }));
+    await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers });
+    await presence.settle();
+    expect(posts(slack, "chat.postMessage").slice(4).map((r) => JSON.parse(r.body))).toEqual([
+      expect.objectContaining({ channel: "G7", thread_ts: "1700000601.000100", username: "Research", text: "Group answer." })
+    ]);
+
+    // Switched off (by a workspace admin; accounts exist now): no more answers.
+    const admin = { principal: { kind: "user" as const, orgId: OWNER, userId: "adam", workspaceRoles: { default: "admin" as const } }, workspaceId: "default" };
+    expect((await presence.removeDirect(admin, "agent-1", "slack")).direct).toEqual([]);
+    expect((await presence.removeDirect(admin, "agent-2", "slack")).direct).toEqual([]);
+    await expect(presence.removeDirect(admin, "agent-2", "slack")).rejects.toMatchObject({ status: 404 });
+    await expect(presence.setDirect({ ...admin, principal: { ...admin.principal, userId: "tom", workspaceRoles: { default: "member" as const } } }, "agent-1", "slack", { respond: "all", allow: "anyone" })).rejects.toMatchObject({ status: 403 });
+    ev = im("Ev7", "U1", "still there?", "1700000700.000100");
+    await http(base, "/api/presence/slack/events", { method: "POST", raw: ev.raw, headers: ev.headers });
+    await presence.settle();
+    expect(posts(slack, "chat.postMessage")).toHaveLength(5);
+  });
+
+  it("answers Teams chats through one subscription on the account's chats, sends notices 1:1, and wakes hosted organizations for renewals", async () => {
+    const env: NodeJS.ProcessEnv = { SIBYL_NOTIFY_EMAIL: "maria@acme.test" };
+    const { base, store, graph, presence, notifications } = await start(env);
+    const graphToken = await connectMicrosoft(base, graph, ["teams_direct"]);
+    await store.agents.upsert(agent("agent-1", "Research"));
+    presence.configure({ provider: scriptedBrain([say("Sure, here it is.")]).provider, model: () => "test/model", systemPrompt: "S" });
+    let clientState = "";
+    graph.route("POST", "/v1.0/subscriptions", (r) => {
+      const body = JSON.parse(r.body);
+      clientState = body.clientState;
+      expect(body).toMatchObject({ changeType: "created", resource: "/users/UACC/chats/getAllMessages", notificationUrl: `${base}/api/presence/teams/notifications` });
+      return { status: 201, json: { id: "sub-chats", expirationDateTime: new Date(Date.now() + 55 * 60_000).toISOString() } };
+    });
+    graph.route("GET", "/v1.0/chats/CHAT1/messages/M1", () => ({
+      json: { id: "M1", messageType: "message", from: { user: { id: "U-MARIA", displayName: "Maria" } }, body: { contentType: "html", content: "<p>Can you find the Q3 deck?</p>" } }
+    }));
+    graph.route("GET", "/v1.0/chats/CHAT1", () => ({ json: { id: "CHAT1", chatType: "oneOnOne" } }));
+    graph.route("GET", "/v1.0/chats/CHAT1/messages", () => ({ json: { value: [] } }));
+    graph.route("GET", "/v1.0/users/U-MARIA", () => ({ json: { mail: "Maria@Acme.test", userPrincipalName: "maria@acme.test" } }));
+    graph.route("POST", "/v1.0/chats/CHAT1/messages", () => ({ status: 201, json: { id: "R1" } }));
+
+    // Channels need more groups; direct messages are available with “Teams: agents in chats”.
+    const state = await http(base, "/api/presence/agents/agent-1");
+    expect(state.body.providers[1]).toMatchObject({ provider: "teams", available: false, direct: { available: true } });
+    expect((await http(base, "/api/presence/agents/agent-1/direct/teams", { method: "PUT", body: { respond: "all", allow: "members" } })).status).toBe(200);
+    await presence.settle();
+    const binding = presence.records.bindings()[0]!;
+    expect(binding).toMatchObject({ kind: "direct", status: "active", accountUserId: "UACC", subscription: { id: "sub-chats" } });
+
+    // A forged notification is ignored; the real one is answered in the chat.
+    const note = (state: string) => ({ value: [{ subscriptionId: "sub-chats", clientState: state, changeType: "created", resource: "chats('CHAT1')/messages('M1')" }] });
+    await http(base, "/api/presence/teams/notifications", { method: "POST", body: note("forged") });
+    await presence.settle();
+    expect(graph.requests.some((r) => r.path === "/v1.0/chats/CHAT1/messages/M1")).toBe(false);
+    expect((await http(base, "/api/presence/teams/notifications", { method: "POST", body: note(clientState) })).status).toBe(202);
+    await presence.settle();
+    const reply = graph.requests.find((r) => r.method === "POST" && r.path === "/v1.0/chats/CHAT1/messages")!;
+    expect(reply.headers.authorization).toBe(`Bearer ${graphToken}`);
+    expect(JSON.parse(reply.body)).toEqual({ body: { contentType: "html", content: "<p><b>Research</b></p><p>Sure, here it is.</p>" } });
+
+    // Notices go to the person 1:1 (the chat is found or created by e-mail).
+    graph.route("POST", "/v1.0/chats", (r) => {
+      const body = JSON.parse(r.body);
+      expect(body.chatType).toBe("oneOnOne");
+      expect(body.members.map((m: Record<string, string>) => m["user@odata.bind"])).toEqual(["https://graph.microsoft.com/v1.0/users('UACC')", "https://graph.microsoft.com/v1.0/users('maria@acme.test')"]);
+      return { status: 201, json: { id: "CHAT9" } };
+    });
+    graph.route("POST", "/v1.0/chats/CHAT9/messages", () => ({ status: 201, json: { id: "N1" } }));
+    const sent = await notifications.notify({ kind: "monitor_fired", recipientUserId: "owner", title: "Deal moved", body: "Acme → Negotiation", links: {} }, { channels: ["teams"] });
+    expect(sent.deliveries).toEqual([{ channel: "inbox", status: "sent" }, { channel: "teams", status: "sent" }]);
+    expect(JSON.parse(graph.requests.find((r) => r.path === "/v1.0/chats/CHAT9/messages")!.body).body.content).toBe("<p><b>Deal moved</b></p><p>Acme → Negotiation</p>");
+
+    // Hosted: the organization's next renewal is indexed across organizations, so an idle one is woken in time.
+    await presence.records.flush();
+    const renewAt = binding.subscription!.expiresAt - 20 * 60_000;
+    expect(await store.kv.get(OWNER, "presence.wake")).toEqual({ at: renewAt });
+    expect(await PresenceStore.dueOrganizations(store, renewAt - 1)).toEqual([]);
+    expect(await PresenceStore.dueOrganizations(store, renewAt)).toEqual([OWNER]);
+    graph.route("DELETE", "/v1.0/subscriptions/sub-chats", () => ({ status: 204 }));
+    await http(base, "/api/presence/agents/agent-1/direct/teams", { method: "DELETE" });
+    await presence.settle();
+    await presence.records.flush();
+    expect(await store.kv.get(OWNER, "presence.wake")).toBeUndefined();
+    expect(graph.requests.some((r) => r.method === "DELETE" && r.path === "/v1.0/subscriptions/sub-chats")).toBe(true);
+  });
+
+  it("falls back to the notifications channel when the 1:1 chat can't be opened", async () => {
+    const env: NodeJS.ProcessEnv = { SIBYL_NOTIFY_EMAIL: "maria@acme.test" };
+    const { base, graph, notifications } = await start(env);
+    await connectMicrosoft(base, graph, ["teams_read", "teams_post", "teams_direct"]);
+    graph.route("POST", "/v1.0/chats", () => ({ status: 404, json: { error: { code: "NotFound", message: "no such user" } } }));
+    graph.route("POST", /\/v1\.0\/teams\/T1\/channels\/.+\/messages$/, () => ({ status: 201, json: { id: "P1" } }));
+    expect((await http(base, "/api/presence/settings", { method: "PUT", body: { teams: { teamId: "T1", channelId: "19:n@thread.tacv2", channelName: "Alerts" } } })).status).toBe(200);
+    const sent = await notifications.notify({ kind: "monitor_fired", recipientUserId: "owner", title: "Deal moved", links: {} }, { channels: ["teams"] });
+    expect(sent.deliveries[1]).toEqual({ channel: "teams", status: "sent" });
+    expect(graph.requests.some((r) => r.method === "POST" && /\/teams\/T1\/channels\/.+\/messages$/.test(r.path))).toBe(true);
   });
 });

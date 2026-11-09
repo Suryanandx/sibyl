@@ -32,19 +32,19 @@ function MicrosoftMark() {
   );
 }
 
-/** Continue with Google / Microsoft (only the ones this server has a sign-in app for). */
-export function ProviderButtons({ options, next = "/" }: { options: SignupOptionsView | null; next?: string }) {
+/** Continue with Google / Microsoft (only the ones this server has a sign-in app for); with `invite`, accepts that invitation. */
+export function ProviderButtons({ options, next = "/", invite }: { options: SignupOptionsView | null; next?: string; invite?: string }) {
   if (!options || (!options.google && !options.microsoft)) return null;
   return (
     <div className={styles.providers}>
       {options.google ? (
-        <a className={`ghostBtn ${styles.provider}`} href={signupApi.oauthUrl("google", next)}>
+        <a className={`ghostBtn ${styles.provider}`} href={signupApi.oauthUrl("google", next, invite)}>
           <GoogleMark />
           Continue with Google
         </a>
       ) : null}
       {options.microsoft ? (
-        <a className={`ghostBtn ${styles.provider}`} href={signupApi.oauthUrl("microsoft", next)}>
+        <a className={`ghostBtn ${styles.provider}`} href={signupApi.oauthUrl("microsoft", next, invite)}>
           <MicrosoftMark />
           Continue with Microsoft
         </a>

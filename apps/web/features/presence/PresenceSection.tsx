@@ -13,6 +13,7 @@ import { errorText } from "../../lib/gateway-http";
 import { relativeTime } from "../../lib/format";
 import { PROVIDER_NAMES, RESPOND_OPTIONS, addBinding, fetchAgentPresence, placeLabel, removeBinding, setAgentNotify, updateBinding } from "./api";
 import { ChannelPicker } from "./ChannelPicker";
+import { DirectMessages } from "./DirectMessages";
 import styles from "./presence.module.css";
 
 export function PresenceSection({ agentId, agentName }: { agentId: string; agentName: string }) {
@@ -35,7 +36,7 @@ export function PresenceSection({ agentId, agentName }: { agentId: string; agent
   }, [agentId]);
   useEffect(load, [load]);
   // A Teams channel connects in the background (Graph checks the gateway first): look again until it settles.
-  const connecting = state?.bindings.some((b) => b.status === "pending");
+  const connecting = [...(state?.bindings ?? []), ...(state?.direct ?? [])].some((b) => b.status === "pending");
   useEffect(() => {
     if (!connecting) return;
     const timer = setInterval(load, 4000);
@@ -61,7 +62,7 @@ export function PresenceSection({ agentId, agentName }: { agentId: string; agent
 
   return (
     <Card aria-label="Presence">
-      <CardHeader title="Slack and Teams" meta={`Channels where ${agentName} answers. Anyone in a channel can talk to it there.`} />
+      <CardHeader title="Slack and Teams" meta={`Channels and direct messages where ${agentName} answers. Anyone in a channel can talk to it there.`} />
       {error ? <Notice tone="danger">{error}</Notice> : null}
       {!state ? (
         !error ? <Muted>Loading…</Muted> : null
@@ -185,6 +186,8 @@ export function PresenceSection({ agentId, agentName }: { agentId: string; agent
               </Row>
             )
           ) : null}
+
+          <DirectMessages agentId={agentId} agentName={agentName} state={state} busy={busy} run={run} />
 
           <fieldset className={styles.notify} disabled={!state.canEdit || busy}>
             <legend>When it acts on its own (“Act, then tell me”), also tell me in</legend>

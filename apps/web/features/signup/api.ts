@@ -57,8 +57,13 @@ export const signupApi = {
     if (!response.ok || !body) throw new GatewayError(body?.message || "Couldn't sign in. Try again.", response.status, body?.error || "error");
     return body;
   },
-  /** Full gateway URL that starts Continue with Google / Microsoft (the browser navigates there). */
-  oauthUrl: (provider: "google" | "microsoft", next = "/") => `${gatewayHttpUrl()}/api/signup/oauth/${provider}/start?next=${encodeURIComponent(next)}`
+  /**
+   * Full gateway URL that starts Continue with Google / Microsoft (the
+   * browser navigates there). With `invite`, finishing accepts that
+   * invitation and comes back to /invite/<token>?joined=<workspace>.
+   */
+  oauthUrl: (provider: "google" | "microsoft", next = "/", invite?: string) =>
+    `${gatewayHttpUrl()}/api/signup/oauth/${provider}/start?next=${encodeURIComponent(next)}${invite ? `&invite=${encodeURIComponent(invite)}` : ""}`
 };
 
 /** A message for ?signin_error=<code> (Google / Microsoft) and failed links. */
@@ -79,6 +84,16 @@ export function signupErrorMessage(code: string, provider?: string | null): stri
       return "There's no Sibyl account for that address here. Ask an admin for an invitation.";
     case "account_disabled":
       return "This account is turned off. Ask an admin.";
+    case "wrong_account":
+      return `That ${who} account's address isn't the one this invitation is for. Continue with the right account.`;
+    case "invite_used":
+      return "This invitation was already used. Sign in to continue.";
+    case "invite_expired":
+      return "This invitation has expired. Ask for a new one.";
+    case "invite_not_found":
+      return "This invitation link isn't valid.";
+    case "workspace_gone":
+      return "The workspace in this invitation no longer exists.";
     case "sso_required":
       return "Your organization signs in with single sign-on. Use that button instead.";
     case "not_available":

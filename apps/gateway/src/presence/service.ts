@@ -13,9 +13,16 @@
  * - Teams subscriptions are created when an agent is placed and renewed by a
  *   job on the routine scheduler (the same tick and lease machinery as
  *   routines and monitors).
+ * - Direct messages: an agent can also answer Slack DMs / group DMs with the
+ *   app and Teams 1:1 / group chats with the account (a "direct" binding,
+ *   one per agent and provider). Same turn, autonomy, approvals, budgets and
+ *   rate limits as a channel; by default only people of the Sibyl workspace
+ *   (matched by e-mail) may write. Teams chats arrive through one Graph
+ *   subscription per binding on `/users/{account}/chats/getAllMessages`.
  * - Notifications: registers the "slack" and "teams" notifiers with the one
  *   notifications module (monitors pick them; agents' "act, then tell me"
- *   notices use the channels each agent chose).
+ *   notices use the channels each agent chose). Both reach the person 1:1
+ *   (found by e-mail) and fall back to the workspace's notifications channel.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -35,6 +42,8 @@ import type {
   PresenceBindingView,
   PresenceChannelList,
   PresenceChannelRef,
+  PresenceDirectInput,
+  PresenceDirectView,
   PresenceProvider,
   PresenceProviderStatus,
   PresenceRespondMode,
@@ -55,20 +64,29 @@ import type { ScheduledJobType } from "../routines/scheduler.js";
 import { ROUTINE_TOOL_NAMES } from "../routines/tools.js";
 import { RecentIds, pickBinding, type BindingPick, type InboundMessage } from "./inbound.js";
 import { parseSlackEnvelope, slackEscape, slackInbound, verifySlackSignature } from "./slack.js";
-import { PresenceStore, threadKey, type PresenceBinding } from "./store.js";
+import { DIRECT_CHANNEL, PresenceStore, isDirect, teamsDueAt, threadKey, type PresenceBinding } from "./store.js";
 import {
-  TEAMS_RENEW_BEFORE_MS,
+  accountChatsResource,
   accountUserId,
+  channelMessagesResource,
   clientStateMatches,
   createSubscription,
   deleteSubscription,
   fetchChannelMessage,
+  fetchChatHistory,
+  fetchChatMessage,
+  fetchChatType,
   fetchThread,
+  oneOnOneChat,
+  parseChatResource,
   parseGraphNotifications,
   parseMessageResource,
+  postChatMessage,
   renewSubscription,
+  teamsChatInbound,
   teamsHtml,
-  teamsInbound
+  teamsInbound,
+  userEmail
 } from "./teams.js";
 import { runChannelTurn, type PresenceBrainOptions, type ThreadLine } from "./turn.js";
 import { messageText } from "../connectors/microsoft/files-teams.js";
@@ -79,15 +97,17 @@ export const MAX_BINDINGS_PER_AGENT = 20;
 /** Turns per binding in RATE_WINDOW_MS (the rest are dropped and logged). */
 export const RATE_LIMIT = 20;
 export const RATE_WINDOW_MS = 10 * 60_000;
+/** Direct messages: RATE_LIMIT per conversation, and at most this many per agent and provider. */
+export const DIRECT_RATE_LIMIT = 200;
 const DEFAULT_CONCURRENCY = 4;
 const VENDOR_TIMEOUT_MS = 20_000;
 /** A turn may wait this long (approvals wait up to a day). */
 const TURN_TIMEOUT_MS = 25 * 60 * 60_000;
 
-/** Connector and groups an agent needs to live in each provider. */
-const PROVIDERS: Record<PresenceProvider, { connectorId: string; name: string; groups: string[]; notifyGroups: string[] }> = {
-  slack: { connectorId: "slack", name: "Slack", groups: ["agents"], notifyGroups: ["write"] },
-  teams: { connectorId: "microsoft", name: "Microsoft Teams", groups: ["teams_read", "teams_messages_read", "teams_post"], notifyGroups: ["teams_post"] }
+/** Connector and groups an agent needs to live in each provider (channels, direct messages, notices). */
+const PROVIDERS: Record<PresenceProvider, { connectorId: string; name: string; groups: string[]; directGroups: string[]; notifyGroups: string[] }> = {
+  slack: { connectorId: "slack", name: "Slack", groups: ["agents"], directGroups: ["agents_direct"], notifyGroups: ["write"] },
+  teams: { connectorId: "microsoft", name: "Microsoft Teams", groups: ["teams_read", "teams_messages_read", "teams_post"], directGroups: ["teams_direct"], notifyGroups: ["teams_post"] }
 };
 
 type Log = (event: string, fields?: Record<string, unknown>) => void;
@@ -208,8 +228,12 @@ export class PresenceService {
       agentId,
       bindings: this.records
         .bindings()
-        .filter((b) => b.agentId === agentId && b.workspaceId === caller.workspaceId)
+        .filter((b) => b.agentId === agentId && b.workspaceId === caller.workspaceId && !isDirect(b))
         .map((b) => this.view(b, canEdit)),
+      direct: this.records
+        .bindings()
+        .filter((b) => b.agentId === agentId && b.workspaceId === caller.workspaceId && isDirect(b))
+        .map((b) => this.directView(b, canEdit)),
       notify: this.records.agentNotify(agentId),
       providers: (["slack", "teams"] as const).map((provider) => this.providerStatus(provider, caller.workspaceId)),
       canEdit
@@ -220,7 +244,7 @@ export class PresenceService {
     await this.editableAgent(caller, agentId);
     const connection = this.hostConnection(input.provider, caller.workspaceId);
     if (!connection) throw new PresenceError(this.providerStatus(input.provider, caller.workspaceId).reason ?? "Not available.", 409, "not_connected");
-    const existing = this.records.bindings().filter((b) => b.agentId === agentId);
+    const existing = this.records.bindings().filter((b) => b.agentId === agentId && !isDirect(b));
     if (existing.length >= MAX_BINDINGS_PER_AGENT) throw new PresenceError(`An agent can be in at most ${MAX_BINDINGS_PER_AGENT} channels.`, 409, "limit");
     if (existing.some((b) => b.provider === input.provider && b.channelId === input.channelId && b.teamId === input.teamId)) {
       throw new PresenceError("The agent is already in that channel.", 409, "exists");
@@ -253,17 +277,64 @@ export class PresenceService {
 
   async updateBinding(caller: Caller, agentId: string, bindingId: string, respond: PresenceRespondMode): Promise<PresenceAgentState> {
     await this.editableAgent(caller, agentId);
-    const updated = await this.records.patchBinding(bindingId, (b) => (b.agentId === agentId && b.workspaceId === caller.workspaceId ? { ...b, respond, updatedAt: this.now() } : b));
-    if (!updated || updated.agentId !== agentId || updated.workspaceId !== caller.workspaceId) throw new PresenceError("Not found.", 404, "not_found");
+    const ours = (b: PresenceBinding) => b.agentId === agentId && b.workspaceId === caller.workspaceId && !isDirect(b);
+    const updated = await this.records.patchBinding(bindingId, (b) => (ours(b) ? { ...b, respond, updatedAt: this.now() } : b));
+    if (!updated || !ours(updated)) throw new PresenceError("Not found.", 404, "not_found");
     return this.agentState(caller, agentId);
   }
 
   async removeBinding(caller: Caller, agentId: string, bindingId: string): Promise<PresenceAgentState> {
     await this.editableAgent(caller, agentId);
     const binding = this.records.binding(bindingId);
-    if (!binding || binding.agentId !== agentId || binding.workspaceId !== caller.workspaceId) throw new PresenceError("Not found.", 404, "not_found");
+    if (!binding || binding.agentId !== agentId || binding.workspaceId !== caller.workspaceId || isDirect(binding)) throw new PresenceError("Not found.", 404, "not_found");
     await this.unbind(binding);
     return this.agentState(caller, agentId);
+  }
+
+  /** Let people message the agent directly in Slack or Teams (or change how). */
+  async setDirect(caller: Caller, agentId: string, provider: PresenceProvider, input: PresenceDirectInput): Promise<PresenceAgentState> {
+    await this.editableAgent(caller, agentId);
+    const current = this.directBinding(agentId, caller.workspaceId, provider);
+    if (current) {
+      await this.records.patchBinding(current.id, (b) => ({ ...b, respond: input.respond, allow: input.allow, updatedAt: this.now() }));
+      return this.agentState(caller, agentId);
+    }
+    const connection = this.directConnection(provider, caller.workspaceId);
+    if (!connection) throw new PresenceError(this.directStatus(provider, caller.workspaceId).reason ?? "Not available.", 409, "not_connected");
+    const at = this.now();
+    const binding: PresenceBinding = {
+      id: this.createId(),
+      ownerId: this.options.ownerId,
+      workspaceId: caller.workspaceId,
+      agentId,
+      provider,
+      kind: "direct",
+      allow: input.allow,
+      connectionId: connection.id,
+      channelId: DIRECT_CHANNEL,
+      respond: input.respond,
+      createdBy: creatorId(caller.principal),
+      ...(caller.name ? { createdByName: caller.name } : {}),
+      createdAt: at,
+      updatedAt: at,
+      status: provider === "slack" ? "active" : "pending"
+    };
+    await this.records.upsertBinding(binding);
+    this.options.log("presence.direct_on", { bindingId: binding.id, agentId, provider });
+    if (provider === "teams") this.track(this.ensureSubscription(binding.id));
+    return this.agentState(caller, agentId);
+  }
+
+  async removeDirect(caller: Caller, agentId: string, provider: PresenceProvider): Promise<PresenceAgentState> {
+    await this.editableAgent(caller, agentId);
+    const binding = this.directBinding(agentId, caller.workspaceId, provider);
+    if (!binding) throw new PresenceError("Not found.", 404, "not_found");
+    await this.unbind(binding);
+    return this.agentState(caller, agentId);
+  }
+
+  private directBinding(agentId: string, workspaceId: string, provider: PresenceProvider): PresenceBinding | undefined {
+    return this.records.bindings().find((b) => isDirect(b) && b.agentId === agentId && b.workspaceId === workspaceId && b.provider === provider);
   }
 
   async setAgentNotify(caller: Caller, agentId: string, notify: PresenceProvider[]): Promise<PresenceAgentState> {
@@ -371,9 +442,14 @@ export class PresenceService {
         this.options.log("presence.teams_rejected", { subscriptionId: notification.subscriptionId.slice(0, 64) });
         continue;
       }
-      const ref = notification.resource ? parseMessageResource(notification.resource) : undefined;
-      if (!ref || notification.changeType !== "created") continue;
-      this.track(this.receiveTeamsMessage(binding, ref));
+      if (notification.changeType !== "created" || !notification.resource) continue;
+      if (isDirect(binding)) {
+        const chat = parseChatResource(notification.resource);
+        if (chat) this.track(this.receiveTeamsChat(binding, chat));
+        continue;
+      }
+      const ref = parseMessageResource(notification.resource);
+      if (ref) this.track(this.receiveTeamsMessage(binding, ref));
     }
     return { status: 202 };
   }
@@ -414,6 +490,19 @@ export class PresenceService {
     }
   }
 
+  private async receiveTeamsChat(binding: PresenceBinding, ref: { chatId: string; messageId: string }): Promise<void> {
+    try {
+      const ctx = this.options.connectors.contextFor(binding.connectionId, AbortSignal.timeout(VENDOR_TIMEOUT_MS));
+      const message = await fetchChatMessage(ctx, ref);
+      // The account's own posts (the agents' replies) need no further call.
+      if (binding.accountUserId && message.from?.user?.id === binding.accountUserId) return;
+      const inbound = teamsChatInbound(message, { connectionId: binding.connectionId, chatId: ref.chatId, chatType: await fetchChatType(ctx, ref.chatId), accountUserId: binding.accountUserId });
+      if (inbound) this.accept(inbound);
+    } catch (error) {
+      this.options.log("presence.teams_fetch_failed", { bindingId: binding.id, error: errorText(error) });
+    }
+  }
+
   /* ───────────── dispatch ───────────── */
 
   /** A message arrived: drop retries, pick the agent, queue its turn. */
@@ -421,20 +510,26 @@ export class PresenceService {
     if (this.closed || !this.seen.add(message.dedupeKey)) return;
     const candidates = this.records
       .bindings()
-      .filter((b) => b.provider === message.provider && message.connectionIds.includes(b.connectionId) && b.channelId === message.channelId && (message.provider !== "teams" || b.teamId === message.teamId));
+      .filter((b) =>
+        b.provider === message.provider &&
+        message.connectionIds.includes(b.connectionId) &&
+        (message.direct ? isDirect(b) : b.channelId === message.channelId && (message.provider !== "teams" || b.teamId === message.teamId))
+      );
     const key = threadKey(message.provider, message.spaceKey, message.channelId, message.threadId);
     const pick = pickBinding({ message, candidates, threadBindingId: this.records.threadBinding(key), agentName: (id) => this.agentNames.get(id) });
     if (!pick) return;
-    if (!this.withinRate(pick.binding.id)) {
+    // A channel is one conversation; direct messages are many (one per person or group), each limited like a channel.
+    const lane = message.direct ? `${pick.binding.id}:${message.channelId}` : pick.binding.id;
+    if (!this.withinRate(lane, RATE_LIMIT) || (message.direct && !this.withinRate(pick.binding.id, DIRECT_RATE_LIMIT))) {
       this.options.log("presence.rate_limited", { bindingId: pick.binding.id });
       return;
     }
-    const previous = this.chains.get(pick.binding.id) ?? Promise.resolve();
+    const previous = this.chains.get(lane) ?? Promise.resolve();
     const next = previous.then(() => this.withSlot(() => this.respond(pick, message, key)));
     const settled = next.catch((error: unknown) => this.options.log("presence.turn_crashed", { bindingId: pick.binding.id, error: errorText(error) }));
-    this.chains.set(pick.binding.id, settled);
+    this.chains.set(lane, settled);
     void settled.then(() => {
-      if (this.chains.get(pick.binding.id) === settled) this.chains.delete(pick.binding.id);
+      if (this.chains.get(lane) === settled) this.chains.delete(lane);
     });
     this.track(settled);
   }
@@ -461,10 +556,19 @@ export class PresenceService {
     this.running.set(runId, controller);
     try {
       const ctx = this.options.connectors.contextFor(binding.connectionId, controller.signal);
+      const io = binding.provider === "slack" ? this.slackIo(ctx, binding, message) : isDirect(binding) ? this.teamsChatIo(ctx, binding) : this.teamsIo(ctx, binding);
+      if (isDirect(binding) && (binding.allow ?? "members") === "members") {
+        const email = await io.authorEmail(message).catch(() => undefined);
+        if (!(await this.memberMayWrite(email, binding.workspaceId))) {
+          this.options.log("presence.direct_refused", { bindingId: binding.id, provider: binding.provider, reason: email ? "not_a_member" : "no_email" });
+          await io.reply(message, agent.name, "Sorry, I only answer people of this Sibyl workspace, matched by their e-mail address. Ask a workspace admin to invite you.");
+          return;
+        }
+      }
       await this.records.joinThread(key, binding.id);
-      const io = binding.provider === "slack" ? this.slackIo(ctx, binding, message) : this.teamsIo(ctx, binding);
       void io.ack().catch(() => undefined);
-      const [history, authorName] = await Promise.all([message.inThread ? io.history(message).catch(() => []) : Promise.resolve([]), io.authorName(message).catch(() => message.authorName ?? "Someone")]);
+      const withHistory = message.inThread || message.direct === "one" || (message.provider === "teams" && message.direct === "group");
+      const [history, authorName] = await Promise.all([withHistory ? io.history(message).catch(() => []) : Promise.resolve([]), io.authorName(message).catch(() => message.authorName ?? "Someone")]);
       const conversationId = await this.ensureConversation(binding, agent.name);
       const result = await runChannelTurn(
         {
@@ -490,13 +594,13 @@ export class PresenceService {
           runId,
           conversationId,
           signal: controller.signal,
-          say: (text) => io.reply(message.threadId, agent.name, text)
+          say: (text) => io.reply(message, agent.name, text)
         }
       );
-      if (result.reply) await io.reply(message.threadId, agent.name, result.reply);
+      if (result.reply) await io.reply(message, agent.name, result.reply);
       await this.records.patchBinding(binding.id, (b) => {
         const next: PresenceBinding = { ...b, lastActivityAt: this.now() };
-        if (b.status === "error" && b.provider === "slack") {
+        if (b.status === "error" && (b.provider === "slack" || isDirect(b))) {
           next.status = "active";
           delete next.statusMessage;
         }
@@ -517,13 +621,22 @@ export class PresenceService {
   private slackIo(ctx: ConnectorActionContext, binding: PresenceBinding, message: InboundMessage) {
     const connection = this.options.connectors.store.get(binding.connectionId);
     const botUserId = connection?.metadata.botUserId;
+    // A channel: the binding's. Direct messages: the conversation the message came from.
+    const channel = message.channelId;
+    // Where the conversation's earlier messages are: a thread, or (1:1 DMs outside a thread) the DM itself.
+    const thread = message.direct === "one" ? message.replyIn : message.threadId;
     return {
       // 👀 while working (best effort; needs the Reactions group).
-      ack: () => slackCall(ctx, "reactions.add", { channel: binding.channelId, timestamp: message.messageId, name: "eyes" }, { write: true }).then(() => undefined),
+      ack: () => slackCall(ctx, "reactions.add", { channel, timestamp: message.messageId, name: "eyes" }, { write: true }).then(() => undefined),
       authorName: async (m: InboundMessage) => (await slackUserNames(ctx, [m.authorId])).get(m.authorId) ?? "Someone",
+      authorEmail: async (m: InboundMessage) => (await slackCall<SlackResponse & { user?: { profile?: { email?: string } } }>(ctx, "users.info", { user: m.authorId })).user?.profile?.email,
       history: async (m: InboundMessage): Promise<ThreadLine[]> => {
-        const replies = await slackCall<SlackResponse & { messages?: SlackMessage[] }>(ctx, "conversations.replies", { channel: binding.channelId, ts: m.threadId, limit: 40 });
-        const earlier = (replies.messages ?? []).filter((x) => x.ts !== m.messageId && (!x.subtype || x.subtype === "bot_message" || x.subtype === "thread_broadcast"));
+        const page = thread
+          ? await slackCall<SlackResponse & { messages?: SlackMessage[] }>(ctx, "conversations.replies", { channel, ts: thread, limit: 40 })
+          : await slackCall<SlackResponse & { messages?: SlackMessage[] }>(ctx, "conversations.history", { channel, limit: 20 });
+        // conversations.history is newest first.
+        const ordered = thread ? (page.messages ?? []) : (page.messages ?? []).slice().reverse();
+        const earlier = ordered.filter((x) => x.ts !== m.messageId && (!x.subtype || x.subtype === "bot_message" || x.subtype === "thread_broadcast"));
         const names = await slackUserNames(ctx, earlier.map((x) => x.user ?? "").filter(Boolean));
         return earlier.map((x) => {
           const fromAgent = Boolean(x.bot_id) && (!botUserId || x.user === botUserId || !x.user);
@@ -531,8 +644,9 @@ export class PresenceService {
           return { author: fromAgent ? (x.username ?? "Agent") : (x.user ? (names.get(x.user) ?? x.user) : (x.username ?? "Someone")), text, fromAgent };
         });
       },
-      reply: async (threadId: string, agentName: string, text: string) => {
-        await slackCall(ctx, "chat.postMessage", { channel: binding.channelId, thread_ts: threadId, text: slackEscape(text), username: agentName, unfurl_links: false }, { write: true });
+      reply: async (m: InboundMessage, agentName: string, text: string) => {
+        const threadTs = m.direct === "one" ? m.replyIn : m.threadId;
+        await slackCall(ctx, "chat.postMessage", { channel, ...(threadTs ? { thread_ts: threadTs } : {}), text: slackEscape(text), username: agentName, unfurl_links: false }, { write: true });
       }
     };
   }
@@ -542,6 +656,7 @@ export class PresenceService {
     return {
       ack: async () => undefined,
       authorName: async (m: InboundMessage) => m.authorName ?? "Someone",
+      authorEmail: async (m: InboundMessage) => userEmail(ctx, m.authorId),
       history: async (m: InboundMessage): Promise<ThreadLine[]> => {
         const thread = await fetchThread(ctx, { ...ref, messageId: m.threadId });
         return thread
@@ -551,12 +666,48 @@ export class PresenceService {
             return { author: x.from?.user?.displayName ?? x.from?.application?.displayName ?? "Someone", text: messageText(x), fromAgent };
           });
       },
-      reply: async (threadId: string, agentName: string, text: string) => {
-        await ctx.http.post(`${ctx.base("graph")}/v1.0/teams/${encodeURIComponent(ref.teamId)}/channels/${encodeURIComponent(ref.channelId)}/messages/${encodeURIComponent(threadId)}/replies`, {
+      reply: async (m: InboundMessage, agentName: string, text: string) => {
+        await ctx.http.post(`${ctx.base("graph")}/v1.0/teams/${encodeURIComponent(ref.teamId)}/channels/${encodeURIComponent(ref.channelId)}/messages/${encodeURIComponent(m.threadId)}/replies`, {
           body: { contentType: "html", content: teamsHtml(agentName, text) }
         });
       }
     };
+  }
+
+  /** Teams 1:1 and group chats with the account: no threads, the chat is the conversation. */
+  private teamsChatIo(ctx: ConnectorActionContext, binding: PresenceBinding) {
+    return {
+      ack: async () => undefined,
+      authorName: async (m: InboundMessage) => m.authorName ?? "Someone",
+      authorEmail: async (m: InboundMessage) => userEmail(ctx, m.authorId),
+      history: async (m: InboundMessage): Promise<ThreadLine[]> =>
+        (await fetchChatHistory(ctx, m.channelId))
+          .filter((x) => x.id !== m.messageId)
+          .map((x) => ({
+            author: x.from?.user?.displayName ?? x.from?.application?.displayName ?? "Someone",
+            text: messageText(x),
+            fromAgent: Boolean(binding.accountUserId && x.from?.user?.id === binding.accountUserId)
+          })),
+      reply: async (m: InboundMessage, agentName: string, text: string) => postChatMessage(ctx, m.channelId, teamsHtml(agentName, text))
+    };
+  }
+
+  /**
+   * "members": the person writing is someone of this Sibyl workspace — an
+   * active account with this e-mail that may use agents there (or, without
+   * accounts, the owner's notification address).
+   */
+  private async memberMayWrite(email: string | undefined, workspaceId: string): Promise<boolean> {
+    const address = email?.trim().toLowerCase();
+    if (!address || !address.includes("@")) return false;
+    const { store, ownerId } = this.options;
+    const user = await store.identity.users.getByEmail(ownerId, address).catch(() => undefined);
+    if (user) {
+      if (user.disabledAt !== undefined || user.removedAt !== undefined) return false;
+      return typeof (await actingPrincipal(store, ownerId, { createdBy: user.id, workspaceId, permission: PERMISSIONS.AGENTS_USE, feature: "agents" })) !== "string";
+    }
+    const owner = await this.options.notifications.recipientOf("owner");
+    return Boolean(owner.email && owner.email.trim().toLowerCase() === address);
   }
 
   /* ───────────── Teams subscriptions (scheduler job) ───────────── */
@@ -568,7 +719,7 @@ export class PresenceService {
       due: async (now) =>
         this.records
           .bindings()
-          .filter((b) => b.provider === "teams" && (b.retryAt ?? 0) <= now && (!b.subscription || b.subscription.expiresAt - now < TEAMS_RENEW_BEFORE_MS))
+          .filter((b) => (teamsDueAt(b) ?? Number.POSITIVE_INFINITY) <= now)
           .map((b) => ({ ...b })),
       claim: async (job) => {
         if (this.renewing.has(job.id) || !this.records.binding(job.id)) return undefined;
@@ -590,7 +741,7 @@ export class PresenceService {
   /** Create or renew the binding's Graph subscription; failures back off (1 min doubling, at most an hour). */
   async ensureSubscription(bindingId: string): Promise<void> {
     const binding = this.records.binding(bindingId);
-    if (!binding || binding.provider !== "teams" || !binding.teamId) return;
+    if (!binding || binding.provider !== "teams" || (!binding.teamId && !isDirect(binding))) return;
     const publicUrl = this.options.env.SIBYL_PUBLIC_GATEWAY_URL?.trim().replace(/\/+$/, "");
     if (!publicUrl || !(publicUrl.startsWith("https://") || (this.options.allowHttpPublicUrl && publicUrl.startsWith("http://")))) {
       await this.records.patchBinding(bindingId, (b) => ({ ...b, status: "error", statusMessage: "Teams needs SIBYL_PUBLIC_GATEWAY_URL set to this gateway's public HTTPS address to deliver messages.", retryAt: this.now() + 60 * 60_000 }));
@@ -609,7 +760,8 @@ export class PresenceService {
         }
       }
       // Hosted organizations receive Graph notifications under /o/<orgId>.
-      subscription ??= await createSubscription(ctx, { teamId: binding.teamId, channelId: binding.channelId, publicUrl: `${publicUrl}${tenantPath(this.options.ownerId, "")}`, nowMs: this.now() });
+      const resource = isDirect(binding) ? accountChatsResource(userId) : channelMessagesResource(binding.teamId!, binding.channelId);
+      subscription ??= await createSubscription(ctx, { resource, publicUrl: `${publicUrl}${tenantPath(this.options.ownerId, "")}`, nowMs: this.now() });
       const kept = subscription;
       await this.records.patchBinding(bindingId, (b) => {
         const next: PresenceBinding = { ...b, accountUserId: userId, subscription: kept, status: "active", updatedAt: this.now() };
@@ -623,7 +775,8 @@ export class PresenceService {
       const failures = (binding.failures ?? 0) + 1;
       const wait = Math.min(60 * 60_000, 60_000 * 2 ** (failures - 1));
       const detail = error instanceof ConnectorHttpError ? `HTTP ${error.status}${error.detail ? `: ${error.detail}` : ""}` : errorText(error);
-      await this.records.patchBinding(bindingId, (b) => ({ ...b, status: "error", statusMessage: `Couldn't subscribe to the Teams channel (${detail}). Retrying.`, failures, retryAt: this.now() + wait }));
+      const what = isDirect(binding) ? "Teams chats" : "the Teams channel";
+      await this.records.patchBinding(bindingId, (b) => ({ ...b, status: "error", statusMessage: `Couldn't subscribe to ${what} (${detail}). Retrying.`, failures, retryAt: this.now() + wait }));
       this.options.log("presence.teams_subscribe_failed", { bindingId, failures, error: detail });
     }
   }
@@ -676,27 +829,47 @@ export class PresenceService {
     return `*${slackEscape(record.title)}*${body}${link}`;
   }
 
+  /**
+   * Teams notices: a 1:1 chat from the workspace's account to the person
+   * (found by e-mail; needs “Teams: agents in chats”), else a post in the
+   * workspace's notifications channel.
+   */
   private teamsNotifier(): Notifier {
     return {
       channel: "teams",
-      available: ({ workspaceId }) => {
+      available: ({ workspaceId, recipient }) => {
+        if (recipient.email && this.directConnection("teams", workspaceId)) return { ok: true };
         if (!this.anyConnection("teams", workspaceId, PROVIDERS.teams.notifyGroups)) {
-          return { ok: false, reason: "Connect Microsoft 365 for the whole workspace (with “Teams: post messages”) in Integrations to deliver here." };
+          return { ok: false, reason: "Connect Microsoft 365 for the whole workspace (with “Teams: agents in chats”, or “Teams: post messages” and a notifications channel) in Integrations to deliver here." };
         }
         if (!this.records.workspace(workspaceId).teams) return { ok: false, reason: "Choose a Teams notifications channel first (Integrations → Microsoft 365)." };
         return { ok: true };
       },
-      send: async ({ record }) => {
-        const connection = this.anyConnection("teams", record.workspaceId, PROVIDERS.teams.notifyGroups);
-        const target = this.records.workspace(record.workspaceId).teams;
-        if (!connection || !target?.teamId) throw new Error("Teams notifications aren't set up for this workspace.");
-        const ctx = this.options.connectors.contextFor(connection.id, AbortSignal.timeout(VENDOR_TIMEOUT_MS));
+      send: async ({ record, recipient }) => {
         const appUrl = this.options.env.SIBYL_APP_URL?.trim().replace(/\/+$/, "");
         const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-        const content = `<p>${escape(record.body || record.title).replace(/\n/g, "<br>")}</p>${appUrl ? `<p><a href="${escape(`${appUrl}${notificationPath(record)}`)}">Open in Sibyl</a></p>` : ""}`;
+        const link = appUrl ? `<p><a href="${escape(`${appUrl}${notificationPath(record)}`)}">Open in Sibyl</a></p>` : "";
+        const body = `<p>${escape(record.body || record.title).replace(/\n/g, "<br>")}</p>${link}`;
+        const target = this.records.workspace(record.workspaceId).teams;
+        const direct = recipient.email ? this.directConnection("teams", record.workspaceId) : undefined;
+        if (direct && recipient.email) {
+          try {
+            const ctx = this.options.connectors.contextFor(direct.id, AbortSignal.timeout(VENDOR_TIMEOUT_MS));
+            const chatId = await oneOnOneChat(ctx, await accountUserId(ctx), recipient.email);
+            const titled = record.body && record.body !== record.title ? `<p><b>${escape(record.title)}</b></p>${body}` : body;
+            await postChatMessage(ctx, chatId, titled);
+            return;
+          } catch (error) {
+            if (!target) throw error;
+            this.options.log("presence.teams_dm_failed", { error: errorText(error) });
+          }
+        }
+        const connection = this.anyConnection("teams", record.workspaceId, PROVIDERS.teams.notifyGroups);
+        if (!connection || !target?.teamId) throw new Error("Teams notifications aren't set up for this workspace.");
+        const ctx = this.options.connectors.contextFor(connection.id, AbortSignal.timeout(VENDOR_TIMEOUT_MS));
         await ctx.http.post(`${ctx.base("graph")}/v1.0/teams/${encodeURIComponent(target.teamId)}/channels/${encodeURIComponent(target.channelId)}/messages`, {
           subject: record.title.slice(0, 200),
-          body: { contentType: "html", content }
+          body: { contentType: "html", content: body }
         });
       }
     };
@@ -709,6 +882,22 @@ export class PresenceService {
     return this.anyConnection(provider, workspaceId, PROVIDERS[provider].groups);
   }
 
+  /** The workspace's shared connection that can take direct messages. */
+  private directConnection(provider: PresenceProvider, workspaceId: string): ConnectionRecord | undefined {
+    return this.anyConnection(provider, workspaceId, PROVIDERS[provider].directGroups);
+  }
+
+  private directStatus(provider: PresenceProvider, workspaceId: string): { available: boolean; reason?: string } {
+    if (this.directConnection(provider, workspaceId)) return { available: true };
+    const product = provider === "teams" ? "Microsoft 365" : PROVIDERS[provider].name;
+    const any = this.options.connectors.connectionsOf(PROVIDERS[provider].connectorId).find((c) => c.scope === "workspace" && c.workspaceId === workspaceId);
+    if (!any) return { available: false, reason: `Connect ${product} for the whole workspace in Integrations first.` };
+    if (any.status === "reconnect") return { available: false, reason: `${product} needs to be reconnected in Integrations.` };
+    const def = this.options.connectors.definition(PROVIDERS[provider].connectorId);
+    const missing = PROVIDERS[provider].directGroups.filter((group) => !any.groups.includes(group)).map((group) => `“${def?.groups.find((g) => g.id === group)?.title ?? group}”`);
+    return { available: false, reason: `Switch on ${missing.join(", ")} for the workspace connection in Integrations.` };
+  }
+
   /** A shared, working connection of the provider's connector in the workspace with these groups. */
   private anyConnection(provider: PresenceProvider, workspaceId: string, groups: string[] = []): ConnectionRecord | undefined {
     return this.options.connectors
@@ -719,14 +908,15 @@ export class PresenceService {
 
   private providerStatus(provider: PresenceProvider, workspaceId: string): PresenceProviderStatus {
     const { name, connectorId, groups } = PROVIDERS[provider];
+    const direct = this.directStatus(provider, workspaceId);
     const host = this.hostConnection(provider, workspaceId);
-    if (host) return { provider, available: true, ...(host.account ? { account: host.account } : {}) };
+    if (host) return { provider, available: true, ...(host.account ? { account: host.account } : {}), direct };
     const any = this.options.connectors.connectionsOf(connectorId).find((c) => c.scope === "workspace" && c.workspaceId === workspaceId);
-    if (!any) return { provider, available: false, reason: `Connect ${provider === "teams" ? "Microsoft 365" : name} for the whole workspace in Integrations first.` };
-    if (any.status === "reconnect") return { provider, available: false, reason: `${provider === "teams" ? "Microsoft 365" : name} needs to be reconnected in Integrations.` };
+    if (!any) return { provider, available: false, reason: `Connect ${provider === "teams" ? "Microsoft 365" : name} for the whole workspace in Integrations first.`, direct };
+    if (any.status === "reconnect") return { provider, available: false, reason: `${provider === "teams" ? "Microsoft 365" : name} needs to be reconnected in Integrations.`, direct };
     const def = this.options.connectors.definition(connectorId);
     const missing = groups.filter((group) => !any.groups.includes(group)).map((group) => def?.groups.find((g) => g.id === group)?.title ?? group);
-    return { provider, available: false, reason: `Switch on ${missing.map((m) => `“${m}”`).join(", ")} for the workspace connection in Integrations.` };
+    return { provider, available: false, reason: `Switch on ${missing.map((m) => `“${m}”`).join(", ")} for the workspace connection in Integrations.`, ...(any.account ? { account: any.account } : {}), direct };
   }
 
   private async editableAgent(caller: Caller, agentId: string) {
@@ -794,15 +984,18 @@ export class PresenceService {
     return conversation.id;
   }
 
-  private withinRate(bindingId: string): boolean {
+  private withinRate(lane: string, limit: number): boolean {
     const at = this.now();
-    const recent = (this.hits.get(bindingId) ?? []).filter((t) => at - t < RATE_WINDOW_MS);
-    if (recent.length >= RATE_LIMIT) {
-      this.hits.set(bindingId, recent);
+    const recent = (this.hits.get(lane) ?? []).filter((t) => at - t < RATE_WINDOW_MS);
+    if (recent.length >= limit) {
+      this.hits.set(lane, recent);
       return false;
     }
     recent.push(at);
-    this.hits.set(bindingId, recent);
+    this.hits.set(lane, recent);
+    if (this.hits.size > 10_000) {
+      for (const [key, times] of this.hits) if (!times.some((t) => at - t < RATE_WINDOW_MS)) this.hits.delete(key);
+    }
     return true;
   }
 
@@ -822,6 +1015,21 @@ export class PresenceService {
     const settled = work.catch((error: unknown) => this.options.log("presence.background_failed", { error: errorText(error) }));
     this.pending.add(settled);
     void settled.finally(() => this.pending.delete(settled));
+  }
+
+  private directView(binding: PresenceBinding, canEdit: boolean): PresenceDirectView {
+    return {
+      id: binding.id,
+      provider: binding.provider,
+      respond: binding.respond,
+      allow: binding.allow ?? "members",
+      status: binding.status,
+      ...(binding.statusMessage ? { statusMessage: binding.statusMessage } : {}),
+      ...(binding.createdByName ? { createdByName: binding.createdByName } : {}),
+      createdAt: binding.createdAt,
+      ...(binding.lastActivityAt ? { lastActivityAt: binding.lastActivityAt } : {}),
+      canEdit
+    };
   }
 
   private view(binding: PresenceBinding, canEdit: boolean): PresenceBindingView {
@@ -845,7 +1053,8 @@ export class PresenceService {
   }
 }
 
-export function placeOf(binding: Pick<PresenceBinding, "provider" | "channelId" | "channelName" | "teamName">): string {
+export function placeOf(binding: Pick<PresenceBinding, "provider" | "channelId" | "channelName" | "teamName" | "kind">): string {
+  if (isDirect(binding)) return binding.provider === "slack" ? "Slack direct messages" : "Teams chats";
   if (binding.provider === "slack") return `Slack #${binding.channelName ?? binding.channelId}`;
   return `Teams ${binding.teamName ?? "team"} › ${binding.channelName ?? "channel"}`;
 }

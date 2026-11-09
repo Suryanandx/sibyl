@@ -498,23 +498,6 @@ code {
   color: var(--text);
 }
 
-.sidebarFooterBtn {
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  display: flex;
-  font-weight: 500;
-  gap: 8px;
-  height: 40px;
-  justify-content: center;
-  margin-top: 12px;
-}
-
-.sidebarFooterBtn:hover {
-  background: var(--subtle);
-}
-
 .scrim {
   display: none;
 }

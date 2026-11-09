@@ -13,6 +13,9 @@ import { directoryApi } from "./api";
 import styles from "./identity.module.css";
 
 const ROLES: Array<GroupRoleRule["role"]> = ["admin", "member", "viewer"];
+/** Select value for "follow Admin → Organization" (sent as null). */
+const ORG_DEFAULT = "";
+const roleName = (role: string) => role[0]!.toUpperCase() + role.slice(1);
 
 export function DirectorySettings({ showJit }: { showJit: boolean }) {
   const [view, setView] = useState<DirectorySettingsView | null>(null);
@@ -52,6 +55,7 @@ export function DirectorySettings({ showJit }: { showJit: boolean }) {
 
   if (!view) return error ? <Notice tone="danger">{error}</Notice> : <Muted>Loading…</Muted>;
   const firstWorkspace = view.workspaces[0]?.id ?? "default";
+  const workspaceName = (id: string) => view.workspaces.find((w) => w.id === id)?.name ?? id;
 
   return (
     <Card>
@@ -60,7 +64,12 @@ export function DirectorySettings({ showJit }: { showJit: boolean }) {
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <div className={styles.formGrid}>
           <Field label="New people join">
-            <Select value={view.defaultWorkspaceId} disabled={busy} onChange={(event) => void save({ defaultWorkspaceId: event.target.value })}>
+            <Select
+              value={view.followsOrganization?.workspace ? ORG_DEFAULT : view.defaultWorkspaceId}
+              disabled={busy}
+              onChange={(event) => void save({ defaultWorkspaceId: event.target.value === ORG_DEFAULT ? null : event.target.value })}
+            >
+              <option value={ORG_DEFAULT}>Organization default ({workspaceName(view.organizationDefaults?.defaultWorkspaceId ?? view.defaultWorkspaceId)})</option>
               {view.workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
                   {workspace.name}
@@ -69,14 +78,20 @@ export function DirectorySettings({ showJit }: { showJit: boolean }) {
             </Select>
           </Field>
           <Field label="as">
-            <Select value={view.defaultRole} disabled={busy} onChange={(event) => void save({ defaultRole: event.target.value })}>
+            <Select
+              value={view.followsOrganization?.role ? ORG_DEFAULT : view.defaultRole}
+              disabled={busy}
+              onChange={(event) => void save({ defaultRole: event.target.value === ORG_DEFAULT ? null : event.target.value })}
+            >
+              <option value={ORG_DEFAULT}>Organization default ({roleName(view.organizationDefaults?.defaultRole ?? view.defaultRole)})</option>
               {ROLES.map((role) => (
                 <option key={role} value={role}>
-                  {role[0]!.toUpperCase() + role.slice(1)}
+                  {roleName(role)}
                 </option>
               ))}
             </Select>
           </Field>
+          <Muted className={styles.full}>“Organization default” follows Admin → Organization, also when it changes later.</Muted>
           {showJit ? (
             <div className={styles.full}>
               <Checkbox
@@ -112,7 +127,7 @@ export function DirectorySettings({ showJit }: { showJit: boolean }) {
                 <Select value={rule.role} onChange={(event) => setRules(rules.map((r, i) => (i === index ? { ...r, role: event.target.value as GroupRoleRule["role"] } : r)))}>
                   {ROLES.map((role) => (
                     <option key={role} value={role}>
-                      {role[0]!.toUpperCase() + role.slice(1)}
+                      {roleName(role)}
                     </option>
                   ))}
                 </Select>

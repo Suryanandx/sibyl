@@ -67,7 +67,7 @@ export const ssoApi = {
 
 export const directoryApi = {
   get: () => gatewayRequest<DirectorySettingsView>("/api/directory"),
-  save: (input: Partial<{ defaultWorkspaceId: string; defaultRole: string; jitProvisioning: boolean; groupRoles: GroupRoleRule[] }>) =>
+  save: (input: Partial<{ defaultWorkspaceId: string | null; defaultRole: string | null; jitProvisioning: boolean; groupRoles: GroupRoleRule[] }>) =>
     gatewayRequest<DirectorySettingsView>("/api/directory", { method: "PUT", body: input })
 };
 

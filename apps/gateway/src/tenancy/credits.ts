@@ -148,11 +148,17 @@ export class CreditsService {
     return { ...result, balanceUsd: this.balanceUsd() };
   }
 
-  /** Charge one recorded model call (cost + margin). Idempotent per usage event. */
-  charge(event: UsageEvent): void {
-    if (!this.active || event.ownerId !== this.orgId || !(event.costUsd > 0)) return;
+  /**
+   * The ledger charge for one recorded model call (cost + margin), or
+   * undefined when this call isn't paid with credits. The meter writes it in
+   * the same store transaction as the usage event, so a restart never loses
+   * a charge, and its idempotency key (`usage:<event id>`) never counts one
+   * twice.
+   */
+  chargeFor(event: UsageEvent): CreditEntry | undefined {
+    if (!this.active || event.ownerId !== this.orgId || !(event.costUsd > 0)) return undefined;
     const micros = Math.max(1, Math.round(event.costUsd * (1 + this.options.margin) * MICROS_PER_USD));
-    void this.append({
+    return {
       orgId: this.orgId,
       idempotencyKey: `usage:${event.id}`,
       kind: "charge",
@@ -160,17 +166,27 @@ export class CreditsService {
       at: event.at,
       reference: event.id,
       note: `${event.feature} · ${event.model}`.slice(0, 200)
-    }).catch((error: unknown) => this.log("credits.charge_failed", { orgId: this.orgId, error: error instanceof Error ? error.message : String(error) }));
+    };
   }
 
-  /** The usage policy: charges every recorded call and blocks new ones when the balance is empty. */
+  /**
+   * The usage policy: blocks new calls when the balance is empty, and
+   * charges every recorded call (in the usage event's own transaction). The
+   * cached balance follows the charge at once; load() reads the ledger again.
+   */
   policy(): UsagePolicy {
     return {
       check: (input) => {
         if (!this.active || input.ownerId !== this.orgId) return undefined;
         return this.balance > 0 ? undefined : { allowed: false, scope: "credits", message: CREDITS_BLOCKED_MESSAGE };
       },
-      recorded: (event) => this.charge(event)
+      charge: (event) => this.chargeFor(event),
+      recorded: (event) => {
+        const entry = this.chargeFor(event);
+        if (!entry) return;
+        this.balance += entry.amountMicros;
+        for (const listener of this.listeners) listener();
+      }
     };
   }
 

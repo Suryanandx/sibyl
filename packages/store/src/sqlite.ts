@@ -372,6 +372,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store {
   const parseAll = <T>(rows: Row[], column = "data"): T[] => rows.map((row) => JSON.parse(String(row[column])) as T);
   const opt = (value: string | number | undefined): SQLInputValue => (value === undefined ? null : value);
 
+  const tenancy = createSqliteTenancyStores(db);
   const sql = {
     convList: prepare(
       `SELECT id, owner_id, workspace_id, created_by, title, created_at, updated_at FROM conversations
@@ -488,6 +489,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store {
       "INSERT INTO kv (owner_id, key, value) VALUES (?, ?, ?) ON CONFLICT (owner_id, key) DO UPDATE SET value = excluded.value"
     ),
     kvDelete: prepare("DELETE FROM kv WHERE owner_id = ? AND key = ?"),
+    kvByKey: prepare("SELECT owner_id, value FROM kv WHERE key = ? AND value IS NOT NULL ORDER BY owner_id"),
 
     wsList: prepare("SELECT data FROM workspaces WHERE owner_id = ? ORDER BY rowid ASC"),
     wsGet: prepare("SELECT data FROM workspaces WHERE id = ? AND owner_id = ?"),
@@ -668,8 +670,16 @@ export function createSqliteStore(options: SqliteStoreOptions): Store {
       }
     },
     usage: {
-      async insert(event) {
-        sql.usageInsert.run(event.ownerId, event.at, event.feature, opt(event.routineId), event.costUsd, json(event));
+      async insert(event, credit) {
+        if (!credit) {
+          sql.usageInsert.run(event.ownerId, event.at, event.feature, opt(event.routineId), event.costUsd, json(event));
+          return;
+        }
+        // The event and its credits charge commit together (or neither does).
+        transaction(() => {
+          sql.usageInsert.run(event.ownerId, event.at, event.feature, opt(event.routineId), event.costUsd, json(event));
+          tenancy.appendCredit(credit);
+        });
       },
       async sum(ownerId, from, to, filter = {}) {
         // Summed in insertion order in JS so float results match the memory store exactly.
@@ -732,7 +742,8 @@ export function createSqliteStore(options: SqliteStoreOptions): Store {
         sql.artifactRemove.run(id, ownerId);
       }
     },
-    ...createSqliteTenancyStores(db),
+    organizations: tenancy.organizations,
+    credits: tenancy.credits,
     audit: {
       async append(record) {
         sql.auditInsert.run(
@@ -783,6 +794,9 @@ export function createSqliteStore(options: SqliteStoreOptions): Store {
       },
       async delete(ownerId, key) {
         sql.kvDelete.run(ownerId, key);
+      },
+      async listByKey<T>(key: string) {
+        return (sql.kvByKey.all(key) as Row[]).map((row) => ({ ownerId: String(row.owner_id), value: JSON.parse(String(row.value)) as T }));
       }
     },
     workspaces: {

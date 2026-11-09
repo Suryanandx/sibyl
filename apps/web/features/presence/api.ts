@@ -6,6 +6,8 @@ import type {
   PresenceBindingInput,
   PresenceChannelList,
   PresenceChannelRef,
+  PresenceDirectAllow,
+  PresenceDirectInput,
   PresenceProvider,
   PresenceRespondMode,
   PresenceWorkspaceSettings
@@ -33,6 +35,24 @@ export function removeBinding(agentId: string, bindingId: string): Promise<Prese
 export function setAgentNotify(agentId: string, notify: PresenceProvider[]): Promise<PresenceAgentState> {
   return gatewayRequest(`${agentPath(agentId)}/settings`, { method: "PUT", body: { notify } });
 }
+
+export function setDirect(agentId: string, provider: PresenceProvider, input: PresenceDirectInput): Promise<PresenceAgentState> {
+  return gatewayRequest(`${agentPath(agentId)}/direct/${provider}`, { method: "PUT", body: input });
+}
+
+export function removeDirect(agentId: string, provider: PresenceProvider): Promise<PresenceAgentState> {
+  return gatewayRequest(`${agentPath(agentId)}/direct/${provider}`, { method: "DELETE" });
+}
+
+export const DIRECT_RESPOND_OPTIONS: Array<{ id: PresenceRespondMode; label: string }> = [
+  { id: "all", label: "Every direct message (unless another agent is named)" },
+  { id: "mentions", label: "Only when the message starts with its name" }
+];
+
+export const DIRECT_ALLOW_OPTIONS: Array<{ id: PresenceDirectAllow; label: string }> = [
+  { id: "members", label: "People in this workspace (matched by e-mail)" },
+  { id: "anyone", label: "Anyone in the Slack workspace or Microsoft 365 organization" }
+];
 
 export function fetchChannels(provider: PresenceProvider, teamId?: string): Promise<PresenceChannelList> {
   const query = new URLSearchParams({ provider, ...(teamId ? { teamId } : {}) });

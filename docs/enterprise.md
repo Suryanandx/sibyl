@@ -198,8 +198,23 @@ is one organization, so there is no DNS check.
 - Otherwise, with **"Create an account the first time someone signs in"** on, a
   new account is created in the workspace and role you choose under **New people
   and groups**. With it off, only existing or provisioned people get in.
+- Someone removed from the organization (Admin → Users → Remove) is not an
+  account to sign in to any more. With just-in-time creation on, they come back
+  as a fresh account: the same account id, but none of the old access, links or
+  groups (as an invitation does).
 
 Accounts created this way have no Sibyl password.
+
+### Where new people land
+
+**New people and groups → New people join … as …** sets the workspace and role
+for accounts SSO and SCIM create. **Organization default** (the default) follows
+Admin → Organization ("New people also join" and "Default role"), also when you
+change those later. Pick a workspace or role here to use your own; pick
+**Organization default** again to follow Admin → Organization. (Settings saved
+before this option existed keep only what differs from the defaults.)
+`PUT /api/directory` takes `defaultWorkspaceId: null` / `defaultRole: null` to
+follow again.
 
 ### Groups
 
@@ -241,6 +256,10 @@ What Sibyl supports:
 
 - `userName` is the person's email address.
 - New people join the workspace and role set under **New people and groups**.
+- Creating someone who was removed from the organization in Sibyl works: the
+  old account comes back fresh (same id, only the default access). People
+  removed in Sibyl don't appear in SCIM lists or lookups. A live account with
+  the same `userName` is refused (`409 uniqueness`).
 - **Removing someone** (DELETE, or `active: false`) turns the account off: they
   can't sign in and every session ends at once, including open chats. Their
   chats and work stay. `active: true` turns the account back on.

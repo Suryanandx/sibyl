@@ -38,7 +38,7 @@ import type { IncomingMessage } from "node:http";
 import { normalizeEmail, type ExternalLogin, type SignupTicket, type Store, type UserRecord } from "@open-gpt-live/core";
 import type { SignupEmailSent, SignupOptionsView, SignupProvider, SignupTicketView } from "@open-gpt-live/protocol";
 import type { Mailer } from "../notifications/mailer.js";
-import { hashPassword, passwordProblem, randomToken } from "./crypto.js";
+import { hashPassword, hashToken, passwordProblem, randomToken } from "./crypto.js";
 import { OidcClients, browserBindingMatches, newBrowserBinding, safeNext, type OidcClientSettings, type OidcIdentity } from "./oidc.js";
 import { LoginRateLimiter } from "./rate-limit.js";
 import { IdentityError, type IdentityService } from "./service.js";
@@ -86,6 +86,8 @@ interface PendingOAuth {
   provider: OAuthProvider;
   bindingHash: string;
   next: string;
+  /** Accepting this invitation (/invite/<token>) with the provider. */
+  invite?: string;
   checks: { state: string; nonce: string; verifier: string };
   expiresAt: number;
 }
@@ -283,8 +285,12 @@ export class SignupService {
     return (provider === "google" || provider === "microsoft") && Boolean(this.apps[provider]);
   }
 
-  /** Where to send the browser, and the binding cookie value for this browser. */
-  async startOAuth(provider: OAuthProvider, next: string | undefined, redirectUri: string, ip: string): Promise<{ url: string; binding: string }> {
+  /**
+   * Where to send the browser, and the binding cookie value for this
+   * browser. With `invite`, finishing accepts that invitation (see
+   * acceptInviteExternal) instead of signing in or up.
+   */
+  async startOAuth(provider: OAuthProvider, next: string | undefined, redirectUri: string, ip: string, invite?: string): Promise<{ url: string; binding: string }> {
     const app = this.apps[provider];
     if (!app) throw new IdentityError(404, "not_available", "That sign-in option isn't available.");
     this.limit(this.starts, ip, "", "Too many sign-in attempts. Try again in");
@@ -299,6 +305,7 @@ export class SignupService {
       provider,
       bindingHash: hash,
       next: safeNext(next),
+      ...(invite ? { invite } : {}),
       checks: { state: started.state, nonce: started.nonce, verifier: started.verifier },
       expiresAt: this.now() + OAUTH_TTL_MS
     });
@@ -332,7 +339,23 @@ export class SignupService {
     if (!emailVouched(provider, identity)) {
       throw new IdentityError(400, "email_unverified", `${label(provider)} hasn't confirmed this email address. Sign up with email instead.`);
     }
+    if (pending.invite) return this.acceptInvite(pending.invite, { email, ...(identity.name ? { name: identity.name.slice(0, 80) } : {}), provider, subject: identity.subject }, ip, identityFor);
     return this.verified({ email, ...(identity.name ? { name: identity.name.slice(0, 80) } : {}), provider, subject: identity.subject }, pending.next, ip, identityFor);
+  }
+
+  /** The invitation a pending Google / Microsoft sign-in accepts (for sending errors back to its page). */
+  pendingInvite(state: string | null): string | undefined {
+    return state ? this.oauth.get(state)?.invite : undefined;
+  }
+
+  /** The verified address accepts the invitation in its organization; back to the invitation page, signed in. */
+  private async acceptInvite(token: string, identity: { email: string; name?: string; provider: OAuthProvider; subject: string }, ip: string, identityFor: IdentityFor): Promise<SignupOutcome> {
+    const invite = await this.store.identity.invites.getByTokenHash(hashToken(token));
+    if (!invite) throw new IdentityError(404, "invite_not_found", "This invitation link isn't valid.");
+    const accepted = await (await identityFor(invite.orgId)).acceptInviteExternal(token, identity, ip);
+    this.options.log?.("signup.invite_accepted", { provider: identity.provider, newAccount: accepted.newAccount });
+    const query = new URLSearchParams({ joined: accepted.workspaceId, ...(accepted.newAccount ? { new: "1" } : {}) });
+    return { kind: "session", token: accepted.token, orgId: invite.orgId, path: `/invite/${encodeURIComponent(token)}?${query.toString()}` };
   }
 
   /* ───────────── one person, several organizations ───────────── */

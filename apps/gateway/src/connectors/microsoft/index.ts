@@ -53,7 +53,14 @@ export const microsoftConnector: ConnectorDefinition = {
       scopes: [`${S}ChannelMessage.Read.All`],
       defaultEnabled: false
     },
-    { id: "teams_chat", title: "Teams: chats", description: "List chats and send chat messages as the connected account (always asks first).", scopes: [`${S}Chat.ReadWrite`], defaultEnabled: false }
+    { id: "teams_chat", title: "Teams: chats", description: "List chats and send chat messages as the connected account (always asks first).", scopes: [`${S}Chat.ReadWrite`], defaultEnabled: false },
+    {
+      id: "teams_direct",
+      title: "Teams: agents in chats",
+      description: "People chat with agents 1:1 or in group chats with the connected account, and notices go to people 1:1. Finds people by e-mail.",
+      scopes: [`${S}Chat.ReadWrite`, `${S}User.ReadBasic.All`],
+      defaultEnabled: false
+    }
   ],
   actions: [...outlookActions, ...filesActions, ...teamsActions],
   setup: {

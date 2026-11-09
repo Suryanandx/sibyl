@@ -1,6 +1,11 @@
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createMemoryStore, type UsageEvent } from "@open-gpt-live/core";
+import { createSqliteStore } from "@open-gpt-live/store";
 import { describe, expect, test } from "vitest";
+import { GatewayUsageMeter } from "../metering/meter.js";
 import { orgOfRoom, roomName, roomSpace } from "../realtime/rooms.js";
 import { CreditsService, creditsMargin } from "./credits.js";
 import { checkOpenRouterKey, resolveModelAccess } from "./model-access.js";
@@ -40,30 +45,67 @@ describe("AI credits", () => {
   test("charges cost plus margin once per usage event, and blocks at an empty balance", async () => {
     const store = createMemoryStore();
     const credits = await new CreditsService({ store, orgId: "o1", active: true, margin: creditsMargin({ SIBYL_CREDITS_MARGIN: "0.2" }) }).load();
+    const meter = new GatewayUsageMeter({ store, limits: {} });
+    meter.addPolicy(credits.policy());
     const policy = credits.policy();
     expect(policy.check({ ownerId: "o1", estimateUsd: 0.01, now: Date.now() })).toMatchObject({ allowed: false, scope: "credits" });
     expect(await credits.add({ kind: "grant", amountUsd: 1, idempotencyKey: "g1" })).toBe(true);
     expect(await credits.add({ kind: "grant", amountUsd: 1, idempotencyKey: "g1" })).toBe(false);
     expect(policy.check({ ownerId: "o1", estimateUsd: 0.01, now: Date.now() })).toBeUndefined();
-    const spent = event("o1", 0.5, "e1");
-    policy.recorded!(spent);
-    policy.recorded!(spent);
-    policy.recorded!(event("o2", 5));
+    meter.record({ ownerId: "o1", feature: "brain", model: "m", costUsd: 0.5, estimated: false });
+    meter.record({ ownerId: "o2", feature: "brain", model: "m", costUsd: 5, estimated: false });
+    await meter.flush();
     const view = await credits.view();
     expect(view.balanceUsd).toBeCloseTo(0.4);
     expect(await store.credits.balance("o1")).toBe(400_000);
     expect(view.entries.map((e) => e.kind)).toEqual(["charge", "grant"]);
-    policy.recorded!(event("o1", 0.5));
-    await credits.view();
+    // The same usage event can't be charged twice (its idempotency key).
+    const entry = credits.chargeFor(event("o1", 0.5, "e1"))!;
+    expect(await store.credits.append(entry)).toBe(true);
+    expect(await store.credits.append(entry)).toBe(false);
+    meter.record({ ownerId: "o1", feature: "brain", model: "m", costUsd: 0.5, estimated: false });
     expect(policy.check({ ownerId: "o1", estimateUsd: 0, now: Date.now() })).toMatchObject({ allowed: false, scope: "credits" });
     // Other organizations' checks are not this ledger's business.
     expect(policy.check({ ownerId: "o2", estimateUsd: 0, now: Date.now() })).toBeUndefined();
   });
 
+  test("a charge commits with its usage event: a restart right after a call neither loses nor double-counts it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "sibyl-credits-"));
+    const file = join(dir, "sibyl.db");
+    try {
+      const first = createSqliteStore({ file });
+      const credits = await new CreditsService({ store: first, orgId: "o1", active: true, margin: 0 }).load();
+      await credits.add({ kind: "grant", amountUsd: 2, idempotencyKey: "welcome" });
+      const meter = new GatewayUsageMeter({ store: first, limits: {} });
+      meter.addPolicy(credits.policy());
+      meter.record({ ownerId: "o1", feature: "brain", model: "m", costUsd: 0.25, estimated: false });
+      meter.record({ ownerId: "o1", feature: "brain", model: "m", costUsd: 0.5, estimated: false });
+      // No flush, no waiting: the process "stops" right after the calls.
+      expect(credits.balanceUsd()).toBeCloseTo(1.25);
+      await first.close();
+
+      const second = createSqliteStore({ file });
+      const reloaded = await new CreditsService({ store: second, orgId: "o1", active: true, margin: 0 }).load();
+      expect(reloaded.balanceUsd()).toBeCloseTo(1.25);
+      const events = await second.usage.list("o1", 0, Date.now() + 1);
+      const charges = (await second.credits.list("o1")).filter((e) => e.kind === "charge");
+      expect(charges.map((c) => c.reference).sort()).toEqual(events.map((e) => e.id).sort());
+      // A bad charge rolls back its event too (nothing half-written).
+      await expect(second.usage.insert({ ...events[0]!, id: "again" }, { ...charges[0]!, idempotencyKey: "usage:again", amountMicros: 0.5 })).rejects.toThrow();
+      expect(await second.usage.list("o1", 0, Date.now() + 1)).toHaveLength(2);
+      expect(await second.credits.balance("o1")).toBe(1_250_000);
+      await second.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("an organization with its own key is never charged; buying needs a payment provider", async () => {
     const store = createMemoryStore();
     const credits = await new CreditsService({ store, orgId: "o1", active: false, margin: 0 }).load();
-    credits.policy().recorded!(event("o1", 3));
+    const policy = credits.policy();
+    expect(policy.charge!(event("o1", 3))).toBeUndefined();
+    policy.recorded!(event("o1", 3));
     expect((await credits.view()).balanceUsd).toBe(0);
     expect(credits.policy().check({ ownerId: "o1", estimateUsd: 1, now: Date.now() })).toBeUndefined();
     await expect(credits.purchase(5, "u1")).rejects.toMatchObject({ status: 501 });

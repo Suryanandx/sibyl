@@ -2,12 +2,15 @@
 
 Your agents can work where your team talks. Put an agent in a Slack or Teams
 channel and it answers when someone @mentions it, then keeps answering in that
-thread. Monitors and agents can also send their notices to Slack and Teams.
+thread. People can also message an agent directly: a Slack DM with the app, or a
+Teams chat with the workspace's account. Monitors and agents can send their
+notices to Slack and Teams, to the person directly.
 
 This is part of open-source Sibyl. It uses the same connectors, permissions,
 approvals and budgets as everything else.
 
 - [How it works](#how-it-works)
+- [Direct messages](#direct-messages)
 - [Slack](#slack)
 - [Microsoft Teams](#microsoft-teams)
 - [Notifications](#notifications)
@@ -51,6 +54,48 @@ new?`. Without a name, the channel's first agent answers.
 **What you can see.** Each channel has its own conversation in Sibyl
 ("Research · Slack #support") with what was asked and answered.
 
+## Direct messages
+
+Agents → an agent → **Slack and Teams → Direct messages** → *Answer in Slack*
+or *Answer in Microsoft Teams*.
+
+- **Where people write.** Slack: a direct message to the Sibyl app (Apps →
+  Sibyl → Messages), or a group DM that includes the app. Teams: a 1:1 chat
+  with the workspace's Microsoft 365 account (for example *Sibyl*), or a group
+  chat that includes it. Meeting chats are left out.
+- **Which agent answers.** Several agents can take direct messages.
+  - A message that starts with an agent's name goes to that agent
+    ("Research, what's new?").
+  - After that, the conversation stays with that agent (in a 1:1, until
+    someone names another agent).
+  - Otherwise the first agent set to **Every direct message** answers.
+    Agents set to **Only when the message starts with its name** wait to be
+    named.
+  - In group DMs and group chats an agent answers only when the app or account
+    is @mentioned, or when it is named. In a Slack group DM it then keeps
+    answering in that thread.
+- **Who may write** (per agent and provider):
+  - **People in this workspace** (default): the writer's Slack or Microsoft
+    365 e-mail must belong to an active Sibyl account that may use agents in
+    the agent's workspace. Without accounts (single-owner mode) the owner's
+    `SIBYL_NOTIFY_EMAIL` counts. Anyone else gets one short "Sorry, I only
+    answer people of this Sibyl workspace" and no model is called.
+  - **Anyone** in the Slack workspace or Microsoft 365 organization.
+- **Everything else is as in a channel.** The turn acts as the person who
+  switched direct messages on, with only the workspace's shared connections;
+  its autonomy decides writes (approvals in the inbox); its budget and the
+  organization's apply. The rate limit is per conversation: 20 messages per 10
+  minutes per DM or chat, and at most 200 per agent and provider.
+- **What you can see.** "Research · Slack direct messages" / "Research · Teams
+  chats" in Sibyl, with what was asked and answered.
+
+Slack needs the connection group **Agents in direct messages** (the scopes
+`im:history`, `mpim:history`, `users:read.email`; on by default for new
+connections), the `message.im` and `message.mpim` events, and the app's
+Messages tab (all in the manifest below). Teams needs the group **Teams: agents
+in chats** (`Chat.ReadWrite`, `User.ReadBasic.All`). An existing connection
+gets them with **Reconnect** after switching the group on.
+
 ## Slack
 
 ### 1. Create the Slack app
@@ -67,6 +112,9 @@ display_information:
   description: Your team's AI agents, from Sibyl.
   background_color: "#1d211f"
 features:
+  app_home:
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
   bot_user:
     display_name: Sibyl
     always_online: true
@@ -82,7 +130,9 @@ oauth_config:
       - chat:write.customize
       - groups:history
       - groups:read
+      - im:history
       - im:write
+      - mpim:history
       - reactions:write
       - users:read
       - users:read.email
@@ -95,6 +145,8 @@ settings:
       - app_mention
       - message.channels
       - message.groups
+      - message.im
+      - message.mpim
   interactivity:
     is_enabled: false
   org_deploy_enabled: false
@@ -111,8 +163,9 @@ What each scope is for:
 | `channels:read`, `groups:read` | listing channels to pick from |
 | `chat:write` | replies and posts |
 | `chat:write.customize` | replying under the agent's name |
+| `im:history`, `mpim:history` | direct messages and group DMs with the app (`message.im`, `message.mpim`) and their history for context |
 | `reactions:write` | the 👀 reaction while an agent works, and the reaction action |
-| `users:read`, `users:read.email` | names of the people in a thread; finding people by e-mail for notifications |
+| `users:read`, `users:read.email` | names of the people in a thread; finding people by e-mail for notifications; checking who writes a direct message |
 | `im:write` | opening a direct message for notifications |
 | `search:read` (user scope) | only for "Search messages (as you)", which is off by default |
 
@@ -140,7 +193,8 @@ afterwards and press **Retry**.
   older than five minutes are refused (no replays).
 - Sibyl answers within milliseconds; the agent's work happens afterwards.
   Slack's retries of the same event are recognised and dropped.
-- The app's own messages, edits, joins and direct messages are ignored.
+- The app's own messages, edits and joins are ignored. Direct messages are
+  answered only by agents that take direct messages.
 
 ## Microsoft Teams
 
@@ -174,7 +228,8 @@ Add a permission → Microsoft Graph → Delegated permissions**:
 | `Team.ReadBasic.All`, `Channel.ReadBasic.All` | listing teams and channels ("Teams: list teams and channels") | no |
 | `ChannelMessage.Read.All` | reading channel messages and subscribing to them ("Teams: read channel messages") | **yes** |
 | `ChannelMessage.Send` | replies and posts ("Teams: post messages") | no |
-| `Chat.ReadWrite` | optional: chat actions ("Teams: chats") | no |
+| `Chat.ReadWrite` | chats with agents and 1:1 notices ("Teams: agents in chats"); also the chat actions ("Teams: chats") | no |
+| `User.ReadBasic.All` | finding people by e-mail: who writes in a chat, whom to send a notice ("Teams: agents in chats") | no |
 
 Then **Grant admin consent** for your organization. Connect Microsoft 365 for
 the whole workspace with these groups switched on: *Teams: list teams and
@@ -201,6 +256,19 @@ channels*, *Teams: read channel messages*, *Teams: post messages*.
   after 1, 2, 4… minutes (at most an hour) and show on the channel.
 - Removing the agent from the channel deletes the subscription.
 
+**Chats.** For direct messages Sibyl subscribes to
+`/users/{account}/chats/getAllMessages`: every chat the connected account is
+in. Graph allows this with delegated `Chat.Read` / `Chat.ReadWrite` for the
+signed-in account itself. The tenant-wide `/chats/getAllMessages` would need
+application permissions (`Chat.Read.All`) that the Microsoft 365 connection
+doesn't use, and per-chat subscriptions would need a new subscription for
+every new chat. Each agent that takes Teams chats keeps its own subscription
+(renewed like the channel ones); when several do, Graph notifies once per
+subscription and Sibyl answers once. Notifications carry only
+`chats('…')/messages('…')`; Sibyl reads the message and the chat's type, skips
+the account's own posts and meeting chats, and reads the writer's e-mail when
+only workspace members may write.
+
 ## Notifications
 
 Monitors can notify in **Slack** and **Teams** next to the inbox and e-mail
@@ -211,8 +279,11 @@ in").
 - **Slack:** a direct message from the app to the person, found by their
   account e-mail (group "Notifications by direct message"). If no Slack user
   has that e-mail, the workspace's notifications channel is used.
-- **Teams:** a post in the workspace's notifications channel. Everyone in it
-  sees the notice, so pick a channel for the right people.
+- **Teams:** a 1:1 chat from the workspace's account to the person, found by
+  their account e-mail (group "Teams: agents in chats"; Graph finds the
+  existing chat or starts one). If that isn't possible, a post in the
+  workspace's notifications channel. Everyone in the channel sees it, so pick a
+  channel for the right people.
 
 Workspace admins choose the notifications channel in Integrations → Slack (or
 Microsoft 365) → Notifications and agents. Notices link back to Sibyl when
@@ -231,7 +302,10 @@ Microsoft 365) → Notifications and agents. Notices link back to Sibyl when
   sensitive access out of large channels.
 - Replies are escaped, so a reply can't ping `@channel` or hide a link.
 - Each channel answers at most 20 messages per 10 minutes (more are dropped
-  and logged). At most four channel turns run at once.
+  and logged); each direct-message conversation too, and at most 200 per agent
+  and provider. At most four turns run at once.
+- Direct messages are answered only for workspace members by default
+  (matched by e-mail; see [Direct messages](#direct-messages)).
 
 ## Checking it end to end
 
@@ -259,6 +333,10 @@ real Slack workspace and Teams tenant:
    inbox; the reaction appears.
 10. Create a monitor that notifies in Slack and run it: a direct message from
     the app arrives (your Sibyl account e-mail must match your Slack e-mail).
+11. Agents → the agent → Direct messages → *Answer in Slack*. In Slack open
+    Apps → Sibyl → Messages and write "what can you do?": the agent answers
+    in the DM. Ask a colleague without a Sibyl account to write too: they get
+    the short refusal.
 
 **Teams**
 
@@ -271,6 +349,12 @@ real Slack workspace and Teams tenant:
 4. In Teams, @mention the connected account in that channel. The agent's reply
    appears in the thread, starting with its name.
 5. Wait more than an hour: it still answers (the subscription was renewed).
+6. Switch on "Teams: agents in chats" for the connection (Reconnect), then the
+   agent's *Answer in Microsoft Teams*. Start a 1:1 chat with the connected
+   account and write to it: the reply comes in that chat, starting with the
+   agent's name.
+7. Run a monitor that notifies in Teams: the notice arrives as a 1:1 chat
+   from the connected account.
 
 ## Configuration
 
@@ -292,6 +376,7 @@ All routes act in the workspace from `x-sibyl-workspace`.
 | `POST /api/presence/agents/:agentId/bindings` `{provider, channelId, channelName?, teamId?, teamName?, respond}` | `agents.use`; editing rights on the agent; `integrations.use` |
 | `PATCH /api/presence/agents/:agentId/bindings/:id` `{respond}`, `DELETE …/bindings/:id` | as above |
 | `PUT /api/presence/agents/:agentId/settings` `{notify}` | as above |
+| `PUT /api/presence/agents/:agentId/direct/slack\|teams` `{respond: "all"\|"mentions", allow: "members"\|"anyone"}`, `DELETE …/direct/slack\|teams` | as above |
 | `GET /api/presence/channels?provider=slack\|teams[&teamId=]` | `integrations.use` |
 | `GET /api/presence/settings` | `integrations.use` |
 | `PUT /api/presence/settings` `{slack?, teams?}` | `integrations.connect_shared` |

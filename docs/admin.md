@@ -27,8 +27,8 @@ Admin → Organization has four parts.
   role new people get in the workspace above. It can't be Owner.
 
 With Agent Serve, people created by single sign-on or SCIM land in the same
-workspace with the same role until you choose something else under
-"New people and groups" in Admin → Single sign-on.
+workspace with the same role, also after you change them here, until you choose
+something else under "New people and groups" in Admin → Single sign-on.
 
 **Organization budget.** Daily and monthly spending caps for everyone. They can't
 be higher than `SIBYL_BUDGET_DAILY_USD` / `SIBYL_BUDGET_MONTHLY_USD` on the server;
@@ -65,7 +65,8 @@ What owners and admins can do:
 | Change someone's organization role | You can't give a role above your own, so admins can't make owners. You can't change someone above you. The organization always keeps at least one active owner. |
 | Turn an account off | They are signed out everywhere at once (open tabs close their connection) and can't sign in. Their workspaces and roles stay. You can't turn off yourself or the last owner. |
 | Turn an account on | They can sign in again with everything they had. |
-| Remove from the organization | They lose every workspace and are signed out. They disappear from the list. To bring them back, invite them again: they start fresh with only the new invitation's access. |
+| Remove from the organization | They lose every workspace and are signed out. They disappear from the list. To bring them back, invite them again (or, with Agent Serve, let single sign-on or SCIM create them again): they start fresh with only the new access. |
+| Invite people | People can accept with a password, or with Google or Microsoft when the server has those sign-in apps; the provider's verified address must be the invited one. |
 | Invite people | Pick the workspace and role. The role starts at the organization's default. |
 | Resend an invitation | Makes a new link (valid for 7 days) and emails it when email is set up. The old link stops working. |
 | Revoke an invitation | The link stops working. |

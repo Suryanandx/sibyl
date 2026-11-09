@@ -12,6 +12,7 @@ import type {
   AppBudgets,
   BudgetDecision,
   BudgetLimits,
+  CreditEntry,
   Store,
   UsageAttribution,
   UsageEvent,
@@ -204,8 +205,17 @@ export class GatewayUsageMeter implements UsageMeter {
       this.averages.set(key, previous === undefined ? costUsd : previous * 0.7 + costUsd * 0.3);
     }
 
+    // A policy's ledger charge (hosted credits) commits with the event in one transaction.
+    let credit: CreditEntry | undefined;
+    for (const policy of this.policies) {
+      try {
+        credit ??= policy.charge?.(event);
+      } catch (error) {
+        this.log("usage.policy_failed", { error: error instanceof Error ? error.message : String(error) });
+      }
+    }
     const write = this.store.usage
-      .insert(event)
+      .insert(event, credit)
       .catch((error: unknown) =>
         this.log("usage.store_failed", { error: error instanceof Error ? error.message : String(error) })
       );

@@ -14,6 +14,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   parsePresenceAgentSettings,
   parsePresenceBindingInput,
+  parsePresenceDirectInput,
   parsePresenceRespond,
   parsePresenceWorkspaceSettings
 } from "@open-gpt-live/protocol";
@@ -173,6 +174,19 @@ async function serve(options: PresenceHttpOptions, request: IncomingMessage, res
         if (method === "DELETE") {
           request.resume();
           return reply(200, await service.removeBinding(caller, agentId, segments[3]));
+        }
+      }
+      // /api/presence/agents/:agentId/direct/:provider — direct messages (Slack DMs, Teams chats)
+      if (segments.length === 4 && segments[2] === "direct" && (segments[3] === "slack" || segments[3] === "teams")) {
+        const provider = segments[3];
+        if (method === "PUT") {
+          const input = parsePresenceDirectInput(await body());
+          if (typeof input === "string") return reply(400, { error: "bad_request", message: input });
+          return reply(200, await service.setDirect(caller, agentId, provider, input));
+        }
+        if (method === "DELETE") {
+          request.resume();
+          return reply(200, await service.removeDirect(caller, agentId, provider));
         }
       }
       if (segments.length === 3 && segments[2] === "settings" && method === "PUT") {

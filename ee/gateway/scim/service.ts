@@ -111,7 +111,8 @@ export class ScimService {
 
   async listUsers(query: ListQuery, baseUrl: string): Promise<Json> {
     const filter = parseFilter(query.filter, ["username", "externalid", "emails.value", "id"]);
-    let users = (await this.users.list(this.context.orgId)).sort((a, b) => a.createdAt - b.createdAt);
+    // People removed from the organization aren't in it any more.
+    let users = (await this.users.list(this.context.orgId)).filter((u) => u.removedAt === undefined).sort((a, b) => a.createdAt - b.createdAt);
     if (filter) {
       const [attribute, value] = filter;
       if (attribute === "username" || attribute === "emails.value") users = users.filter((u) => u.email === normalizeEmail(value));
@@ -133,14 +134,15 @@ export class ScimService {
 
   async getUser(id: string): Promise<UserRecord> {
     const user = await this.users.get(this.context.orgId, id);
-    if (!user) throw new ScimError(404, `User ${id} not found.`);
+    if (!user || user.removedAt !== undefined) throw new ScimError(404, `User ${id} not found.`);
     return user;
   }
 
   async createUser(body: Json): Promise<UserRecord> {
     const fields = userFields(body);
     if (!fields.email) throw new ScimError(400, "userName must be the person's email address.", "invalidValue");
-    if (await this.users.getByEmail(this.context.orgId, fields.email)) throw new ScimError(409, `A user with userName ${fields.email} already exists.`, "uniqueness");
+    // Someone removed from the organization in Sibyl can be provisioned again (their old account comes back fresh).
+    if (await this.directory.activeByEmail(fields.email)) throw new ScimError(409, `A user with userName ${fields.email} already exists.`, "uniqueness");
     if (fields.externalId && (await this.directory.findByExternalId(fields.externalId))) throw new ScimError(409, "A user with this externalId already exists.", "uniqueness");
     const user = await this.directory.provision({
       email: fields.email,

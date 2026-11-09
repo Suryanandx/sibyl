@@ -72,6 +72,13 @@ export const slackConnector: ConnectorDefinition = {
       defaultEnabled: true
     },
     {
+      id: "agents_direct",
+      title: "Agents in direct messages",
+      description: "People message agents directly (a DM or group DM with the app). Who may write is set per agent; by default only people of the Sibyl workspace, matched by e-mail.",
+      scopes: ["im:history", "mpim:history", "chat:write", "chat:write.customize", "users:read", "users:read.email"],
+      defaultEnabled: true
+    },
+    {
       id: "notify",
       title: "Notifications by direct message",
       description: "Send monitor and agent notices to people as direct messages (matched by e-mail).",

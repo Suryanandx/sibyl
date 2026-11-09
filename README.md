@@ -192,9 +192,21 @@ A self-hosted deployment is only as private as the providers you route to; check
 
 ## Roadmap
 
-- Hosted Sibyl: sign-up is built (`SIBYL_MODE=hosted`, see [hosting](docs/hosting.md)); payments for plans and AI credits come next.
-- Agents answering Slack direct messages and Teams chats.
-- A desktop view for agent computers.
+**Next**
+
+- **Hosted Sibyl:** sign-up, onboarding and bring-your-own-key are built (`SIBYL_MODE=hosted`, see [hosting](docs/hosting.md)). Payments for plans and AI credits, and the hosted service itself, come next.
+- **Production licence keys** for the enterprise edition, signed with an offline key.
+- **Hosted mode on several servers:** today one gateway process serves every organization; see [Scaling](docs/hosting.md#scaling) for the plan (Postgres, shared limits, routing per organization).
+- **A desktop view for agent computers**, next to the browser.
+
+**Help wanted: try it with real accounts**
+
+These are built and tested against local stand-ins, but not yet against real services. If you run one of them, please tell us how it went in an issue:
+
+- Slack and Microsoft Teams (agents in channels, direct messages and chats)
+- Google and Microsoft sign-in and connectors with your own OAuth apps
+- Phone calls through LiveKit and a SIP provider
+- Meetings from a real Google or Microsoft calendar
 
 Ideas and feedback are welcome in [GitHub issues](https://github.com/Suryanandx/sibyl/issues).
 

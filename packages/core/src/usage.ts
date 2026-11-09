@@ -4,6 +4,8 @@
  * spending before it happens instead of after.
  */
 
+import type { CreditEntry } from "./tenancy";
+
 export type UsageFeature =
   | "voice"
   | "brain"
@@ -128,6 +130,12 @@ export interface UsagePolicyCheck extends UsageAttribution {
 export interface UsagePolicy {
   /** undefined (or { allowed: true }) lets the call go ahead; { downgrade: true } asks for economy models. */
   check(input: UsagePolicyCheck): BudgetDecision | undefined;
+  /**
+   * A credits ledger charge for this event, written in the same store
+   * transaction as the event (hosted AI credits). Called before `recorded`.
+   * Must not throw.
+   */
+  charge?(event: UsageEvent): CreditEntry | undefined;
   /** Called after every recorded event (attribution filled in). Must not throw. */
   recorded?(event: UsageEvent): void;
 }

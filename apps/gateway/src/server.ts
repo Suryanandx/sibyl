@@ -28,6 +28,7 @@ import { createJsonLogger } from "./logger.js";
 import { deploymentMode } from "./tenancy/mode.js";
 import { TenantRegistry, tenantIdleMs, type TenantHandle } from "./tenancy/registry.js";
 import { paymentProviderFromEnv } from "./tenancy/credits.js";
+import { PresenceStore } from "./presence/store.js";
 import { keyFingerprint } from "./tenancy/model-access.js";
 import { OrganizationService } from "./tenancy/organizations.js";
 import { createHostedRouting } from "./tenancy/hosted.js";
@@ -209,10 +210,10 @@ async function main(): Promise<void> {
     build: buildTenant,
     idleMs: tenantIdleMs(process.env),
     log,
-    // Due routines and monitors wake their organization (hosted).
+    // Due routines, monitors and Teams subscription renewals wake their organization (hosted).
     dueOrganizations: async (now) => {
-      const [routines, monitors] = await Promise.all([shared.store.routines.due(now), shared.store.monitors.due(now)]);
-      return [...routines.map((r) => r.ownerId), ...monitors.filter((m) => m.source.kind !== "webhook").map((m) => m.ownerId)];
+      const [routines, monitors, renewals] = await Promise.all([shared.store.routines.due(now), shared.store.monitors.due(now), PresenceStore.dueOrganizations(shared.store, now)]);
+      return [...routines.map((r) => r.ownerId), ...monitors.filter((m) => m.source.kind !== "webhook").map((m) => m.ownerId), ...renewals];
     }
   });
 

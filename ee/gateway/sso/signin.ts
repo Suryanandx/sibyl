@@ -140,7 +140,9 @@ export async function resolveAccount(
   }
   let user = await directory.findByLink(provider.id, identity.subject);
   if (!user) {
-    const existing = await findByEmail(email);
+    // Someone removed from the organization isn't an account to sign in to: just-in-time creation gives them a fresh one.
+    const found = await findByEmail(email);
+    const existing = found && found.removedAt === undefined ? found : undefined;
     if (existing) {
       if (identity.emailVerified === false) throw new SsoError("sso_email_unverified", `${provider.label} says this email address isn't verified.`);
       await directory.link(existing.id, provider.id, identity.subject);

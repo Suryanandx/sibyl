@@ -7,6 +7,7 @@ import { GatewayError, gatewayRequest } from "../../../lib/gateway-http";
 import { refreshAppSession, useAuthState } from "../../../lib/app-session";
 import { MfaStep } from "../../../features/admin-identity";
 import { AuthCard, AuthError, AuthField } from "../../login/auth-ui";
+import { Divider, ProviderButtons, signupErrorMessage, useSignupOptions } from "../../../features/signup";
 
 const ROLE_TEXT: Record<InvitePreview["role"], string> = {
   owner: "an owner",
@@ -28,6 +29,19 @@ export default function InvitePage({ params }: { params: { token: string } }) {
   const [error, setError] = useState<string | null>(null);
   // The organization requires two-step verification: the new account adds it before its first session.
   const [challenge, setChallenge] = useState<{ mfa: MfaChallengeView; workspaceId?: string } | null>(null);
+  const providers = useSignupOptions();
+  // Back from Google / Microsoft: ?joined=<workspace> (accepted and signed in) or ?signin_error=<code>.
+  const [returned, setReturned] = useState<{ joined: string | null; isNew: boolean } | null>(null);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const joined = query.get("joined");
+    const failure = query.get("signin_error");
+    if (failure) setError(signupErrorMessage(failure, query.get("provider")));
+    if (!joined) return;
+    setReturned({ joined, isNew: query.get("new") === "1" });
+    writeWorkspaceId(joined);
+    void refreshAppSession().finally(() => window.location.replace(query.get("new") === "1" ? "/welcome" : "/"));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +118,8 @@ export default function InvitePage({ params }: { params: { token: string } }) {
     );
   }
 
+  if (returned?.joined) return <AuthCard title="Joining…" />;
+
   if (loadError) {
     return (
       <AuthCard title="Invitation not available" lead={loadError}>
@@ -157,6 +173,8 @@ export default function InvitePage({ params }: { params: { token: string } }) {
     return (
       <AuthCard title={`Join ${preview.workspaceName}`} lead={lead}>
         <p className="identNote">You already have an account. Sign in to accept the invitation.</p>
+        <AuthError message={error} />
+        <ProviderButtons options={providers} invite={token} />
         <a className="darkBtn identSubmit" href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}>
           Sign in
         </a>
@@ -166,6 +184,13 @@ export default function InvitePage({ params }: { params: { token: string } }) {
 
   return (
     <AuthCard title={`Join ${preview.workspaceName}`} lead={lead}>
+      {providers?.google || providers?.microsoft ? (
+        <>
+          <ProviderButtons options={providers} invite={token} />
+          {preview.email ? <p className="identNote">Use the account for {preview.email}.</p> : null}
+          <Divider>or create a password</Divider>
+        </>
+      ) : null}
       <form className="identForm" onSubmit={submit} noValidate>
         <AuthField label="Your name" value={name} onChange={setName} autoComplete="name" autoFocus />
         <AuthField label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" disabled={Boolean(preview.email)} />

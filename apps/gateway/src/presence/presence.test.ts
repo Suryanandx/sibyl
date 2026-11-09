@@ -51,7 +51,13 @@ describe("Slack events → messages", () => {
     expect(inbound({ type: "message", channel: "C1", channel_type: "channel", user: "U1", text: "<@UBOT> hi", ts: "3.3" })).toBeUndefined();
     expect(inbound({ type: "message", channel: "C1", user: "UBOT", bot_id: "B1", text: "me", ts: "4.4" })).toBeUndefined();
     expect(inbound({ type: "message", subtype: "message_changed", channel: "C1", ts: "5.5" })).toBeUndefined();
-    expect(inbound({ type: "message", channel: "D1", channel_type: "im", user: "U1", text: "dm", ts: "6.6" })).toBeUndefined();
+    // Direct messages come back marked, with their own dedupe key; a 1:1 DM is one conversation.
+    expect(inbound({ type: "message", channel: "D1", channel_type: "im", user: "U1", text: "dm", ts: "6.6" })).toMatchObject({ direct: "one", threadId: "dm", mentioned: true, dedupeKey: "slack-dm:T1:D1:6.6" });
+    expect(inbound({ type: "message", channel: "D1", channel_type: "im", user: "U1", text: "in a thread", ts: "6.7", thread_ts: "6.6" })).toMatchObject({ direct: "one", replyIn: "6.6" });
+    expect(inbound({ type: "message", channel: "G7", channel_type: "mpim", user: "U1", text: "<@UBOT> hi", ts: "6.8" })).toMatchObject({ direct: "group", threadId: "6.8", mentioned: true, text: "hi" });
+    expect(inbound({ type: "message", channel: "G7", channel_type: "mpim", user: "U1", text: "chatter", ts: "6.9" })).toMatchObject({ direct: "group", mentioned: false });
+    // A D… id outside a DM event is not answered.
+    expect(inbound({ type: "app_mention", channel: "D1", user: "U1", text: "<@UBOT> x", ts: "7.1" })).toBeUndefined();
     expect(inbound({ type: "reaction_added", user: "U1" })).toBeUndefined();
     expect(parseSlackEnvelope(Buffer.from("not json"))).toBeUndefined();
     expect(parseSlackEnvelope(Buffer.from('{"type":"url_verification","challenge":"c"}'))).toEqual({ type: "url_verification", challenge: "c" });
@@ -103,6 +109,18 @@ describe("picking the agent", () => {
     expect(pick({ inThread: true }, undefined)).toBeUndefined();
     expect(pick({})).toMatchObject({ binding: { id: "b2" }, reason: "all" });
     expect(pickBinding({ message: message({}), candidates: [binding("b1", "a1", "mentions", 1)], threadBindingId: undefined, agentName: () => "x" })).toBeUndefined();
+  });
+
+  it("direct messages: a name picks the agent, then the conversation stays with it; group chats need a mention", () => {
+    const direct = { direct: "one" as const, mentioned: true };
+    expect(pick({ ...direct, text: "research, what's new?" })).toMatchObject({ binding: { id: "b1" }, text: "what's new?", reason: "mention" });
+    expect(pick({ ...direct, text: "and?" }, "b1")).toMatchObject({ binding: { id: "b1" }, reason: "thread" });
+    expect(pick({ ...direct, text: "hi" })).toMatchObject({ binding: { id: "b2" }, reason: "all" });
+    expect(pick({ direct: "group", mentioned: false, text: "lunch?" }, "b1")).toBeUndefined();
+    expect(pick({ direct: "group", mentioned: false, text: "Research: lunch?" })).toMatchObject({ binding: { id: "b1" } });
+    expect(pick({ direct: "group", mentioned: true, text: "hi" }, "b1")).toMatchObject({ binding: { id: "b1" } });
+    expect(pick({ direct: "group", mentioned: false, inThread: true, text: "more" }, "b1")).toMatchObject({ binding: { id: "b1" } });
+    expect(pickBinding({ message: message({ ...direct }), candidates: [binding("b1", "a1", "mentions", 1)], threadBindingId: undefined, agentName: () => "x" })).toBeUndefined();
   });
 
   it("matches agent names at the start only, with separators", () => {

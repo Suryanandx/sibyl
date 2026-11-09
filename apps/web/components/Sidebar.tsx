@@ -20,7 +20,8 @@ interface SidebarProps {
   onOpenConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onApplyPreset: (settings: Partial<SessionSettings>) => void;
-  onOpenSettings: () => void;
+  /** Unused: Settings lives in the rail now. Optional until the chat screen stops passing it. */
+  onOpenSettings?: () => void;
   onClose: () => void;
 }
 
@@ -163,11 +164,6 @@ export function Sidebar(props: SidebarProps) {
           ))
         )}
       </div>
-
-      <button type="button" className="sidebarFooterBtn" onClick={props.onOpenSettings}>
-        <Icon name="sliders" size={16} />
-        Models &amp; settings
-      </button>
     </aside>
   );
 }

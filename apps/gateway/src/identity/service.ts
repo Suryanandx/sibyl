@@ -1004,12 +1004,7 @@ export class IdentityService {
     signedIn: Authenticated | undefined,
     ip = "unknown"
   ): Promise<{ user: UserRecord; token?: string; mfa?: MfaChallenge; workspaceId: string }> {
-    const invite = await this.findInvite(token);
-    if (invite.acceptedAt !== undefined) throw new IdentityError(410, "invite_used", "This invitation was already used.");
-    if (invite.expiresAt <= this.now()) throw new IdentityError(410, "invite_expired", "This invitation has expired. Ask for a new one.");
-    if (!(await this.store.workspaces.get(this.orgId, invite.workspaceId))) {
-      throw new IdentityError(410, "workspace_gone", "The workspace in this invitation no longer exists.");
-    }
+    const invite = await this.usableInvite(token);
 
     let user: UserRecord;
     let sessionToken: string | undefined;
@@ -1047,6 +1042,82 @@ export class IdentityService {
       this.hasUsers = true;
       await this.store.identity.memberships.upsert(this.orgId, { userId: user.id, scope: "org", role: "member" });
     }
+    await this.grantInvite(invite, user, !existingUser);
+    let mfa: MfaChallenge | undefined;
+    if (!existingUser) {
+      const signIn = await this.finishPasswordSignIn(user, ip, invite.workspaceId);
+      if ("token" in signIn) sessionToken = signIn.token;
+      else mfa = signIn.mfa;
+    }
+    return { user, ...(sessionToken ? { token: sessionToken } : {}), ...(mfa ? { mfa } : {}), workspaceId: invite.workspaceId };
+  }
+
+  /**
+   * Accept an invitation with Google or Microsoft (the sign-up layer checked
+   * the provider's answer and that it vouches for the e-mail address). The
+   * address must be the invitation's (an invitation without an address takes
+   * the verified one). An existing account with that address joins and is
+   * linked to the provider account — unless it is already linked to another
+   * account of that provider; otherwise a new account without a password is
+   * created (someone removed from the organization comes back fresh).
+   * Signs in like any Google / Microsoft sign-in.
+   */
+  async acceptInviteExternal(
+    token: string,
+    identity: { email: string; name?: string; provider: "google" | "microsoft"; subject: string },
+    ip = "unknown"
+  ): Promise<{ user: UserRecord; token: string; workspaceId: string; newAccount: boolean }> {
+    const invite = await this.usableInvite(token);
+    const email = normalizeEmail(identity.email);
+    if (invite.email && invite.email !== email) {
+      throw new IdentityError(403, "wrong_account", `This invitation is for ${invite.email}. Continue with the account for that address.`);
+    }
+    const link = { provider: identity.provider, subject: identity.subject, linkedAt: this.now() };
+    const existing = await this.store.identity.users.getByEmail(this.orgId, email);
+    let user: UserRecord;
+    const newAccount = !existing || existing.removedAt !== undefined;
+    // The organization's sign-in rules apply before anything changes (enforced SSO, allowed networks), so a refusal leaves the invitation unused.
+    await this.checkSignIn({ userId: newAccount ? "" : existing!.id, email, method: identity.provider, ip });
+    if (existing && !newAccount) {
+      if (existing.disabledAt !== undefined) throw new IdentityError(403, "account_disabled", "This account is turned off. Ask an admin.");
+      if (existing.links?.some((l) => l.provider === identity.provider && l.subject !== identity.subject)) {
+        throw new IdentityError(403, "wrong_account", "This address is linked to a different account with that provider. Use that one, or sign in another way.");
+      }
+      const linked = existing.links?.some((l) => l.provider === identity.provider && l.subject === identity.subject);
+      user = { ...existing, emailVerifiedAt: existing.emailVerifiedAt ?? this.now(), ...(linked ? {} : { links: [...(existing.links ?? []), link] }) };
+      await this.store.identity.users.upsert(user);
+    } else {
+      const name = (identity.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || email.split("@")[0]!;
+      // "none" never matches a password: they sign in with the provider or an e-mailed link.
+      user = { id: existing?.id ?? this.createId(), orgId: this.orgId, email, name, passwordHash: "none", createdAt: this.now(), emailVerifiedAt: this.now(), links: [link] };
+      if (existing) await this.mfa.disable(existing.id);
+      try {
+        await this.store.identity.users.upsert(user);
+      } catch (error) {
+        if (error instanceof DuplicateEmailError) throw new IdentityError(409, "account_exists", error.message);
+        throw error;
+      }
+      this.hasUsers = true;
+      await this.store.identity.memberships.upsert(this.orgId, { userId: user.id, scope: "org", role: "member" });
+    }
+    await this.grantInvite(invite, user, newAccount);
+    const signedIn = await this.signInExternal(user.id, identity.provider, ip);
+    return { user: signedIn.user, token: signedIn.token, workspaceId: invite.workspaceId, newAccount };
+  }
+
+  /** A pending invitation whose workspace still exists. */
+  private async usableInvite(token: string): Promise<InviteRecord> {
+    const invite = await this.findInvite(token);
+    if (invite.acceptedAt !== undefined) throw new IdentityError(410, "invite_used", "This invitation was already used.");
+    if (invite.expiresAt <= this.now()) throw new IdentityError(410, "invite_expired", "This invitation has expired. Ask for a new one.");
+    if (!(await this.store.workspaces.get(this.orgId, invite.workspaceId))) {
+      throw new IdentityError(410, "workspace_gone", "The workspace in this invitation no longer exists.");
+    }
+    return invite;
+  }
+
+  /** Claim the invitation (once) and give its workspace role; new people also join the default workspace. */
+  private async grantInvite(invite: InviteRecord, user: UserRecord, newAccount: boolean): Promise<void> {
     // One-time: claim the invite before granting anything.
     const claimed = await this.store.identity.invites.accept(this.orgId, invite.id, user.id, this.now());
     if (!claimed) throw new IdentityError(410, "invite_used", "This invitation was already used.");
@@ -1059,13 +1130,7 @@ export class IdentityService {
       await this.store.identity.memberships.upsert(this.orgId, { userId: user.id, scope, role: invite.role });
     }
     // New people also join the organization's default workspace (Admin → Organization).
-    if (!existingUser) await this.joinDefaultWorkspace(user.id, invite.workspaceId);
-    let mfa: MfaChallenge | undefined;
-    if (!existingUser) {
-      const signIn = await this.finishPasswordSignIn(user, ip, invite.workspaceId);
-      if ("token" in signIn) sessionToken = signIn.token;
-      else mfa = signIn.mfa;
-    }
+    if (newAccount) await this.joinDefaultWorkspace(user.id, invite.workspaceId);
     this.emit({ kind: "memberships", userId: user.id });
     const workspace = await this.store.workspaces.get(this.orgId, invite.workspaceId);
     this.audit({
@@ -1073,10 +1138,9 @@ export class IdentityService {
       actor: userActor(user),
       workspaceId: invite.workspaceId,
       target: { kind: "invite", id: invite.id },
-      details: { role: invite.role, newAccount: !existingUser }
+      details: { role: invite.role, newAccount }
     });
     this.options.onInviteAccepted?.({ invite, user, workspaceName: workspace?.name ?? DEFAULT_WORKSPACE_NAME });
-    return { user, ...(sessionToken ? { token: sessionToken } : {}), ...(mfa ? { mfa } : {}), workspaceId: invite.workspaceId };
   }
 
   private async joinDefaultWorkspace(userId: string, invitedTo: string): Promise<void> {

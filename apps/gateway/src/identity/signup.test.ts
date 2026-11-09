@@ -266,6 +266,52 @@ describe("hosted sign-up", () => {
     expect(stolen.location).toBe("http://app.test/signup?signin_error=browser_mismatch&provider=google");
   });
 
+  test("an invitation accepted with Google: the address must match; the account is created, linked and signed in", async () => {
+    const ann = new Browser(base);
+    await ann.call("POST", "/api/auth/login", { email: "ann@acme.test", password: PASSWORD });
+    const inviteToken = (email: string) =>
+      ann.call("POST", "/api/invites", { workspaceId: "default", role: "member", email }).then((r) => String(r.body.url).split("/invite/")[1]!);
+    const viaGoogle = async (browser: Browser, token: string) => {
+      const start = await browser.call("GET", `/api/signup/oauth/google/start?invite=${encodeURIComponent(token)}`);
+      expect(start.status).toBe(302);
+      const approved = await fetch(start.location, { redirect: "manual" });
+      return browser.call("GET", approved.headers.get("location")!);
+    };
+    const token = await inviteToken("gus@acme.test");
+
+    // Another Google account (another address): refused, the invitation stays unused.
+    idp.claims = { sub: "google-mallory", email: "mallory@evil.test", email_verified: true };
+    const wrong = await viaGoogle(new Browser(base), token);
+    expect(wrong.location).toBe(`http://app.test/invite/${token}?signin_error=wrong_account&provider=google`);
+    // Google must vouch for the address.
+    idp.claims = { sub: "google-gus", email: "gus@acme.test", email_verified: false };
+    expect((await viaGoogle(new Browser(base), token)).location).toBe(`http://app.test/invite/${token}?signin_error=email_unverified&provider=google`);
+    // A bad token is refused before leaving for Google.
+    expect((await new Browser(base).call("GET", "/api/signup/oauth/google/start?invite=bad%20token")).location).toContain("signin_error=invite_not_found");
+
+    idp.claims = { sub: "google-gus", email: "Gus@Acme.test", email_verified: true, name: "Gus" };
+    const gus = new Browser(base);
+    const joined = await viaGoogle(gus, token);
+    expect(joined.location).toBe(`http://app.test/invite/${token}?joined=default&new=1`);
+    expect((await gus.call("GET", "/api/auth/me")).body).toMatchObject({ authenticated: true, user: { email: "gus@acme.test", name: "Gus" }, organization: { name: "Acme" } });
+    const account = (await shared.store.identity.users.listByEmail("gus@acme.test"))[0]!;
+    expect(account).toMatchObject({ passwordHash: "none", links: [{ provider: "google", subject: "google-gus", linkedAt: expect.any(Number) }], emailVerifiedAt: expect.any(Number) });
+    // Used once.
+    idp.claims = { sub: "google-gus", email: "gus@acme.test", email_verified: true };
+    expect((await viaGoogle(new Browser(base), token)).location).toBe(`http://app.test/invite/${token}?signin_error=invite_used&provider=google`);
+
+    // An existing account joins another workspace with its linked Google account; a different Google account with its address can't.
+    const workspace = await ann.call("POST", "/api/workspaces", { name: "Sales" });
+    const salesId = String(workspace.body.workspace?.id ?? workspace.body.id);
+    const second = String((await ann.call("POST", "/api/invites", { workspaceId: salesId, role: "viewer", email: "gus@acme.test" })).body.url).split("/invite/")[1]!;
+    idp.claims = { sub: "google-impostor", email: "gus@acme.test", email_verified: true };
+    expect((await viaGoogle(new Browser(base), second)).location).toBe(`http://app.test/invite/${second}?signin_error=wrong_account&provider=google`);
+    idp.claims = { sub: "google-gus", email: "gus@acme.test", email_verified: true };
+    expect((await viaGoogle(new Browser(base), second)).location).toBe(`http://app.test/invite/${second}?joined=${salesId}`);
+    const orgId = account.orgId;
+    expect((await shared.store.identity.memberships.listForUser(orgId, account.id)).some((m) => m.scope !== "org" && m.scope.workspaceId === salesId && m.role === "viewer")).toBe(true);
+  });
+
   test("one address in two organizations chooses one", async () => {
     // Fay owns one organization, and is invited into Acme.
     const fay = new Browser(base);

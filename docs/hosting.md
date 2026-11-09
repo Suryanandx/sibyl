@@ -12,7 +12,7 @@ The design is in [plans/hosted.md](plans/hosted.md).
 - Every record already belongs to an organization (`ownerId`).
 - The gateway builds one runtime per organization, from the same code as self-hosted Sibyl. All runtimes share one database connection and one usage meter.
 - A runtime is built the first time it is needed: a request, a connection, or a routine or monitor that is due. It is unloaded after `SIBYL_TENANT_IDLE_MINUTES` without use. Open connections and running jobs keep it loaded.
-- There is one scheduler loop. Every 30 seconds it wakes organizations with due work, then runs each loaded organization's jobs.
+- There is one scheduler loop. Every 30 seconds it wakes organizations with due work (routines, monitors, and Teams subscriptions that need renewing), then runs each loaded organization's jobs. Teams subscriptions last under an hour, so an idle organization with agents in Teams is woken about every 35 minutes to renew them; each organization keeps its next renewal time in a small index entry (`presence.wake`) that the loop reads across organizations.
 - Each request goes to one organization:
   - a signed-in browser: the organization of its session (a session belongs to one organization);
   - an invitation link: the organization that sent it;
@@ -39,6 +39,16 @@ The landing page's "Get started" goes to `/signup`. People pick one of:
 Then they name their organization and first workspace (`/signup/org`), and setup starts (`/welcome`, see [getting-started.md](getting-started.md#4-first-run-owner-account-and-setup)).
 
 Someone who already has an account is signed in instead, whichever way they came: a link, a code, Google or Microsoft. If their address is in more than one organization, they choose one. `/login` offers the same buttons, plus "Email me a sign-in link".
+
+### Invitations with Google or Microsoft
+
+An invitation page (`/invite/<token>`) also offers **Continue with Google** and **Continue with Microsoft** when the server has those sign-in apps. This accepts the invitation in one step:
+
+- The provider must vouch for the address (as above), and the address must be the one the invitation was sent to. Another address is refused ("This invitation is for …") and the invitation stays unused. An invitation without an address takes the verified one, like the password form does.
+- No account with that address yet (or one that was removed from the organization): a new account without a password is created, linked to the Google or Microsoft account, and joins the workspace. It then goes through setup (`/welcome`).
+- An account with that address already exists: it joins the workspace and is linked to the Google or Microsoft account, unless it is already linked to a different one of that provider (refused).
+- The organization's sign-in rules apply first (enforced single sign-on, allowed networks); a refusal leaves the invitation unused.
+- The request is `GET /api/signup/oauth/<google|microsoft>/start?invite=<token>`; the gateway sends the browser back to `/invite/<token>?joined=<workspace>` signed in, or `?signin_error=<code>`.
 
 ### What you set up
 
@@ -124,7 +134,8 @@ Self-hosted Sibyl has the same card. A key added there wins over `OPENROUTER_API
 ## AI credits
 
 - Each organization has a ledger. Entries are only ever added: grant, purchase, charge, refund. Each has an idempotency key, so a retry never counts twice.
-- Every model call of an organization on credits is charged: the cost OpenRouter reported, plus `SIBYL_CREDITS_MARGIN`.
+- Every model call of an organization on credits is charged: the cost OpenRouter reported, plus `SIBYL_CREDITS_MARGIN`. The charge is written in the same database transaction as the call's usage record (key `usage:<event id>`): if the gateway stops right after a call, both are there or neither is, and a charge never counts twice. On start the balance is read from the ledger again.
+- The balance check before a call reads the balance kept in memory (updated with every charge). With one gateway process this is exact; see [Scaling](#scaling).
 - When the balance is used up, new calls stop with "Your AI credits are used up". The chat shows an **Add credits** button.
 - Buying credits goes through a payment provider. Only a test provider exists so far (`SIBYL_PAYMENTS=test`: purchases complete at once, nobody is charged; never use it in production). The real provider comes later.
 
@@ -156,8 +167,27 @@ curl -X POST "$GATEWAY/api/platform/orgs/$ORG/credits" \
 
 All hosted settings are in [configuration.md](configuration.md#hosted-sibyl).
 
+## Scaling
+
+Hosted Sibyl runs as **one gateway process** today. That process can serve many organizations, but you can't yet run two gateways on the same database.
+
+What lives only in that process's memory:
+
+- **Loaded runtimes.** Each organization's services (agents, routines, monitors, connectors, Slack and Teams presence) run in the gateway that loaded them. Two gateways would both run the same organization's scheduled jobs and keep separate copies of its state.
+- **Credit balances.** The ledger is in the database and every charge is transactional (above), but the balance used to allow or block the next call is a copy in memory. A second process wouldn't see the first one's charges until it restarts, so an organization could overspend.
+- **Rate limits and budgets.** Sign-in and sign-up limits, Slack and Teams message limits, and today's / this month's spend per organization, workspace and agent are counted in memory (spend is rebuilt from the database at start).
+- **Pending sign-ins and choices.** Google / Microsoft sign-ins in progress and "which organization?" choices are kept in memory for minutes; they must finish on the same process.
+- **Vendor de-duplication.** Slack retries and Teams notifications are de-duplicated in memory.
+
+What it would take to run several gateways:
+
+1. **PostgreSQL instead of SQLite.** SQLite is one file on one machine. The store is one interface (`packages/core/src/store.ts`) with a contract test suite (`packages/store/src/store-contract.test.ts`) that a PostgreSQL store would have to pass.
+2. **Credits and limits in the store, with row locking.** Check and charge in one transaction (`SELECT … FOR UPDATE` on the organization's balance row, or a conditional update that refuses a charge below zero). Rate-limit counters and budget totals move to the database (or Redis) as well.
+3. **Sticky routing per organization.** Every request, WebSocket and vendor callback of one organization goes to the same gateway (a load balancer hashing the organization: the session's organization, `/o/<organization id>/` in callback paths, the invitation's organization). Then runtimes, de-duplication and pending sign-ins can stay in memory.
+4. **One scheduler per organization.** The scheduler already claims routine runs with leases in the database; the wake-up loop and Teams renewals would follow the same owner as the sticky routing.
+
 ## Limits today
 
-- One gateway process. Runtimes, credit balances and rate limits live in its memory. Running several gateway processes for one database needs shared state first.
+- One gateway process (see [Scaling](#scaling)).
 - LiveKit phone numbers: each organization can set up its own trunk, but one LiveKit project serves all of them.
 - Agent computers: each organization has its own file area and sandbox label. With a fixed `SIBYL_COMPUTER_PROXY_PORT`, only the self-hosted organization uses that port; hosted organizations get a free port each.

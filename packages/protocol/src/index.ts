@@ -4066,6 +4066,8 @@ function parseNotificationsServerMessage(input: Record<string, unknown>): Server
  *   PATCH  /api/presence/agents/:agentId/bindings/:id {respond} → PresenceAgentState
  *   DELETE /api/presence/agents/:agentId/bindings/:id          → PresenceAgentState
  *   PUT    /api/presence/agents/:agentId/settings {notify}     → PresenceAgentState
+ *   PUT    /api/presence/agents/:agentId/direct/:provider {PresenceDirectInput} → PresenceAgentState
+ *   DELETE /api/presence/agents/:agentId/direct/:provider      → PresenceAgentState
  *   GET    /api/presence/channels?provider=slack|teams[&teamId] → PresenceChannelList
  *   GET    /api/presence/settings                              → PresenceWorkspaceSettings
  *   PUT    /api/presence/settings {slack?, teams?}             → PresenceWorkspaceSettings
@@ -4111,11 +4113,58 @@ export interface PresenceProviderStatus {
   available: boolean;
   reason?: string;
   account?: string;
+  /** Direct messages (Slack DMs, Teams chats) need more of the connection. */
+  direct?: { available: boolean; reason?: string };
+}
+
+/**
+ * Who may message an agent directly: "members" — people of this Sibyl
+ * workspace, matched by their Slack / Microsoft 365 e-mail (the default);
+ * "anyone" — everyone in the Slack workspace or Microsoft 365 tenant.
+ */
+export type PresenceDirectAllow = "members" | "anyone";
+
+/**
+ * An agent answering direct messages (Slack DMs and group DMs with the app,
+ * Teams 1:1 and group chats with the workspace's account). `respond`:
+ * "all" — every direct message not addressed to another agent by name;
+ * "mentions" — only messages that start with the agent's name (and the
+ * conversation that follows).
+ */
+export interface PresenceDirectView {
+  id: string;
+  provider: PresenceProvider;
+  respond: PresenceRespondMode;
+  allow: PresenceDirectAllow;
+  status: "active" | "pending" | "error";
+  statusMessage?: string;
+  createdByName?: string;
+  createdAt: number;
+  lastActivityAt?: number;
+  canEdit: boolean;
+}
+
+export interface PresenceDirectInput {
+  respond: PresenceRespondMode;
+  allow: PresenceDirectAllow;
+}
+
+const PRESENCE_DIRECT_ALLOW = ["members", "anyone"] as const;
+
+export function parsePresenceDirectInput(input: unknown): PresenceDirectInput | string {
+  if (!isRecord(input)) return "send a JSON object";
+  const respond = input.respond ?? "all";
+  if (!isEnum(respond, PRESENCE_RESPOND_MODES)) return 'respond must be "mentions" or "all"';
+  const allow = input.allow ?? "members";
+  if (!isEnum(allow, PRESENCE_DIRECT_ALLOW)) return 'allow must be "members" or "anyone"';
+  return { respond, allow };
 }
 
 export interface PresenceAgentState {
   agentId: string;
   bindings: PresenceBindingView[];
+  /** Direct messages it answers (at most one per provider). */
+  direct: PresenceDirectView[];
   /** Where "act, then tell me" notices also go (the inbox always). */
   notify: PresenceProvider[];
   providers: PresenceProviderStatus[];
@@ -4646,6 +4695,10 @@ export interface DirectorySettingsView {
   jitProvisioning: boolean;
   groupRoles: GroupRoleRule[];
   workspaces: Array<{ id: string; name: string }>;
+  /** Workspace / role not chosen here: they follow Admin → Organization (PUT null to go back to following). */
+  followsOrganization?: { workspace: boolean; role: boolean };
+  /** Admin → Organization's defaults right now. */
+  organizationDefaults?: { defaultWorkspaceId: string; defaultRole: IdentityRole };
 }
 
 export interface SessionPolicyView {

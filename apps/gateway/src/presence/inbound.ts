@@ -8,6 +8,15 @@
  * - A new top-level message in a channel where an agent answers everything
  *   ("all"): that agent (the channel's first such agent).
  * - Anything else is ignored.
+ *
+ * Direct messages (Slack DMs and group DMs with the app, Teams chats with
+ * the account) go to the agents that answer direct messages instead:
+ * - the agent whose name starts the message;
+ * - else the agent already talking in this conversation (a 1:1 DM, or a
+ *   thread of a group DM);
+ * - else (1:1, or a group message that @mentions the app/account) the first
+ *   agent that answers every direct message ("all").
+ * In group chats nothing else is answered: people there talk to each other.
  */
 import type { PresenceProvider } from "@open-gpt-live/protocol";
 import type { PresenceBinding } from "./store.js";
@@ -33,6 +42,10 @@ export interface InboundMessage {
   mentioned: boolean;
   /** Unique per delivery (Slack event_id / Teams message id) for retries. */
   dedupeKey: string;
+  /** A direct message: "one" (1:1 with the app/account) or "group" (a group DM / group chat). */
+  direct?: "one" | "group";
+  /** Slack 1:1: the thread the person wrote in (the reply goes there; absent: the conversation itself). */
+  replyIn?: string;
 }
 
 export interface BindingPick {
@@ -53,6 +66,7 @@ export function pickBinding(input: {
   const { message } = input;
   const candidates = [...input.candidates].sort((a, b) => a.createdAt - b.createdAt);
   if (candidates.length === 0) return undefined;
+  if (message.direct) return pickDirect(message, candidates, input.threadBindingId, input.agentName);
   if (message.mentioned) {
     for (const binding of candidates) {
       const rest = afterName(message.text, input.agentName(binding.agentId));
@@ -66,6 +80,18 @@ export function pickBinding(input: {
     const binding = input.threadBindingId ? candidates.find((b) => b.id === input.threadBindingId) : undefined;
     return binding ? { binding, text: message.text, reason: "thread" } : undefined;
   }
+  const all = candidates.find((b) => b.respond === "all");
+  return all ? { binding: all, text: message.text, reason: "all" } : undefined;
+}
+
+function pickDirect(message: InboundMessage, candidates: PresenceBinding[], threadBindingId: string | undefined, agentName: (agentId: string) => string | undefined): BindingPick | undefined {
+  for (const binding of candidates) {
+    const rest = afterName(message.text, agentName(binding.agentId));
+    if (rest !== undefined) return { binding, text: rest, reason: "mention" };
+  }
+  const talking = threadBindingId ? candidates.find((b) => b.id === threadBindingId) : undefined;
+  if (talking && (message.direct === "one" || message.inThread || message.mentioned)) return { binding: talking, text: message.text, reason: "thread" };
+  if (message.direct === "group" && !message.mentioned) return undefined;
   const all = candidates.find((b) => b.respond === "all");
   return all ? { binding: all, text: message.text, reason: "all" } : undefined;
 }

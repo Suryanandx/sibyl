@@ -25,6 +25,8 @@ export const SIGNUP_COOKIE = "sibyl_signup";
 const OAUTH_COOKIE = "sibyl_signin_oauth";
 const CHOICE_COOKIE = "sibyl_choose";
 const OAUTH_PATH = /^\/api\/signup\/oauth\/(google|microsoft)\/(start|callback)$/;
+/** An invitation token (as in /invite/<token>). */
+const INVITE_TOKEN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export interface SignupHttpOptions {
   signup: SignupService;
@@ -176,11 +178,16 @@ async function serveOAuth(
     response.writeHead(302, { location: `${app}${target}`, "cache-control": "no-store", ...(cookies.length ? { "set-cookie": cookies } : {}) });
     response.end();
   };
+  // Accepting an invitation: errors go back to its page.
+  const inviteParam = url.searchParams.get("invite") ?? undefined;
+  let invite = step === "start" && inviteParam && INVITE_TOKEN.test(inviteParam) ? inviteParam : undefined;
+  if (step === "callback") invite = signup.pendingInvite(url.searchParams.get("state"));
   try {
     if (!signup.isConfigured(provider)) throw new IdentityError(404, "not_available", "That sign-in option isn't available.");
     if (step === "start") {
+      if (inviteParam !== undefined && !invite) throw new IdentityError(400, "invite_not_found", "This invitation link isn't valid.");
       const next = safeNext(url.searchParams.get("next") ?? undefined);
-      const started = await signup.startOAuth(provider, next, redirectUri, clientIp(request));
+      const started = await signup.startOAuth(provider, next, redirectUri, clientIp(request), invite);
       response.writeHead(302, {
         location: started.url,
         "cache-control": "no-store",
@@ -201,8 +208,8 @@ async function serveOAuth(
   } catch (error) {
     const code = error instanceof IdentityError ? error.code : "signin_failed";
     if (!(error instanceof IdentityError)) options.log?.("signup.oauth_error", { provider, error: error instanceof Error ? error.message : String(error) });
-    // Back to the screen with a message (hosted: the sign-up screen, which also signs people in).
-    const screen = signup.hosted ? "/signup" : "/login";
+    // Back to the screen with a message (an invitation's page; hosted: the sign-up screen, which also signs people in).
+    const screen = invite ? `/invite/${encodeURIComponent(invite)}` : signup.hosted ? "/signup" : "/login";
     return back(`${screen}?signin_error=${encodeURIComponent(code)}&provider=${provider}`, [cookie(request, options, OAUTH_COOKIE, "", 0)]);
   }
 }

@@ -142,6 +142,16 @@ describe("SSO accounts", () => {
 
     await store.identity.users.upsert({ ...(await store.identity.users.get(ORG, "u-old"))!, disabledAt: 1 });
     await expect(resolveAccount(context.directory, byEmail, okta, { subject: "s2", email: "old@acme.test", groups: [] })).rejects.toMatchObject({ code: "account_disabled" });
+
+    // Removed from the organization: the old link no longer signs in; just-in-time creation brings the same id back, fresh.
+    await context.directory.updateSettings({ jitProvisioning: true });
+    for (const m of await store.identity.memberships.listForUser(ORG, created.id)) await store.identity.memberships.remove(ORG, created.id, m.scope);
+    await store.identity.users.upsert({ ...(await store.identity.users.get(ORG, created.id))!, disabledAt: 2, removedAt: 2 });
+    const back = await resolveAccount(context.directory, byEmail, okta, { subject: "s1", email: "new@acme.test", groups: [] });
+    expect(back).toMatchObject({ id: created.id, email: "new@acme.test" });
+    expect(back.disabledAt).toBeUndefined();
+    expect(back.removedAt).toBeUndefined();
+    expect((await store.identity.memberships.listForUser(ORG, created.id)).map((m) => m.role)).toEqual(["member", "member"]);
   });
 
   it("maps groups to workspace roles, takes them back, and never lowers a hand-given role", async () => {

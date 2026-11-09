@@ -12,7 +12,7 @@ import { createMemoryAgentStore, type AgentStore } from "./agents";
 import { createMemoryNotificationStore, type NotificationStore } from "./notifications";
 import { createMemoryAuditStore, type AuditStore } from "./audit";
 import { createMemoryMeetingStore, type MeetingStore } from "./meetings";
-import { createMemoryCreditStore, createMemoryOrganizationStore, type CreditStore, type OrganizationStore } from "./tenancy";
+import { createMemoryCreditStore, createMemoryOrganizationStore, type CreditEntry, type CreditStore, type OrganizationStore } from "./tenancy";
 import {
   availableInWorkspace,
   inWorkspace,
@@ -174,7 +174,12 @@ export interface Store extends WorkspaceStore, AgentStore {
     decide(ownerId: string, id: string, status: "approved" | "declined" | "expired", at?: number): Promise<ApprovalRecord | undefined>;
   };
   usage: {
-    insert(event: UsageEvent): Promise<void>;
+    /**
+     * Record one event. With `credit` (a credits ledger charge for it), both
+     * are written in one transaction: a charge is never lost or written
+     * without its event, and its idempotency key keeps it from counting twice.
+     */
+    insert(event: UsageEvent, credit?: CreditEntry): Promise<void>;
     /** Sum of cost for an owner in [from, to). */
     sum(ownerId: string, from: number, to: number, filter?: { routineId?: string }): Promise<number>;
     byFeature(ownerId: string, from: number, to: number): Promise<Record<string, number>>;
@@ -223,6 +228,8 @@ export interface Store extends WorkspaceStore, AgentStore {
     get<T = unknown>(ownerId: string, key: string): Promise<T | undefined>;
     set(ownerId: string, key: string, value: unknown): Promise<void>;
     delete(ownerId: string, key: string): Promise<void>;
+    /** One key across every owner (small per-organization index entries, e.g. hosted wake-up times). */
+    listByKey<T = unknown>(key: string): Promise<Array<{ ownerId: string; value: T }>>;
   };
   close(): Promise<void>;
 }
@@ -237,6 +244,7 @@ export function createMemoryStore(): Store {
   const artifacts = new Map<string, ArtifactRecord>();
   const spaces = new Map<string, SpaceRecord>();
   const kv = new Map<string, unknown>();
+  const credits = createMemoryCreditStore();
   const workspaces = new Map<string, WorkspaceRecord>();
   const bases = new Map<string, KnowledgeBaseRecord>();
   const docs = new Map<string, KnowledgeDocRecord>();
@@ -299,7 +307,9 @@ export function createMemoryStore(): Store {
       }
     },
     usage: {
-      async insert(event) {
+      async insert(event, credit) {
+        // Like one transaction: the charge first (it may refuse a bad amount), then the event.
+        if (credit) await credits.append(credit);
         usage.push(clone(event));
       },
       async sum(ownerId, from, to, filter = {}) {
@@ -394,6 +404,14 @@ export function createMemoryStore(): Store {
       },
       async delete(ownerId, key) {
         kv.delete(`${ownerId}\u0000${key}`);
+      },
+      async listByKey<T>(key: string) {
+        const out: Array<{ ownerId: string; value: T }> = [];
+        for (const [composite, value] of kv) {
+          const at = composite.indexOf("\u0000");
+          if (composite.slice(at + 1) === key && value !== undefined) out.push({ ownerId: composite.slice(0, at), value: clone(value) as T });
+        }
+        return out;
       }
     },
     workspaces: {
@@ -503,7 +521,7 @@ export function createMemoryStore(): Store {
     audit: createMemoryAuditStore(),
     meetings: createMemoryMeetingStore(),
     organizations: createMemoryOrganizationStore(),
-    credits: createMemoryCreditStore(),
+    credits,
     ...createMemoryAgentStore(),
     async close() {}
   };

@@ -4,11 +4,22 @@
  * each agent takes part in. One JSON document in the store's key-value table
  * (small: tens of bindings, a capped set of threads), kept in memory and
  * written through on every change, one write at a time.
+ *
+ * Next to it, a tiny `presence.wake` entry ({ at }) says when this
+ * organization's Teams subscriptions are next due for renewal (or a retry):
+ * hosted Sibyl's scheduler reads it across organizations
+ * (store.kv.listByKey) to wake an idle organization in time.
  */
 import type { Store } from "@open-gpt-live/core";
-import type { PresenceChannelRef, PresenceProvider, PresenceRespondMode } from "@open-gpt-live/protocol";
+import type { PresenceChannelRef, PresenceDirectAllow, PresenceProvider, PresenceRespondMode } from "@open-gpt-live/protocol";
 
 export const PRESENCE_KV_KEY = "presence.v1";
+/** Per organization: { at } — when its Teams subscriptions next need the scheduler (hosted wake-ups). */
+export const PRESENCE_WAKE_KEY = "presence.wake";
+/** Teams: renew a subscription when less than this is left (see teams.ts). */
+export const TEAMS_RENEW_BEFORE_MS = 20 * 60_000;
+/** channelId of a direct-message binding (no real Slack or Teams channel id looks like it). */
+export const DIRECT_CHANNEL = "@direct";
 /** Threads an agent stays in (it answers replies there without a new @mention). */
 export const THREAD_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_THREADS = 5_000;
@@ -19,6 +30,14 @@ export interface PresenceBinding {
   workspaceId: string;
   agentId: string;
   provider: PresenceProvider;
+  /**
+   * "direct": the agent answers direct messages (Slack DMs / group DMs with
+   * the app, Teams 1:1 and group chats with the account) instead of a
+   * channel; channelId is DIRECT_CHANNEL. Absent: a channel.
+   */
+  kind?: "direct";
+  /** Direct messages: who may write to it (default "members"). */
+  allow?: PresenceDirectAllow;
   /** The workspace connection that receives and posts (Slack bot install / Microsoft 365 account). */
   connectionId: string;
   channelId: string;
@@ -55,6 +74,17 @@ export interface PresenceState {
   threads: Record<string, { bindingId: string; at: number }>;
 }
 
+export function isDirect(binding: Pick<PresenceBinding, "kind">): boolean {
+  return binding.kind === "direct";
+}
+
+/** When the scheduler must next look at a Teams binding (renewal or retry), or undefined. */
+export function teamsDueAt(binding: PresenceBinding): number | undefined {
+  if (binding.provider !== "teams") return undefined;
+  const renew = binding.subscription ? binding.subscription.expiresAt - TEAMS_RENEW_BEFORE_MS : 0;
+  return Math.max(renew, binding.retryAt ?? 0);
+}
+
 export function threadKey(provider: PresenceProvider, connectionKey: string, channelId: string, threadId: string): string {
   return `${provider}:${connectionKey}:${channelId}:${threadId}`;
 }
@@ -62,6 +92,7 @@ export function threadKey(provider: PresenceProvider, connectionKey: string, cha
 export class PresenceStore {
   private state: PresenceState = { bindings: [], agents: {}, workspaces: {}, threads: {} };
   private writing: Promise<void> = Promise.resolve();
+  private wake: number | undefined | null = null;
 
   constructor(
     private readonly options: { store: Store; ownerId: string; now(): number; log(event: string, fields?: Record<string, unknown>): void }
@@ -75,6 +106,7 @@ export class PresenceStore {
       workspaces: saved?.workspaces && typeof saved.workspaces === "object" ? saved.workspaces : {},
       threads: saved?.threads && typeof saved.threads === "object" ? saved.threads : {}
     };
+    this.wake = (await this.options.store.kv.get<{ at?: number }>(this.options.ownerId, PRESENCE_WAKE_KEY))?.at;
   }
 
   bindings(): readonly PresenceBinding[] {
@@ -166,12 +198,32 @@ export class PresenceStore {
     });
   }
 
+  /** The earliest time a Teams subscription needs the scheduler (undefined: none). */
+  nextWake(): number | undefined {
+    const times = this.state.bindings.map(teamsDueAt).filter((at): at is number => at !== undefined);
+    return times.length ? Math.min(...times) : undefined;
+  }
+
   private change(fn: (state: PresenceState) => void): Promise<void> {
     fn(this.state);
     const snapshot = JSON.parse(JSON.stringify(this.state)) as PresenceState;
-    const write = this.writing.then(() => this.options.store.kv.set(this.options.ownerId, PRESENCE_KV_KEY, snapshot));
+    const wake = this.nextWake();
+    const wakeChanged = wake !== this.wake;
+    this.wake = wake;
+    const { store, ownerId } = this.options;
+    const write = this.writing.then(async () => {
+      await store.kv.set(ownerId, PRESENCE_KV_KEY, snapshot);
+      if (!wakeChanged) return;
+      if (wake === undefined) await store.kv.delete(ownerId, PRESENCE_WAKE_KEY);
+      else await store.kv.set(ownerId, PRESENCE_WAKE_KEY, { at: wake });
+    });
     this.writing = write.catch((error: unknown) => this.options.log("presence.save_failed", { error: error instanceof Error ? error.message : String(error) }));
     return write;
+  }
+
+  /** Hosted: organizations whose Teams subscriptions are due by `now` (read across organizations). */
+  static async dueOrganizations(store: Store, now: number): Promise<string[]> {
+    return (await store.kv.listByKey<{ at?: number }>(PRESENCE_WAKE_KEY)).filter((entry) => typeof entry.value?.at === "number" && entry.value.at <= now).map((entry) => entry.ownerId);
   }
 
   /** Wait for pending writes (tests, shutdown). */

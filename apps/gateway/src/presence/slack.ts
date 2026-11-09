@@ -74,18 +74,43 @@ export function parseSlackEnvelope(body: Buffer): SlackEnvelope | undefined {
 
 /**
  * The message an event carries, or undefined when it is not one an agent
- * answers: bots (including our own replies), edits, joins, DMs, and plain
+ * answers: bots (including our own replies), edits, joins, and plain channel
  * messages that @mention the app (Slack also sends those as app_mention).
+ * Direct messages (`message.im`, `message.mpim`) come back with `direct`;
+ * their dedupe key differs from the app_mention Slack also sends for a group
+ * DM, which no channel binding answers.
  */
 export function slackInbound(envelope: Extract<SlackEnvelope, { type: "event_callback" }>, input: { connectionIds: string[]; botUserId?: string }): InboundMessage | undefined {
   const event = envelope.event;
   if (event.type !== "app_mention" && event.type !== "message") return undefined;
   if (event.bot_id || event.app_id || !event.user || (input.botUserId && event.user === input.botUserId)) return undefined;
   if (event.subtype && event.subtype !== "thread_broadcast") return undefined;
-  if (!event.channel || !/^[CG][A-Z0-9]{1,30}$/.test(event.channel) || !event.ts) return undefined;
-  if (event.type === "message" && event.channel_type && event.channel_type !== "channel" && event.channel_type !== "group") return undefined;
+  if (!event.channel || !/^[CGD][A-Z0-9]{1,30}$/.test(event.channel) || !event.ts) return undefined;
+  const direct = event.type === "message" && event.channel_type === "im" ? "one" : event.type === "message" && event.channel_type === "mpim" ? "group" : undefined;
+  if (event.type === "message" && !direct && event.channel_type && event.channel_type !== "channel" && event.channel_type !== "group") return undefined;
+  if (!direct && event.channel.startsWith("D")) return undefined;
   const raw = event.text ?? "";
   const mention = input.botUserId ? new RegExp(`<@${input.botUserId}(?:\\|[^>]*)?>`, "g") : undefined;
+  if (direct) {
+    const mentionedHere = Boolean(mention && mention.test(raw));
+    const text = (mention ? raw.replace(mention, " ") : raw).replace(/\s+/g, " ").trim();
+    return {
+      provider: "slack",
+      connectionIds: input.connectionIds,
+      spaceKey: envelope.team_id,
+      channelId: event.channel,
+      messageId: event.ts,
+      // 1:1: one conversation; a group DM: its threads.
+      threadId: direct === "one" ? "dm" : (event.thread_ts ?? event.ts),
+      inThread: Boolean(event.thread_ts && event.thread_ts !== event.ts),
+      authorId: event.user,
+      text,
+      mentioned: direct === "one" || mentionedHere,
+      dedupeKey: `slack-dm:${envelope.team_id}:${event.channel}:${event.ts}`,
+      direct,
+      ...(direct === "one" && event.thread_ts ? { replyIn: event.thread_ts } : {})
+    };
+  }
   const mentioned = event.type === "app_mention";
   // The app_mention event answers these; skip the duplicate message event.
   if (!mentioned && mention && mention.test(raw)) return undefined;

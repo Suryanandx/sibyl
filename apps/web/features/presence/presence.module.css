@@ -72,6 +72,13 @@
   padding: 0;
 }
 
+.directList {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
 .warn {
   color: var(--warning);
 }
