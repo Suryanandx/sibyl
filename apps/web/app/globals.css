@@ -1556,17 +1556,6 @@ code {
   font-weight: 500;
 }
 
-.savedBanner {
-  align-items: center;
-  border: 1px dashed var(--border-strong);
-  border-radius: 18px;
-  color: var(--text-2);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  padding: 14px;
-}
 
 /* ───────────────────────── Dialog (Models & voice) ───────────────────────── */
 

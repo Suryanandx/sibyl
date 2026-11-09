@@ -2,16 +2,15 @@
 
 import { useMemo, useState } from "react";
 import type { ModelCatalog, SessionSettings } from "@open-gpt-live/protocol";
-import { groupByDay, type StoredConversation } from "../lib/conversations";
+import { groupByDay, type ConversationSummary } from "../lib/conversations";
 import { Icon } from "./Icon";
 
 interface SidebarProps {
   open: boolean;
   catalog: ModelCatalog | null;
   settings: SessionSettings | null;
-  conversations: StoredConversation[];
+  conversations: ConversationSummary[];
   activeConversationId: string | null;
-  viewingId: string | null;
   onNewChat: () => void;
   onOpenConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
@@ -119,12 +118,7 @@ export function Sidebar(props: SidebarProps) {
                   <li key={item.id} className="historyRow">
                     <button
                       type="button"
-                      className={`historyItem${
-                        item.id === props.viewingId ||
-                        (!props.viewingId && item.id === props.activeConversationId)
-                          ? " active"
-                          : ""
-                      }`}
+                      className={`historyItem${item.id === props.activeConversationId ? " active" : ""}`}
                       onClick={() => props.onOpenConversation(item.id)}
                       title={item.title}
                     >

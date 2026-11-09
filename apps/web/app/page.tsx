@@ -23,14 +23,8 @@ import { Icon, type IconName } from "../components/Icon";
 import { Mark, SilverMark } from "../components/Brand";
 import type { VoiceState } from "../components/voice-state";
 import { sibylDarkTheme, sibylLightTheme } from "../lib/sibyl-theme";
-import {
-  deleteConversation,
-  loadConversations,
-  saveConversation,
-  titleFor,
-  toMarkdown,
-  type StoredConversation
-} from "../lib/conversations";
+import { titleFor, toMarkdown, type ConversationMessageView, type ConversationSummary } from "../lib/conversations";
+import { SignIn, gatewayRequiresLogin, readOwnerToken, withOwnerToken, writeOwnerToken } from "../components/SignIn";
 import { SpokenText } from "../components/SpokenText";
 import { StreamPlayer } from "../lib/stream-player";
 import { LiveCaptions, liveCaptionsSupported } from "../lib/live-captions";
@@ -253,9 +247,14 @@ export default function Home() {
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined);
   const [usage, setUsage] = useState<UsageView | null>(null);
   const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<StoredConversation[]>([]);
-  const [conversationId, setConversationId] = useState(() => createRequestId());
-  const [viewing, setViewing] = useState<StoredConversation | null>(null);
+  /** Conversations stored on the Gateway (newest first). */
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  /** The live conversation (set by conversation.state from the Gateway). */
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const conversationsRef = useRef<ConversationSummary[]>([]);
+  const conversationIdRef = useRef<string | null>(null);
+  /** Owner sign-in needed (failed: the stored password was rejected). */
+  const [signIn, setSignIn] = useState<{ failed: boolean } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [themePref, setThemePref] = useState<"system" | "light" | "dark">("system");
   const [showJump, setShowJump] = useState(false);
@@ -264,7 +263,6 @@ export default function Home() {
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
-  const resettingRef = useRef(false);
   const [speaking, setSpeaking] = useState(false);
   const storedSettingsAppliedRef = useRef(false);
   /** Requests whose voice failed (non-fatal): text + UI still complete. */
@@ -336,7 +334,7 @@ export default function Home() {
 
       let socket: WebSocket;
       try {
-        socket = new WebSocket(gatewayUrl);
+        socket = new WebSocket(withOwnerToken(gatewayUrl, readOwnerToken()));
       } catch {
         setConnected(false);
         setConnectionStatus("disconnected");
@@ -345,23 +343,31 @@ export default function Home() {
         return;
       }
       socketRef.current = socket;
+      let opened = false;
 
       socket.addEventListener("open", () => {
         if (disposed || socketRef.current !== socket) {
           socket.close();
           return;
         }
+        opened = true;
+        setSignIn(null);
         storedSettingsAppliedRef.current = false;
         sendRaw(socket, { type: WS_EVENTS.USAGE_REQUEST });
         const restoredConnection = reconnectAttempt > 0;
         reconnectAttempt = 0;
         setConnected(true);
         setConnectionStatus("connected");
-        setError(
-          restoredConnection
-            ? "Gateway reconnected. A new session has started."
-            : null
-        );
+        setError(restoredConnection ? "Gateway reconnected." : null);
+        // History lives on the Gateway: list it, and resume the live
+        // conversation (with its full context) if it was saved.
+        const resumeId = conversationIdRef.current;
+        const resume = resumeId && conversationsRef.current.some((item) => item.id === resumeId);
+        sendRaw(socket, { type: WS_EVENTS.CONVERSATIONS_REQUEST });
+        sendRaw(socket, {
+          type: WS_EVENTS.CONVERSATION_OPEN,
+          ...(resume ? { conversationId: resumeId } : {})
+        });
       });
 
       socket.addEventListener("close", () => {
@@ -372,19 +378,23 @@ export default function Home() {
         socketRef.current = null;
         setConnected(false);
         setSessionId(null);
-        if (resettingRef.current) {
-          // "New chat": start a fresh session right away, no error.
-          resettingRef.current = false;
-          cancelRequestsAfterDisconnect();
-          reconnectAttempt = 0;
-          connect();
-          return;
-        }
         setConnectionStatus("disconnected");
         cancelRequestsAfterDisconnect();
-        setError(
-          "Gateway disconnected. Reconnecting automatically; the next connection starts a new session."
-        );
+        if (!opened) {
+          // Rejected before opening: either the Gateway is down or it wants
+          // the owner password (the browser can't see the 401 itself).
+          void gatewayRequiresLogin(gatewayUrl).then((required) => {
+            if (disposed || socketRef.current) return;
+            if (required) {
+              setError(null);
+              setSignIn({ failed: Boolean(readOwnerToken()) });
+              return;
+            }
+            scheduleReconnect();
+          });
+          return;
+        }
+        setError("Gateway disconnected. Reconnecting automatically...");
         scheduleReconnect();
       });
 
@@ -449,6 +459,29 @@ export default function Home() {
 
     if (message.type === WS_EVENTS.BUDGET_BLOCKED) {
       setBudgetNotice(message.message);
+      return;
+    }
+
+    if (message.type === WS_EVENTS.CONVERSATIONS_LIST) {
+      conversationsRef.current = message.items;
+      setConversations(message.items);
+      return;
+    }
+
+    if (message.type === WS_EVENTS.CONVERSATION_STATE) {
+      // The opened conversation is now the live one; earlier replies are over.
+      for (const requestId of cancelActiveRequests(requestLifecyclesRef.current)) {
+        ignorePlaybackRequest(requestId);
+        settleRequestLatency(requestId, "interrupted");
+      }
+      cleanupAllPlayback();
+      brainRequestsRef.current.clear();
+      activeRequestIdRef.current = null;
+      setActiveRequestId(null);
+      conversationIdRef.current = message.conversationId;
+      setConversationId(message.conversationId);
+      setMessages(message.messages.map(fromStoredMessage));
+      atBottomRef.current = true;
       return;
     }
 
@@ -798,6 +831,12 @@ export default function Home() {
     }
 
     if (message.type === "error") {
+      if (!message.requestId && message.message === "Conversation not found") {
+        setError("That conversation no longer exists.");
+        const socket = socketRef.current;
+        if (socket) sendRaw(socket, { type: WS_EVENTS.CONVERSATIONS_REQUEST });
+        return;
+      }
       if (
         message.requestId &&
         !canAcceptRequestEvent(requestLifecyclesRef.current, message.requestId)
@@ -1767,7 +1806,6 @@ export default function Home() {
     } catch {
       // ignore
     }
-    setConversations(loadConversations());
   }, []);
   const systemMode = useSystemThemeMode();
   const themeMode: "light" | "dark" = themePref === "system" ? systemMode : themePref;
@@ -1786,7 +1824,7 @@ export default function Home() {
 
   // Send the next queued message as soon as Sibyl is free.
   useEffect(() => {
-    if (!connected || activeRequestId || recording || viewing || queue.length === 0) return;
+    if (!connected || activeRequestId || recording || queue.length === 0) return;
     const timer = window.setTimeout(() => {
       if (activeRequestIdRef.current) return;
       const [next, ...rest] = queue;
@@ -1795,29 +1833,7 @@ export default function Home() {
       sendWithTransition(next.text);
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [connected, activeRequestId, recording, viewing, queue]);
-
-  // Keep the current conversation in local history.
-  useEffect(() => {
-    const persistable = messages.filter((item) => !item.transient && (item.content.trim() || item.ui));
-    if (!persistable.some((item) => item.role === "user")) return;
-    const timer = window.setTimeout(() => {
-      const stored = persistable.map(
-        ({ id, role, content, requestId, source, ui, kind, task, model }) => ({
-          id, role, content, requestId, source, ui, kind, task, model
-        })
-      );
-      setConversations(
-        saveConversation({
-          id: conversationId,
-          title: titleFor(stored),
-          updatedAt: Date.now(),
-          messages: stored
-        })
-      );
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [messages, conversationId]);
+  }, [connected, activeRequestId, recording, queue]);
 
   // Follow new content unless the user scrolled up to read.
   useEffect(() => {
@@ -1834,39 +1850,53 @@ export default function Home() {
     setShowJump(!atBottom);
   }
 
-  function startNewChat(): void {
-    setViewing(null);
+  /**
+   * Make a conversation the live one: a stored one (its full context is
+   * restored on the Gateway, so the chat simply continues) or a new one.
+   */
+  function switchConversation(id?: string): void {
     setSidebarOpen(false);
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setError("Not connected to the gateway yet.");
+      return;
+    }
     if (activeRequestIdRef.current) stopResponse();
-    setMessages([]);
-    setInput("");
+    setQueue([]);
     setError(null);
-    setConversationId(createRequestId());
-    // A fresh Gateway session so Sibyl starts without the old context.
-    resettingRef.current = true;
-    socketRef.current?.close();
+    sendRaw(socket, { type: WS_EVENTS.CONVERSATION_OPEN, ...(id ? { conversationId: id } : {}) });
+  }
+
+  function startNewChat(): void {
+    setInput("");
+    switchConversation();
   }
 
   function openConversation(id: string): void {
-    const found = conversations.find((item) => item.id === id);
-    setSidebarOpen(false);
-    if (!found) return;
-    if (found.id === conversationId) {
-      setViewing(null);
+    if (id === conversationId) {
+      setSidebarOpen(false);
       return;
     }
-    setViewing(found);
+    switchConversation(id);
   }
 
   function removeConversation(id: string): void {
-    setConversations(deleteConversation(id));
-    if (viewing?.id === id) setViewing(null);
+    const socket = socketRef.current;
+    if (!socket || !sendRaw(socket, { type: WS_EVENTS.CONVERSATION_DELETE, conversationId: id })) {
+      setError("Not connected to the gateway; the conversation was not deleted.");
+    }
+  }
+
+  function submitOwnerToken(token: string): void {
+    writeOwnerToken(token);
+    setSignIn(null);
+    reconnectNowRef.current?.();
   }
 
   function exportConversation(): void {
-    const source = viewing?.messages ?? messages;
+    const source = messages.filter((item) => !item.transient);
     if (!source.length) return;
-    const title = viewing?.title ?? titleFor(source);
+    const title = conversations.find((item) => item.id === conversationId)?.title ?? titleFor(source);
     const blob = new Blob([toMarkdown(title, source)], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1975,11 +2005,11 @@ export default function Home() {
           ([key, value]) => settings[key as keyof SessionSettings] === value
         )
     )?.id ?? null;
-  const shown: ChatMessage[] = viewing ? (viewing.messages as ChatMessage[]) : messages;
   const lastAssistantId = [...messages].reverse().find((item) => item.role === "assistant")?.id;
-  const latestGroupKey = groupTurns(shown).at(-1)?.key;
-  const empty = shown.length === 0;
-  const title = viewing?.title ?? (messages.length ? titleFor(messages) : "New conversation");
+  const latestGroupKey = groupTurns(messages).at(-1)?.key;
+  const empty = messages.length === 0;
+  const saved = conversations.find((item) => item.id === conversationId);
+  const title = saved?.title ?? (messages.length ? titleFor(messages) : "New conversation");
   const modelLabel = (id?: string) =>
     catalog?.llm.find((model) => model.id === id)?.label ?? id?.split("/").pop() ?? "";
 
@@ -1990,6 +2020,10 @@ export default function Home() {
     { icon: "check", text: "Help me pick a laptop — ask me questions with a form" }
   ];
 
+  if (signIn) {
+    return <SignIn failed={signIn.failed} onSubmit={submitOwnerToken} />;
+  }
+
   return (
     <ThemeProvider mode={themeMode} lightTheme={sibylLightTheme} darkTheme={sibylDarkTheme}>
     <div className={`app${sidebarOpen ? " sidebarOpen" : ""}`}>
@@ -1998,7 +2032,7 @@ export default function Home() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/sibyl-mark.png" alt="" width={24} height={24} />
         </button>
-        <button type="button" className="railBtn active" aria-label="Chat" title="Chat" onClick={() => setViewing(null)}>
+        <button type="button" className="railBtn active" aria-label="Chat" title="Chat" onClick={() => setSidebarOpen(false)}>
           <Icon name="chat" />
         </button>
         <button type="button" className="railBtn" aria-label="History" title="History" onClick={() => setSidebarOpen((open) => !open)}>
@@ -2026,7 +2060,6 @@ export default function Home() {
         settings={settings}
         conversations={conversations}
         activeConversationId={conversationId}
-        viewingId={viewing?.id ?? null}
         onNewChat={startNewChat}
         onOpenConversation={openConversation}
         onDeleteConversation={removeConversation}
@@ -2045,16 +2078,19 @@ export default function Home() {
             <span className="titleText" title={title}>{title}</span>
             <span className={`statusBadge ${connectionStatus}`}>
               <i />
-              {viewing
-                ? "Saved"
-                : connectionStatus === "connected"
-                  ? liveMode
-                    ? "Live"
-                    : "Ready"
-                  : connectionStatus === "reconnecting" || connectionStatus === "connecting"
-                    ? "Connecting"
-                    : "Offline"}
+              {connectionStatus === "connected"
+                ? liveMode
+                  ? "Live"
+                  : "Ready"
+                : connectionStatus === "reconnecting" || connectionStatus === "connecting"
+                  ? "Connecting"
+                  : "Offline"}
             </span>
+            {saved ? (
+              <span className="statusBadge saved" title="This conversation is saved on your Sibyl server">
+                Saved
+              </span>
+            ) : null}
           </div>
           <div className="topActions">
             <button type="button" className="ghostBtn" onClick={() => setSettingsOpen(true)}>
@@ -2096,18 +2132,17 @@ export default function Home() {
               </div>
             ) : (
               <div className="thread">
-                {groupTurns(shown).map((group) => {
+                {groupTurns(messages).map((group) => {
                   const replies = group.replies;
                   const lastReply = replies[replies.length - 1];
                   const isLatest = group.key === latestGroupKey;
                   const pending =
-                    !viewing &&
                     isLatest &&
                     Boolean(activeRequestId) &&
                     !replies.some((reply) => reply.content.trim() || reply.ui);
                   const settled =
                     replies.length > 0 &&
-                    replies.every((reply) => reply.done || viewing) &&
+                    replies.every((reply) => reply.done) &&
                     replies.some((reply) => reply.content.trim() || reply.ui);
                   const replyText = replies
                     .map((reply) => cleanText(reply.content))
@@ -2150,7 +2185,7 @@ export default function Home() {
                                     >
                                       {message.failed ? (
                                         <Icon name="close" size={15} className="stepIcon fail" />
-                                      ) : message.done || viewing ? (
+                                      ) : message.done ? (
                                         <Icon name="check" size={15} className="stepIcon done" />
                                       ) : (
                                         <span className="spinner" aria-hidden />
@@ -2158,7 +2193,7 @@ export default function Home() {
                                       <span>
                                         {message.failed
                                           ? "Deep work hit a problem"
-                                          : message.done || viewing
+                                          : message.done
                                             ? "Thought it through"
                                             : message.ui
                                               ? "Building the visual…"
@@ -2178,8 +2213,8 @@ export default function Home() {
                                 {message.ui ? (
                                   <GenUiView
                                     source={message.ui}
-                                    streaming={!viewing && !message.done}
-                                    onAction={!viewing && message.id === lastAssistantId ? sendUiAction : undefined}
+                                    streaming={!message.done}
+                                    onAction={message.id === lastAssistantId ? sendUiAction : undefined}
                                   />
                                 ) : null}
                                 {message.ui && openSources.has(message.id) ? (
@@ -2210,7 +2245,7 @@ export default function Home() {
                                     <Icon name="code" size={15} />
                                   </button>
                                 ))}
-                                {!viewing && group.user && isLatest ? (
+                                {group.user && isLatest ? (
                                   <button
                                     type="button"
                                     className="actionBtn"
@@ -2272,18 +2307,6 @@ export default function Home() {
                 </button>
               </div>
             ) : null}
-            {viewing ? (
-              <div className="savedBanner">
-                <span>You&apos;re reading a saved conversation.</span>
-                <button type="button" className="ghostBtn" onClick={() => setViewing(null)}>
-                  Back to current chat
-                </button>
-                <button type="button" className="darkBtn" onClick={startNewChat}>
-                  New chat
-                </button>
-              </div>
-            ) : (
-              <>
               <QueueStack
                 items={queue}
                 busy={Boolean(activeRequestId)}
@@ -2319,8 +2342,6 @@ export default function Home() {
                 economyMode={usage?.economyMode}
                 onOpenUsage={() => openSettings("usage")}
               />
-              </>
-            )}
           </div>
         </section>
       </main>
@@ -2466,6 +2487,22 @@ function VadPanel({
 
 function formatVadLevel(value: number | undefined): string {
   return value === undefined ? "—" : value.toFixed(4);
+}
+
+/** A message from the Gateway's conversation store, ready to show. */
+function fromStoredMessage(message: ConversationMessageView): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    requestId: message.requestId,
+    ...(message.source ? { source: message.source } : {}),
+    ...(message.ui ? { ui: message.ui } : {}),
+    ...(message.kind ? { kind: message.kind } : {}),
+    ...(message.task ? { task: message.task } : {}),
+    ...(message.model ? { model: message.model } : {}),
+    done: true
+  };
 }
 
 function sendRaw(socket: WebSocket, message: ClientMessage): boolean {
