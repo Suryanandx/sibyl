@@ -12,6 +12,7 @@ import {
   type ServerMessage,
   type SessionCapabilities,
   type SessionSettings,
+  type ToolArtifactView,
   type UsageView
 } from "@open-gpt-live/protocol";
 import { ThemeProvider, useSystemThemeMode } from "@openuidev/react-ui";
@@ -21,6 +22,7 @@ import { Composer } from "../components/Composer";
 import { QueueStack, type QueuedMessage } from "../components/QueueStack";
 import { Sidebar } from "../components/Sidebar";
 import { ApprovalCard, type ApprovalCardStatus } from "../components/ApprovalCard";
+import { SlidesCard } from "../components/SlidesCard";
 import { Icon, type IconName } from "../components/Icon";
 import { SilverMark } from "../components/Brand";
 import { SibylLoader, ThinkingStatus } from "../components/SibylLoader";
@@ -88,6 +90,8 @@ interface ToolStep {
   title: string;
   status: "running" | "ok" | "error" | "declined";
   summary?: string;
+  /** Deck produced by create_slides / revise_slides. */
+  artifact?: ToolArtifactView;
 }
 
 interface ApprovalEntry {
@@ -639,7 +643,7 @@ export default function Home() {
                 ...item,
                 tools: (item.tools ?? []).map((tool) =>
                   tool.callId === message.callId
-                    ? { ...tool, status: message.status, summary: message.summary }
+                    ? { ...tool, status: message.status, summary: message.summary, ...(message.artifact ? { artifact: message.artifact } : {}) }
                     : tool
                 )
               }
@@ -2174,6 +2178,9 @@ export default function Home() {
         <button type="button" className="railBtn" aria-label="History" title="History" onClick={() => setSidebarOpen((open) => !open)}>
           <Icon name="history" />
         </button>
+        <a className="railBtn" href="/library/slides" aria-label="Slides" title="Slides">
+          <Icon name="layers" />
+        </a>
         <button type="button" className="railBtn" aria-label="Models & voice" title="Models & voice" onClick={() => setSettingsOpen(true)}>
           <Icon name="sliders" />
         </button>
@@ -2368,6 +2375,11 @@ export default function Home() {
                                     <ToolSteps tools={message.tools} settled={Boolean(message.done)} />
                                   </div>
                                 ) : null}
+                                {message.tools?.map((tool) =>
+                                  tool.artifact?.kind === "slides" ? (
+                                    <SlidesCard key={`deck:${tool.callId}`} artifact={tool.artifact} onRevise={setInput} />
+                                  ) : null
+                                )}
                                 {message.approvals?.map((entry) => (
                                   <ApprovalCard
                                     key={entry.view.id}

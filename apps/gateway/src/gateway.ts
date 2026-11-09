@@ -34,6 +34,7 @@ import { ApprovalBroker } from "./brain/approvals.js";
 import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
+import { routeSlidesRequest, takeSlidesArtifact } from "./slides/index.js";
 import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
 
 export const DEFAULT_MAX_AUDIO_TURN_BYTES = 25 * 1024 * 1024;
@@ -329,6 +330,19 @@ export async function createGatewayServer(
         "access-control-allow-origin": "*"
       });
       response.end(body);
+      return;
+    }
+    if (
+      routeSlidesRequest(request, response, {
+        runtime: config.runtime,
+        ...(options.ownerToken ? { ownerToken: options.ownerToken } : {}),
+        allowedOrigins: options.allowedOrigins ?? [],
+        ...(options.providers.toolLlm ? { toolLlm: options.providers.toolLlm } : {}),
+        model: () => config.defaultSettings.llmModel,
+        llmParams: (model) => config.llmParams[model],
+        log: (event, fields) => config.logger.info(event, fields)
+      })
+    ) {
       return;
     }
     response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
@@ -1817,8 +1831,10 @@ class GatewayConnection {
       meter: runtime.meter,
       log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields }),
       onToolStarted: (call) => this.send({ type: WS_EVENTS.TOOL_STARTED, requestId: run.runId, ...call }),
-      onToolFinished: ({ callId, status, summary }) =>
-        this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: run.runId, callId, status, ...(summary ? { summary } : {}) }),
+      onToolFinished: ({ callId, toolName, status, summary }) => {
+        const artifact = takeSlidesArtifact(run.runId, toolName);
+        this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: run.runId, callId, status, ...(summary ? { summary } : {}), ...(artifact ? { artifact } : {}) });
+      },
       approve: ({ tool, input }) => this.approvals.request({ runId: run.runId, conversationId: this.conversations.conversationId, tool, input, signal: run.signal })
     };
   }

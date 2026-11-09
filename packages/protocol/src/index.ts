@@ -58,6 +58,26 @@ export interface ToolFinishedMessage {
   status: "ok" | "error" | "declined";
   /** Short human summary of the result. */
   summary?: string;
+  /** Deck or file the tool produced (e.g. create_slides), for a preview card. */
+  artifact?: ToolArtifactView;
+}
+
+/** Browser-safe view of an artifact a tool produced. URLs never point at internal services. */
+export interface ToolArtifactView {
+  id: string;
+  kind: "slides" | "file";
+  title: string;
+  version: number;
+  parentId?: string;
+  spaceId?: string;
+  slideCount?: number;
+  /** Web-app path of the editor, e.g. /slides/presentation?id=… */
+  editUrl?: string;
+  /** Gateway-relative thumbnail path (needs the owner token). */
+  thumbnailUrl?: string;
+  /** Gateway-relative download paths (need the owner token). */
+  downloads?: { pptx?: string; pdf?: string };
+  createdAt?: number;
 }
 
 export interface ApprovalView {

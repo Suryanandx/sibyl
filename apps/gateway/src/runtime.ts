@@ -18,12 +18,15 @@ import {
 import { createUsageMeter } from "./metering/meter.js";
 import { installSibylTools, type InstalledTools } from "./tools/index.js";
 import { openStore } from "@open-gpt-live/store";
+import { installSlides, type SlidesService } from "./slides/index.js";
 
 export interface GatewayRuntime {
   ownerId: string;
   store: Store;
   tools: ToolRegistry;
   meter: UsageMeter;
+  /** Sibyl Slides (engine client + decks), when the engine is configured. */
+  slides?: SlidesService;
   close(): Promise<void>;
 }
 
@@ -44,6 +47,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<GatewayRun
     store,
     tools,
     meter,
+    ...(installed.slides ? { slides: installed.slides } : {}),
     close: async () => {
       await installed.close();
       await store.close();
@@ -57,10 +61,12 @@ async function installTools(input: {
   meter: UsageMeter;
   ownerId: string;
   options: RuntimeOptions;
-}): Promise<InstalledTools> {
+}): Promise<InstalledTools & { slides?: SlidesService }> {
+  // Slides first, so the persisted per-tool switches below apply to them too.
+  const slides = await installSlides({ ...input, env: input.options.env, log: input.options.log });
   // Built-in tools, MCP servers (mcp.config.json) and persisted per-tool switches.
-  // Slides register here too.
-  return installSibylTools({ ...input, env: input.options.env, log: input.options.log });
+  const installed = await installSibylTools({ ...input, env: input.options.env, log: input.options.log });
+  return slides ? { ...installed, slides } : installed;
 }
 
 /** Meter that records nothing and never blocks (until metering is installed). */
