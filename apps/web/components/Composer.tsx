@@ -11,6 +11,7 @@ import { VOICE_LABELS, type VoiceState } from "./voice-state";
 import { ATTACHMENT_ACCEPT, type ComposerAttachment } from "./AttachmentClient";
 import { AttachmentIcon, AttachmentTray } from "./AttachmentChips";
 import { MentionPicker, type MentionItem } from "../features/media/ChatMedia";
+import { VoiceEngineMenuItems } from "../features/voice-engine";
 
 interface ComposerProps {
   /** Who answers: the agent picker (shown before the model menu). */
@@ -448,6 +449,8 @@ function ModelMenu(props: {
               ))}
             </>
           ) : null}
+
+          {needle ? null : <VoiceEngineMenuItems onPicked={() => setOpen(false)} />}
 
           {voices.length ? (
             <>

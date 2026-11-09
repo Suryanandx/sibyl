@@ -5,6 +5,7 @@ import { PRESET_BLURBS } from "../../../components/SettingsPanel";
 import { Muted, Notice } from "../../../components/ui";
 import { useGateway } from "../../../lib/gateway";
 import { usd } from "../../../lib/pricing";
+import { perMinute } from "../../voice-engine";
 import { updateOnboarding } from "../useOnboarding";
 import { StepLayout, useFlow } from "../OnboardingFlow";
 import styles from "../onboarding.module.css";
@@ -14,7 +15,8 @@ const DEFAULT_PRESET = "balanced";
 /** Pick a style: the four model presets with typed and spoken prices; Balanced is preselected. */
 export function StepStyle() {
   const { view } = useFlow();
-  const { catalog, connected, activePresetId, updateSettings } = useGateway();
+  const { catalog, connected, activePresetId, updateSettings, capabilities } = useGateway();
+  const premium = capabilities?.voiceEngines?.realtime.models[0];
   const presets = catalog?.presets ?? [];
   const [picked, setPicked] = useState<string | null>(null);
   const chosen = picked ?? view.presetId ?? activePresetId ?? (presets.some((p) => p.id === DEFAULT_PRESET) ? DEFAULT_PRESET : presets[0]?.id ?? null);
@@ -65,6 +67,11 @@ export function StepStyle() {
             </label>
           ))}
           <Muted className={styles.small}>Prices are per 100 messages or spoken turns. Web searches add about $0.01 each.</Muted>
+          {premium ? (
+            <Muted className={styles.small}>
+              Optional: for the most natural voice, GPT Realtime is a premium voice engine ({perMinute(premium.usdPerMinute)}, with your OpenAI key). Turn it on later in Settings → Voice.
+            </Muted>
+          ) : null}
         </fieldset>
       )}
     </StepLayout>

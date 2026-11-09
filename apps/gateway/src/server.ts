@@ -11,6 +11,7 @@ import {
 import {
   buildBrainSystemPrompt,
   buildGenUiSystemPrompt,
+  buildRealtimeVoicePrompt,
   buildVoicePrompt
 } from "@open-gpt-live/genui";
 import { DEFAULT_OWNER_ID } from "@open-gpt-live/core";
@@ -304,6 +305,7 @@ async function main(): Promise<void> {
       ? {
           live: {
             voicePrompt: buildVoicePrompt(config.assistantName),
+            realtimePrompt: buildRealtimeVoicePrompt(config.assistantName),
             warmUp: true,
             brainPrompt: (genUi: boolean) =>
               buildBrainSystemPrompt(genUi, config.assistantName)

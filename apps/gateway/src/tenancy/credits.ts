@@ -156,7 +156,7 @@ export class CreditsService {
    * twice.
    */
   chargeFor(event: UsageEvent): CreditEntry | undefined {
-    if (!this.active || event.ownerId !== this.orgId || !(event.costUsd > 0)) return undefined;
+    if (!this.active || event.ownerId !== this.orgId || event.ownKey || !(event.costUsd > 0)) return undefined;
     const micros = Math.max(1, Math.round(event.costUsd * (1 + this.options.margin) * MICROS_PER_USD));
     return {
       orgId: this.orgId,

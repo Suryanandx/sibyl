@@ -32,6 +32,7 @@ import {
 import {
   SpeechUiSplitter,
   VoiceReplyParser,
+  buildRealtimeVoicePrompt,
   stripEmotionTags,
   toSpeakableText
 } from "@open-gpt-live/genui";
@@ -109,6 +110,16 @@ import { TRANSPORT_OPEN, headlessTransport, type SessionTransport, type VoiceMed
 import { handleRealtimeHttp, handleRealtimeMessage, handleRealtimeWebhook } from "./realtime/index.js";
 import { handleMeetingsHttp, handleMeetingsMessage, isMeetingGuestRoute } from "./meetings/index.js";
 import { handleTenancyHttp } from "./tenancy/http.js";
+import {
+  RealtimeVoiceEngine,
+  agentRealtimeVoice,
+  applyVoiceEngineSettings,
+  handleVoiceEngineHttp,
+  realtimeSettings,
+  sibylMinuteFor,
+  wantedEngine,
+  type VoiceEngineHost
+} from "./voice-engine/index.js";
 
 export const DEFAULT_MAX_AUDIO_TURN_BYTES = 25 * 1024 * 1024;
 
@@ -194,6 +205,8 @@ export interface GatewayServerOptions {
 
 export interface LiveConversationConfig {
   voicePrompt: string;
+  /** Instructions for GPT Realtime, the premium voice engine (default: buildRealtimeVoicePrompt()). */
+  realtimePrompt?: string;
   brainPrompt: (genUi: boolean) => string;
   /** Send a tiny request when a session starts so the first reply isn't cold. */
   warmUp?: boolean;
@@ -794,6 +807,8 @@ function createTenantGateway(options: GatewayServerOptions, base: GatewayConfig,
       handlePresenceHttp({ ...api, presence: runtime.presence }, request, response) ||
       // Model access (own OpenRouter key) and AI credits.
       handleTenancyHttp({ ...api, runtime }, request, response) ||
+      // Voice engines: GPT Realtime's OpenAI key and the workspace switch.
+      Boolean(runtime.voiceEngines && handleVoiceEngineHttp({ ...api, voiceEngines: runtime.voiceEngines, sibylUsdPerMinute: () => sibylMinuteFor(config.modelCatalog, config.defaultSettings) }, request, response)) ||
       handleOnboardingHttp({ ...api, onboarding }, request, response) ||
       // Enterprise routes in the route map (/api/admin/*, /api/recordings, …): gated here like the rest; absent without a licence (404).
       Boolean(runtime.license?.httpRoutes.some((handler) => handler(request, response, api)));
@@ -890,6 +905,10 @@ class GatewayConnection implements VoiceSessionPort {
   private mediaSink: VoiceMediaSink | undefined;
   private readonly observers = new Set<(message: ServerMessage) => void>();
   private readonly closeListeners = new Set<() => void>();
+  /** GPT Realtime, when this session's live turns use it (see voice-engine/). */
+  private realtimeVoice: RealtimeVoiceEngine | undefined;
+  private realtimeNotice: string | undefined;
+  private unsubscribeVoiceEngines: (() => void) | undefined;
 
   constructor(
     private readonly socket: SessionTransport,
@@ -969,6 +988,8 @@ class GatewayConnection implements VoiceSessionPort {
       return { userId: this.auth.principal.userId ?? this.auth.principal.kind, workspaceId: this.workspaceId, ...(role ? { role } : {}) };
     });
     if (!this.options.headless) this.subscribeBrowserPushes();
+    // A new OpenAI key or workspace switch for GPT Realtime: the engine choices change.
+    this.unsubscribeVoiceEngines = this.config.runtime.voiceEngines?.onChange(() => this.sendSessionConfig());
     this.warmUpVoice();
 
     this.socket.on("message", (raw) => {
@@ -1165,6 +1186,7 @@ class GatewayConnection implements VoiceSessionPort {
     }
 
     if (message.type === WS_EVENTS.INTERRUPT) {
+      this.realtimeVoice?.interrupt(message.requestId, message.reason ?? "user interrupt");
       if (message.requestId) {
         this.cancelAudioTurn(
           message.requestId,
@@ -1184,11 +1206,17 @@ class GatewayConnection implements VoiceSessionPort {
 
     if (message.type === WS_EVENTS.VAD_SPEECH_START) {
       if (message.agentId) this.selectedAgentId = message.agentId;
-      this.startLiveAudioTurn(message.requestId);
-      return;
+      // GPT Realtime takes the turn when it is this session's (or agent's) engine.
+      return this.realtimeTakes(message.requestId).then((taken) => {
+        if (!taken) this.startLiveAudioTurn(message.requestId);
+      });
     }
 
     if (message.type === WS_EVENTS.VAD_SPEECH_END) {
+      if (this.realtimeVoice?.owns(message.requestId)) {
+        this.realtimeVoice.speechEnd(message.requestId, message.caption, message.reason);
+        return;
+      }
       if (message.reason === "cancelled") {
         this.cancelAudioTurn(message.requestId, "client cancelled live turn");
         return;
@@ -1225,6 +1253,11 @@ class GatewayConnection implements VoiceSessionPort {
       // Awaited by the message queue: a conversation.open must restore the
       // history before the next user message is handled.
       return this.handleV03Message(message);
+    }
+
+    if (this.realtimeVoice?.owns(message.requestId)) {
+      if (message.chunk) this.realtimeVoice.audio(message.requestId, Buffer.from(message.chunk, "base64"), message.mimeType);
+      return;
     }
 
     void this.handleAudioChunk(message);
@@ -1576,7 +1609,11 @@ class GatewayConnection implements VoiceSessionPort {
       genUi: Boolean(this.config.genUiSystemPrompt),
       tts: Boolean(this.providers.tts),
       realtimeStt: this.config.realtimeSttEnabled,
-      ...(this.config.runtime.realtime ? { realtime: this.config.runtime.realtime.capability() } : {})
+      ...(this.config.runtime.realtime ? { realtime: this.config.runtime.realtime.capability() } : {}),
+      // GPT Realtime hands work to the deep brain, so it needs live conversation.
+      ...(this.config.runtime.voiceEngines && this.config.live
+        ? { voiceEngines: this.config.runtime.voiceEngines.capability(this.workspaceId, sibylMinuteFor(this.config.modelCatalog, this.session.settings)) }
+        : {})
     };
   }
 
@@ -1638,8 +1675,12 @@ class GatewayConnection implements VoiceSessionPort {
     if (patch.speak !== undefined) {
       next.speak = patch.speak && Boolean(this.providers.tts);
     }
+    const engineRefusal = applyVoiceEngineSettings(patch, next, this.config.runtime.voiceEngines);
+    if (engineRefusal) return reject(engineRefusal);
 
     this.session.settings = next;
+    const engines = this.config.runtime.voiceEngines;
+    if (engines) this.realtimeVoice?.update(realtimeSettings(next, engines));
     for (const key of Object.keys(patch) as Array<keyof SessionSettings>) {
       if (key === "ttsVoice" && ignoredVoice) continue;
       this.session.userChosen.add(key);
@@ -2640,8 +2681,11 @@ class GatewayConnection implements VoiceSessionPort {
     });
   }
 
-  /** Background deep-brain run: reasoning + optional OpenUI visual, then a spoken gist. */
-  private async runDeepBrain(parentRequestId: string, task: string): Promise<void> {
+  /**
+   * Background deep-brain run: reasoning + optional OpenUI visual, then a spoken gist.
+   * `speak: false`: the caller speaks the result itself (GPT Realtime); resolves with it.
+   */
+  private async runDeepBrain(parentRequestId: string, task: string, options: { speak?: boolean } = {}): Promise<{ requestId: string; gist: string; visual: boolean; entry: LLMMessage } | undefined> {
     const live = this.config.live;
     if (!live || !this.session.settings.llmModel) return;
     const brainId = this.config.createId();
@@ -2684,7 +2728,7 @@ class GatewayConnection implements VoiceSessionPort {
     // the stream and can take much longer), instead of after the whole run.
     let spoke = false;
     const speakGist = (): void => {
-      if (spoke) return;
+      if (spoke || options.speak === false) return;
       spoke = true;
       const gist = speech.trim();
       if (gist) {
@@ -2746,10 +2790,11 @@ class GatewayConnection implements VoiceSessionPort {
       this.noteRequestCost(brainId);
       this.pushUsage();
       const gist = speech.trim();
-      this.session.history.push({
+      const entry: LLMMessage = {
         role: "assistant",
         content: `[deep brain] ${gist}${ui.trim() ? " (A visual with the details is on the user's screen.)" : ""}`
-      });
+      };
+      this.session.history.push(entry);
       this.conversations.brainResult(brainId, parentRequestId, { content: gist, ui, task, model });
       if (agent) void agent.finish({ runId: brainId, task, reply: gist, conversationId: this.conversations.conversationId, ...this.reflectWith(model) });
       this.config.logger.info("brain.finished", {
@@ -2759,6 +2804,7 @@ class GatewayConnection implements VoiceSessionPort {
         uiChars: ui.length
       });
       speakGist();
+      return { requestId: brainId, gist, visual: Boolean(ui.trim()), entry };
     } catch (error) {
       if (controller.signal.aborted || this.disposed) return;
       this.config.logger.error("brain.failed", {
@@ -3429,6 +3475,8 @@ class GatewayConnection implements VoiceSessionPort {
     }
     this.session.brainRuns.clear();
     this.session.pendingSpeech = undefined;
+    this.realtimeVoice?.close(reason);
+    this.unsubscribeVoiceEngines?.();
     this.approvals.dispose();
     this.secrets?.dispose();
     this.integrations.dispose();
@@ -3484,6 +3532,116 @@ class GatewayConnection implements VoiceSessionPort {
     const all = usableTools(this.config.runtime.tools.list({ enabledOnly: true }), { ...scope, governance: this.config.runtime.governance });
     const tools = this.can(PERMISSIONS.TOOLS_WRITE) ? all : all.filter((tool) => tool.effect !== "write");
     return agent ? agent.tools(tools) : tools;
+  }
+
+  /* ───────────── voice engines (GPT Realtime; see voice-engine/) ───────────── */
+
+  /** Start a live turn on GPT Realtime when it is the engine for this session or agent (and usable). */
+  private async realtimeTakes(requestId: string): Promise<boolean> {
+    const engines = this.config.runtime.voiceEngines;
+    if (!engines || !this.config.live) return false;
+    const agentId = this.selectedAgentId;
+    const agent = agentId ? await this.config.runtime.agents?.get(this.auth.principal, this.workspaceId, agentId) : undefined;
+    if (wantedEngine(this.session.settings, agent, engines) !== "gpt-realtime") return false;
+    const reason = engines.capability(this.workspaceId).realtime.unavailableReason;
+    if (reason) {
+      // Say once why Sibyl voice answers instead.
+      if (this.realtimeNotice !== reason) {
+        this.realtimeNotice = reason;
+        const why = reason === "no_key" ? "Add an OpenAI key to use GPT Realtime" : reason === "blocked" ? "GPT Realtime is turned off in this workspace" : "GPT Realtime is turned off on this server";
+        this.send({ type: "error", scope: "llm", message: `${why}. Using Sibyl voice.` });
+      }
+      return false;
+    }
+    this.realtimeNotice = undefined;
+    this.realtimeVoice ??= new RealtimeVoiceEngine(this.voiceEngineHost(), engines.config, realtimeSettings(this.session.settings, engines));
+    if (this.realtimeVoice.coolingDown) return false;
+    return this.realtimeVoice.speechStart(requestId);
+  }
+
+  /** What GPT Realtime uses of this session: the same history, storage, budgets, agents and deep brain. */
+  private voiceEngineHost(): VoiceEngineHost {
+    const engines = this.config.runtime.voiceEngines!;
+    const { meter, ownerId } = this.config.runtime;
+    return {
+      sessionId: this.session.sessionId,
+      now: () => this.config.now(),
+      createId: () => this.config.createId(),
+      log: (event, fields) => this.config.logger.info(event, fields),
+      send: (message) => this.send(message),
+      speech: (requestId, pcm, segmentIndex, isFinal) => {
+        const audio = pcm16MonoToWav(pcm, 24_000);
+        if (this.mediaSink) {
+          this.mediaSink.speech({ requestId, audio, mimeType: "audio/wav", segmentIndex, isFinal });
+          return;
+        }
+        this.send({ type: WS_EVENTS.TTS_CHUNK, requestId, sequence: segmentIndex, chunk: audio.toString("base64"), mimeType: "audio/wav", segmentIndex, isFinal });
+      },
+      speechEnd: (requestId, reason) => {
+        this.mediaSink?.speechEnd(requestId, reason);
+        this.send({ type: WS_EVENTS.TTS_END, requestId, reason });
+      },
+      history: () => this.conversation(),
+      beginUserTurn: (requestId, entry, transcriptReady) => {
+        this.session.history.push(entry);
+        this.beginStoredTurn(requestId, entry, { kind: "live", requestStartedAt: this.config.now() });
+        this.session.transcriptReady = transcriptReady;
+      },
+      completeReply: (requestId, entry, reply) => {
+        if (entry) this.session.history.push(entry);
+        this.conversations.completeReply(requestId, reply, this.session.transcriptReady);
+        this.noteRequestCost(requestId);
+        this.pushUsage();
+      },
+      newTurn: () => {
+        this.session.pendingSpeech = undefined;
+        return (this.session.turnCounter += 1);
+      },
+      turn: () => this.session.turnCounter,
+      interruptPipeline: (reason) => {
+        this.interruptCurrentRun(reason);
+        this.session.pendingSpeech = undefined;
+      },
+      prepareTurn: async (requestId) => {
+        if ((await this.pickAgent(requestId, "", undefined)) === false) return undefined;
+        const agent = this.agentTurn?.requestId === requestId ? this.agentTurn : undefined;
+        const settings = realtimeSettings(this.session.settings, engines);
+        if (agent && !this.agentBudgetAllows(agent, "voice", `openai/${settings.model}`, requestId)) return undefined;
+        agent?.bindRequest(requestId);
+        const prompt = this.config.live?.realtimePrompt ?? buildRealtimeVoicePrompt();
+        return {
+          instructions: (await this.withMemory(prompt)) + (agent?.voiceBlock ?? ""),
+          voice: agentRealtimeVoice(agent?.agent, settings.voice),
+          ...(agent ? { agentId: agent.agent.id } : {})
+        };
+      },
+      budgetAllows: (requestId, estimateUsd) => {
+        if (meter instanceof GatewayUsageMeter) meter.bindRequest(requestId, this.session.sessionId);
+        const model = `openai/${realtimeSettings(this.session.settings, engines).model}`;
+        const decision = meter.check({ ownerId, estimateUsd, sessionId: this.session.sessionId, workspaceId: this.workspaceId, feature: "voice", model });
+        if (decision.allowed) return true;
+        this.config.logger.warn("budget.blocked", { sessionId: this.session.sessionId, requestId, feature: "voice", scope: decision.scope });
+        this.send({ type: WS_EVENTS.BUDGET_BLOCKED, requestId, scope: browserScope(decision.scope), message: decision.message });
+        return false;
+      },
+      record: ({ ownKey, ...usage }) =>
+        meter.record({
+          ownerId,
+          feature: "voice",
+          estimated: false,
+          conversationId: this.conversations.conversationId,
+          ...(ownKey ? { ownKey } : {}),
+          ...usage
+        }),
+      deepBrain: async (parentRequestId, task) =>
+        (await this.runDeepBrain(parentRequestId, task, { speak: false })) ?? { error: "The deep brain couldn't do that right now (see the chat)." },
+      fallback: async (requestId, pcm, caption) => {
+        this.startLiveAudioTurn(requestId);
+        await this.handleAudioChunk({ type: WS_EVENTS.AUDIO_CHUNK, requestId, chunk: pcm.toString("base64"), mimeType: "audio/pcm;rate=24000", sequence: 0, turnMode: "live", isFinal: true });
+        await this.finishLiveAudioTurn(requestId, caption);
+      },
+      connect: (model, signal) => engines.connect(model, signal)
+    };
   }
 
   /* ───────────── agents ───────────── */

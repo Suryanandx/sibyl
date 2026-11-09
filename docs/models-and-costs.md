@@ -177,6 +177,10 @@ Measured on 2026-11-09 with the voice + visuals prompt, time to the first token:
 
 Reasoning settings make the biggest difference. For voice, prefer models with prompt caching and low or no reasoning.
 
+## GPT Realtime (premium voice)
+
+Next to these four roles, live voice can run on OpenAI's GPT Realtime, a speech-to-speech model, for people who want the most natural voice and accept a higher price: about $0.05 a minute for `gpt-realtime-2.1` and $0.02 for `gpt-realtime-2.1-mini`, against roughly $0.005–0.01 for Sibyl voice on the Cheapest and Balanced presets. It needs an OpenAI key (OpenRouter doesn't offer the Realtime API). The deep brain still does the tools and visuals. See [voice.md](voice.md#voice-engines-sibyl-voice-and-gpt-realtime).
+
 ## Budgets and the Usage tab
 
 Model calls — voice brain, deep brain, transcription and speech — are recorded with the cost OpenRouter reports for it (or an estimate when a provider reports none). Web searches, model-scout probes and voice warm-up requests are metered too. Budgets are checked *before* a call is made, so a cap stops spending rather than reporting it afterwards.

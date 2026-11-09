@@ -377,3 +377,20 @@ Made with the media models on OpenRouter, in chat (Create mode or the `create_im
 ## Phone line
 
 The phone line has no settings of its own in `.env`: owners and admins set it up in Settings → Admin → Phone ([realtime.md](realtime.md#phone-calls)). It needs the realtime layer (`LIVEKIT_*`). LiveKit phone numbers need `LIVEKIT_URL` at LiveKit Cloud (`*.livekit.cloud`). The SIP trunk password is kept in the vault, so `SIBYL_SECRET_KEY` should be set. `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` and `LIVEKIT_SIP_FROM_NUMBER` (above) still override the line for outbound calls.
+
+## Voice engines (GPT Realtime)
+
+GPT Realtime is the premium voice engine next to Sibyl voice. See [voice.md](voice.md#voice-engines-sibyl-voice-and-gpt-realtime). It needs live conversation (`LIVE_CONVERSATION`, the default) and an OpenAI key: the organization's own (Settings → Voice, kept in the vault) or, self-hosted only, `OPENAI_API_KEY`.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `OPENAI_API_KEY` | unset | Self-hosted: GPT Realtime's key when the organization has none of its own. Never used for hosted organizations. (Also the fallback key for OpenAI speech; see above.) |
+| `SIBYL_REALTIME_ENGINE` | `on` | `off` hides GPT Realtime everywhere. |
+| `SIBYL_REALTIME_ENGINE_DEFAULT` | `sibyl` | The engine new sessions start with: `sibyl` or `gpt-realtime`. |
+| `SIBYL_REALTIME_MODEL` | `gpt-realtime-2.1` | The default GPT Realtime model. |
+| `SIBYL_REALTIME_MODELS` | `gpt-realtime-2.1,gpt-realtime-2.1-mini` | Models people can pick (ids from the price table). |
+| `SIBYL_REALTIME_VOICE` | `marin` | The default voice (`marin`, `cedar`, `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`, `verse`). |
+| `SIBYL_REALTIME_PRICES` | OpenAI's published prices | JSON to change or add prices in USD per 1M tokens, e.g. `{"gpt-realtime-2.1":{"audioIn":32,"audioOut":64}}`. Keys: `audioIn`, `audioInCached`, `audioOut`, `textIn`, `textInCached`, `textOut`, `label`. |
+| `SIBYL_REALTIME_TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | Writes your side of the transcript (metered as voice). |
+| `SIBYL_REALTIME_IDLE_SECONDS` | `300` | Close an idle GPT Realtime session after this long (it reopens with the conversation on your next turn). |
+| `SIBYL_REALTIME_URL` | `wss://api.openai.com/v1/realtime` | Another Realtime-compatible endpoint (and its `/v1/models` for the key check). For tests and compatible proxies. |

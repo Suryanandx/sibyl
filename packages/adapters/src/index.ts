@@ -1,6 +1,7 @@
 export type LLMRole = "system" | "user" | "assistant";
 
 export * from "./streaming-stt";
+export * from "./openai-realtime-voice";
 export * from "./chat-tools";
 
 /** OpenAI-style content parts; input_audio lets audio-native models hear the user. */

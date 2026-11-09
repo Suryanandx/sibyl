@@ -232,6 +232,11 @@ export function protectedRoutePermission(method: string, path: string): Protecte
     // The organization's own OpenRouter key: anyone who chats sees its status; owners and admins change it.
     return { permission: write ? PERMISSIONS.ORG_SETTINGS : PERMISSIONS.CHAT_USE };
   }
+  if (path === "/api/voice-engine" || path.startsWith("/api/voice-engine/")) {
+    // Voice engines (GPT Realtime): everyone who chats sees them; the OpenAI key is the organization's, the switch the workspace's.
+    if (!write) return { permission: PERMISSIONS.CHAT_USE };
+    return { permission: path === "/api/voice-engine/policy" ? PERMISSIONS.WORKSPACE_SETTINGS : PERMISSIONS.ORG_SETTINGS };
+  }
   if (path === "/api/onboarding" || path === "/api/onboarding/profile") {
     // Your own onboarding and checklist (steps are filtered by permission in onboarding/service.ts).
     return { permission: PERMISSIONS.CHAT_USE };

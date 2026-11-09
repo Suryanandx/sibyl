@@ -43,6 +43,10 @@ export interface AgentVoice {
   ttsVoice?: string;
   /** Speaking style / personality hint added to the voice prompt ("warm, brisk"). */
   style?: string;
+  /** Talk to this agent on this voice engine (absent: the session's; see docs/voice.md). */
+  engine?: "sibyl" | "gpt-realtime";
+  /** Its GPT Realtime voice (absent: the closest to its voice and style). */
+  realtimeVoice?: string;
 }
 
 /**

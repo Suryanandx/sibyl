@@ -31,6 +31,7 @@ import {
   type ServerMessage,
   type SessionCapabilities,
   type SessionSettings,
+  type VoiceEngineCapability,
   type UsageView,
   type AuthMeResponse
 } from "@open-gpt-live/protocol";
@@ -121,7 +122,8 @@ function writeStoredSettings(settings: Partial<SessionSettings>): void {
 function storedPatch(
   stored: Partial<SessionSettings>,
   catalog: ModelCatalog,
-  current: SessionSettings
+  current: SessionSettings,
+  engines?: VoiceEngineCapability
 ): Partial<SessionSettings> {
   const patch: Partial<SessionSettings> = {};
   if (stored.llmModel && stored.llmModel !== current.llmModel && catalog.llm.some((m) => m.id === stored.llmModel)) {
@@ -139,6 +141,13 @@ function storedPatch(
   }
   if (typeof stored.genUi === "boolean" && stored.genUi !== current.genUi) patch.genUi = stored.genUi;
   if (typeof stored.speak === "boolean" && stored.speak !== current.speak) patch.speak = stored.speak;
+  // Voice engine (GPT Realtime): only what this gateway still offers.
+  if (engines) {
+    if (stored.voiceEngine && stored.voiceEngine !== current.voiceEngine) patch.voiceEngine = stored.voiceEngine;
+    if (stored.realtimeModel && engines.realtime.models.some((m) => m.id === stored.realtimeModel)) patch.realtimeModel = stored.realtimeModel;
+    if (stored.realtimeVoice && engines.realtime.voices.includes(stored.realtimeVoice)) patch.realtimeVoice = stored.realtimeVoice;
+    if (stored.realtimeTurn) patch.realtimeTurn = stored.realtimeTurn;
+  }
   return patch;
 }
 
@@ -268,7 +277,7 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
           setCapabilities(message.capabilities);
           if (!storedSettingsAppliedRef.current) {
             storedSettingsAppliedRef.current = true;
-            const patch = storedPatch(readStoredSettings(), message.catalog, message.settings);
+            const patch = storedPatch(readStoredSettings(), message.catalog, message.settings, message.capabilities.voiceEngines);
             if (Object.keys(patch).length > 0) updateSettings(patch, false);
           }
           return false;

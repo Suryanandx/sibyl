@@ -47,6 +47,8 @@ export interface UsageEvent {
   userId?: string;
   /** Workspace the spend belongs to (absent: unattributed, e.g. background work of older records). */
   workspaceId?: string;
+  /** Paid on the organization's own provider key (e.g. its OpenAI key for GPT Realtime): never charged as AI credits. */
+  ownKey?: boolean;
 }
 
 /** Usage reported by a model call (OpenRouter returns `usage` with `cost` when asked). */

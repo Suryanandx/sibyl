@@ -96,6 +96,7 @@
     <article class="prose">
 <h1 id="voice">Voice</h1>
 <p>Sibyl&#39;s live conversation is built from swappable OpenRouter models, not a single vendor&#39;s realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, and what the measured latency looks like.</p>
+<p>For people who want the most natural voice and are happy to pay more, OpenAI&#39;s GPT Realtime is available as a premium <a href="#voice-engines-sibyl-voice-and-gpt-realtime">voice engine</a>. Sibyl voice stays the default.</p>
 <h2 id="websocket-or-livekit"><a class="anchor" href="#websocket-or-livekit" aria-hidden="true" tabindex="-1">#</a>WebSocket or LiveKit</h2>
 <p>By default the browser streams your voice to the gateway over its WebSocket, and Sibyl&#39;s voice comes back the same way. Nothing else is needed.</p>
 <p>When the gateway has <a href="realtime.html">LiveKit</a> configured (<code>LIVEKIT_URL</code>, <code>LIVEKIT_API_KEY</code>, <code>LIVEKIT_API_SECRET</code>), hands-free voice runs over WebRTC instead: the microphone and Sibyl&#39;s voice travel through a LiveKit room, and the gateway&#39;s room agent detects your turns with the same speech detector. The brain, the turn rules, barge-in, hedging and budgets below are the same in both. Transcripts, replies, visuals and approvals stay on the WebSocket. If the room can&#39;t be joined, voice falls back to the WebSocket. LiveKit also brings calls with several people and agents, phone calls and streams; see <a href="realtime.html">Realtime calls (LiveKit)</a>.</p>
@@ -260,6 +261,128 @@
 <p>With <code>LIVE_CONVERSATION=false</code>, or when no voice brain is configured, each turn uses one model:</p>
 <div class="codeBlock"><span class="codeLang">text</span><pre><code class="language-text">audio ──► transcription ──► chat model (voice reply + optional visual) ──► speech</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
 <p>The model writes one to three spoken sentences first, then optionally one visual. The spoken part is streamed to speech as it arrives; the visual is rendered and never spoken. In hands-free mode without a voice brain, partial transcripts are produced while you speak, either by re-transcribing the audio every few seconds or, with <code>STT_REALTIME_ENABLED=true</code>, through OpenAI&#39;s Realtime transcription.</p>
+<h2 id="voice-engines-sibyl-voice-and-gpt-realtime"><a class="anchor" href="#voice-engines-sibyl-voice-and-gpt-realtime" aria-hidden="true" tabindex="-1">#</a>Voice engines: Sibyl voice and GPT Realtime</h2>
+<p>Live voice runs on one of two engines. Everything else is the same on both: the conversation and its history, the deep brain with its tools, approvals and visuals, agents, budgets, the WebSocket or LiveKit transport, captions and barge-in.</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Engine</th>
+<th>What talks</th>
+<th>Price (estimate)</th>
+<th>Choose it for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Sibyl voice</strong> (default)</td>
+<td>The voice brain, the deep brain and a speech model, chosen by the <a href="models-and-costs.html">model scout</a></td>
+<td>About $0.005–0.01 a minute on the Cheapest and Balanced presets</td>
+<td>Low cost, any provider, emotion cues</td>
+</tr>
+<tr>
+<td><strong>GPT Realtime</strong> (premium)</td>
+<td>OpenAI&#39;s speech-to-speech model: it hears you and answers in its own voice</td>
+<td>About $0.05 a minute (<code>gpt-realtime-2.1</code>) or $0.02 (<code>gpt-realtime-2.1-mini</code>)</td>
+<td>The most natural voice and turn-taking</td>
+</tr>
+</tbody></table></div>
+<p>A &quot;minute&quot; here is about 25 seconds of you talking and 25 of the reply, over four turns. GPT Realtime&#39;s real cost grows with long conversations, because each reply re-reads the conversation so far (mostly at the cheaper cached rate).</p>
+<h3 id="turning-it-on"><a class="anchor" href="#turning-it-on" aria-hidden="true" tabindex="-1">#</a>Turning it on</h3>
+<ol>
+<li><strong>An OpenAI key.</strong> An organization owner or admin adds it in <strong>Settings → Voice → OpenAI key</strong>. Sibyl checks it with OpenAI first, keeps it encrypted in the organization&#39;s <a href="secrets.html">vault</a> (<code>MODEL_OPENAI</code>, usable only for <code>api.openai.com</code>), and never shows or logs it again. <strong>Test key</strong> checks it again. A self-hosted server can set <code>OPENAI_API_KEY</code> instead; hosted organizations always use their own key. Without a key, the option reads &quot;Add an OpenAI key to use GPT Realtime&quot;.</li>
+<li><strong>Pick the engine</strong> in <strong>Settings → Voice</strong> or the model menu in the composer, which shows each engine&#39;s price per minute. Choosing an engine needs <code>models.choose</code> (members and up), like choosing models.</li>
+<li><strong>Options:</strong> the model (GPT Realtime or GPT Realtime mini), the voice (<code>marin</code> and <code>cedar</code> sound the most natural) and turn detection:</li>
+</ol>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Turn detection</th>
+<th>How it works</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Quick</strong> (default)</td>
+<td>Sibyl&#39;s own speech detector ends your turn after about 0.4 s of silence. The lowest latency.</td>
+</tr>
+<tr>
+<td><strong>Balanced</strong></td>
+<td>OpenAI&#39;s semantic turn detection listens to <em>how</em> you speak and waits when you sound unfinished. If you pause and carry on, both parts become one turn (<code>turn.merged</code>).</td>
+</tr>
+<tr>
+<td><strong>Patient</strong></td>
+<td>The same, but it lets you take your time.</td>
+</tr>
+</tbody></table></div>
+<p><strong>Agents</strong> can have their own engine and GPT Realtime voice (agent editor → Voice). Without a voice of its own, an agent gets the GPT Realtime voice closest to its Sibyl voice and personality. Its instructions, personality, tools and budget apply on both engines.</p>
+<p><strong>Workspace admins</strong> can turn the premium engine off for their workspace (<strong>Allow GPT Realtime in this workspace</strong>, <code>workspace.settings</code>). Sessions then use Sibyl voice and say why once.</p>
+<h3 id="how-a-gpt-realtime-turn-works"><a class="anchor" href="#how-a-gpt-realtime-turn-works" aria-hidden="true" tabindex="-1">#</a>How a GPT Realtime turn works</h3>
+<div class="codeBlock"><span class="codeLang">text</span><pre><code class="language-text">mic ─► vad.speech_start / audio.chunk / vad.speech_end (unchanged; browser or LiveKit room agent)
+        │
+        ▼  gateway (key stays here)
+  OpenAI Realtime WebSocket ── 24 kHz PCM in ──► speech-to-speech model
+        │                                          │            │
+        │   tts.chunk (WAV) / LiveKit track ◄── audio      ask_sibyl(task)
+        │   llm.delta ◄── its transcript                       │
+        │   transcript.update ◄── your transcript              ▼
+        │                                  the deep brain (tools, approvals, visual in chat)
+        │                                          │
+        └──────── function output ◄── short result ┘ ──► GPT Realtime says it in its voice</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
+<ul>
+<li>The gateway opens one Realtime session per conversation when you first speak, and closes it after five idle minutes (<code>SIBYL_REALTIME_IDLE_SECONDS</code>). A new session gets the recent conversation as text, so typed messages and earlier deep-brain results carry over.</li>
+<li>Your audio is resampled to 24 kHz if needed and appended as you speak. With <strong>Quick</strong>, the gateway commits it when your turn ends and asks for a reply. With <strong>Balanced</strong> or <strong>Patient</strong>, it feeds silence after your turn until OpenAI decides you finished (at most 4.5 or 8.5 seconds).</li>
+<li>The reply&#39;s audio is sent in small WAV pieces (the first after about 120 ms of audio) through the same gapless player, or into the LiveKit room. Its transcript streams as <code>llm.delta</code>; your words come back from OpenAI&#39;s transcription and replace the caption.</li>
+<li><strong>Barge-in:</strong> talking over the reply stops playback at once, cancels the response, and cuts the audio OpenAI keeps (<code>conversation.item.truncate</code>) at what you actually heard.</li>
+<li><strong>Tools and visuals stay Sibyl&#39;s.</strong> GPT Realtime has one function, <code>ask_sibyl</code>. It says a short line (&quot;Let me pull that up&quot;), then hands a self-contained task to the deep brain: the same tool loop, approvals, permissions, budgets and visuals as the <code>@brain</code> handoff. The deep brain&#39;s short result goes back as the function&#39;s output and GPT Realtime tells you the key takeaway. If you have moved on by then, the result is not spoken; it stays on screen and in the conversation.</li>
+<li>If OpenAI can&#39;t be reached, the turn is answered by Sibyl voice and the app says so. Sibyl voice keeps answering for a minute before GPT Realtime is tried again.</li>
+</ul>
+<h3 id="costs-and-budgets"><a class="anchor" href="#costs-and-budgets" aria-hidden="true" tabindex="-1">#</a>Costs and budgets</h3>
+<ul>
+<li>Every response is metered from OpenAI&#39;s usage (<code>response.done</code>: text and audio tokens in and out, cached tokens) at the price table, and your transcript from the transcription model&#39;s usage. Both count as <strong>Voice conversation</strong> in the Usage tab, toward the organization, workspace, user and agent budgets.</li>
+<li>The budget is checked before each turn. When a cap is reached, no new GPT Realtime turn starts (<code>budget.blocked</code>) and the session closes after the reply in progress.</li>
+<li>Calls on the organization&#39;s own OpenAI key are never charged as AI credits on hosted Sibyl; OpenAI bills the key directly.</li>
+<li>Prices default to OpenAI&#39;s published rates and can be changed with <code>SIBYL_REALTIME_PRICES</code> (<a href="configuration.html#voice-engines-gpt-realtime">Configuration</a>).</li>
+</ul>
+<h3 id="the-openai-realtime-api-research-notes-2026-11-10"><a class="anchor" href="#the-openai-realtime-api-research-notes-2026-11-10" aria-hidden="true" tabindex="-1">#</a>The OpenAI Realtime API (research notes, 2026-11-10)</h3>
+<p>From OpenAI&#39;s documentation (<a href="https://developers.openai.com/api/docs/guides/realtime-conversations" rel="noopener">realtime conversations</a>, <a href="https://developers.openai.com/api/docs/guides/realtime-vad" rel="noopener">turn detection</a>, <a href="https://developers.openai.com/api/reference/resources/realtime/client-events" rel="noopener">client</a> and <a href="https://developers.openai.com/api/reference/resources/realtime/server-events" rel="noopener">server events</a>, <a href="https://developers.openai.com/api/docs/pricing" rel="noopener">pricing</a>):</p>
+<ul>
+<li><strong>Models:</strong> <code>gpt-realtime-2.1</code> (current flagship, 128k context) and <code>gpt-realtime-2.1-mini</code>; older <code>gpt-realtime-2</code>, <code>gpt-realtime</code> and <code>gpt-realtime-mini</code> still work. <code>gpt-live-1</code> (a full-duplex model, $0.05 a minute plus a separate backend model) uses a different endpoint (<code>/v1/live/sessions</code>) and is not supported here.</li>
+<li><strong>Transport:</strong> WebRTC (browsers, with ephemeral keys) or WebSocket (<code>wss://api.openai.com/v1/realtime?model=…</code>, <code>Authorization: Bearer</code>; servers). Sibyl uses the WebSocket from the gateway, so the key never reaches a browser and the same session works for the browser, LiveKit rooms and phone calls. A session lasts at most 60 minutes.</li>
+<li><strong>Session config</strong> (<code>session.update</code>, <code>type: &quot;realtime&quot;</code>): instructions, <code>output_modalities</code> (<code>audio</code>), function <code>tools</code>, <code>audio.input</code> (format <code>audio/pcm</code> at 24 kHz, <code>noise_reduction</code>, <code>transcription.model</code>, <code>turn_detection</code>) and <code>audio.output</code> (format, <code>voice</code>, <code>speed</code>). The voice can&#39;t change after the session has spoken.</li>
+<li><strong>Turn detection:</strong> <code>server_vad</code> (threshold, padding, silence duration) or <code>semantic_vad</code> (<code>eagerness</code> low / medium / high / auto), each with <code>create_response</code> and <code>interrupt_response</code>; or <code>null</code>, where the client commits the input buffer and asks for each response.</li>
+<li><strong>Interruptions:</strong> over WebSocket the client stops playback, cancels (<code>response.cancel</code>) and truncates the assistant&#39;s audio item to what was heard (<code>conversation.item.truncate</code>).</li>
+<li><strong>Function calling:</strong> <code>response.function_call_arguments.done</code>, answered with a <code>function_call_output</code> item and a new <code>response.create</code>.</li>
+<li><strong>Audio:</strong> PCM16 24 kHz mono (or G.711 µ-law / A-law) in and out, base64 in JSON events.</li>
+<li><strong>Transcripts:</strong> the model&#39;s own (<code>response.output_audio_transcript.*</code>) and, when input transcription is on, yours (<code>conversation.item.input_audio_transcription.completed</code>, with its own usage).</li>
+<li><strong>Usage:</strong> <code>response.done</code> reports input text, audio and cached tokens and output text and audio tokens. Audio is about 10 tokens a second in and 20 out.</li>
+<li><strong>Prices</strong> (USD per 1M tokens): <code>gpt-realtime-2.1</code> audio in $32 (cached $0.40), audio out $64, text in $4 (cached $0.40), text out $24; <code>gpt-realtime-2.1-mini</code> audio in $10 (cached $0.30), audio out $20, text in $0.60 (cached $0.06), text out $2.40.</li>
+<li><strong>OpenRouter</strong> offers <code>openai/gpt-audio</code> and <code>openai/gpt-audio-mini</code> (audio in and out over chat completions) but not the Realtime API, so GPT Realtime needs an OpenAI key of its own.</li>
+</ul>
+<h3 id="measured"><a class="anchor" href="#measured" aria-hidden="true" tabindex="-1">#</a>Measured</h3>
+<p>Gateway on macOS, 2026-11-10, a scripted client sending macOS <code>say</code> speech as 24 kHz PCM over the WebSocket. <strong>No OpenAI key was available</strong>, so GPT Realtime ran against a local stand-in that speaks OpenAI&#39;s Realtime protocol (<code>apps/gateway/src/voice-engine/fake-openai-realtime.ts</code>, 300 ms simulated model delay). The deep brain was real (OpenRouter).</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>What</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Sibyl voice (real OpenRouter, same audio): end of speech → first audio</td>
+<td>4.8–5.4 s, about $0.001–0.004 per turn</td>
+</tr>
+<tr>
+<td>GPT Realtime path: end of speech → first audio (stand-in model)</td>
+<td>0.33 s, of which 0.30 s was the stand-in&#39;s delay: the gateway adds about 30 ms</td>
+</tr>
+<tr>
+<td>Barge-in</td>
+<td>Playback stopped, response cancelled and truncated</td>
+</tr>
+<tr>
+<td>Handoff</td>
+<td><code>ask_sibyl</code> → deep brain (real) → a table in chat → the result spoken by the realtime voice</td>
+</tr>
+</tbody></table></div>
+<p>What OpenAI&#39;s model itself adds (time to first audio, real cost per minute) has not been measured here; the per-minute prices above are estimates from the published rates.</p>
 <h2 id="when-speech-fails"><a class="anchor" href="#when-speech-fails" aria-hidden="true" tabindex="-1">#</a>When speech fails</h2>
 <p>If the speech model fails, the reply continues as text and visuals. The browser shows a non-fatal &quot;Voice reply unavailable&quot; notice (an <code>error</code> event with <code>scope: &quot;tts&quot;</code>).</p>
 
@@ -270,7 +393,7 @@
       <a class="next" href="generative-ui.html"><span>Next</span>Generative UI</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#websocket-or-livekit">WebSocket or LiveKit</a></li><li class="d2"><a href="#three-ways-to-talk">Three ways to talk</a></li><li class="d2"><a href="#the-live-pipeline">The live pipeline</a></li><li class="d3"><a href="#the-voice-brain">The voice brain</a></li><li class="d3"><a href="#the-deep-brain">The deep brain</a></li><li class="d3"><a href="#transcripts">Transcripts</a></li><li class="d2"><a href="#turn-taking">Turn-taking</a></li><li class="d3"><a href="#ending-a-turn">Ending a turn</a></li><li class="d3"><a href="#turn-merging">Turn merging</a></li><li class="d3"><a href="#barge-in">Barge-in</a></li><li class="d2"><a href="#staying-fast">Staying fast</a></li><li class="d3"><a href="#hedged-requests">Hedged requests</a></li><li class="d3"><a href="#other-latency-work">Other latency work</a></li><li class="d2"><a href="#measured-latency">Measured latency</a></li><li class="d2"><a href="#single-model-mode">Single-model mode</a></li><li class="d2"><a href="#when-speech-fails">When speech fails</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#websocket-or-livekit">WebSocket or LiveKit</a></li><li class="d2"><a href="#three-ways-to-talk">Three ways to talk</a></li><li class="d2"><a href="#the-live-pipeline">The live pipeline</a></li><li class="d3"><a href="#the-voice-brain">The voice brain</a></li><li class="d3"><a href="#the-deep-brain">The deep brain</a></li><li class="d3"><a href="#transcripts">Transcripts</a></li><li class="d2"><a href="#turn-taking">Turn-taking</a></li><li class="d3"><a href="#ending-a-turn">Ending a turn</a></li><li class="d3"><a href="#turn-merging">Turn merging</a></li><li class="d3"><a href="#barge-in">Barge-in</a></li><li class="d2"><a href="#staying-fast">Staying fast</a></li><li class="d3"><a href="#hedged-requests">Hedged requests</a></li><li class="d3"><a href="#other-latency-work">Other latency work</a></li><li class="d2"><a href="#measured-latency">Measured latency</a></li><li class="d2"><a href="#single-model-mode">Single-model mode</a></li><li class="d2"><a href="#voice-engines-sibyl-voice-and-gpt-realtime">Voice engines: Sibyl voice and GPT Realtime</a></li><li class="d3"><a href="#turning-it-on">Turning it on</a></li><li class="d3"><a href="#how-a-gpt-realtime-turn-works">How a GPT Realtime turn works</a></li><li class="d3"><a href="#costs-and-budgets">Costs and budgets</a></li><li class="d3"><a href="#the-openai-realtime-api-research-notes-2026-11-10">The OpenAI Realtime API (research notes, 2026-11-10)</a></li><li class="d3"><a href="#measured">Measured</a></li><li class="d2"><a href="#when-speech-fails">When speech fails</a></li></ul></aside>
 </div>
 
   <footer class="footer">

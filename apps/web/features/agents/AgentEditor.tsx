@@ -19,6 +19,7 @@ import { AgentAvatar } from "./AgentAvatar";
 import { ComputerSettings } from "../computers/ComputerSettings";
 import { Button, Card, CardHeader, Checkbox, Field, Input, Muted, Notice, Row, Select, SectionTitle, Textarea, Toolbar } from "../../components/ui";
 import { PresenceSection } from "../presence";
+import { AgentVoiceEngineFields } from "../voice-engine/AgentVoiceEngineFields";
 import styles from "./agents.module.css";
 
 /** What the agent may be given access to (the app shell passes what the workspace has). */
@@ -308,6 +309,7 @@ export function AgentEditor(props: AgentEditorProps) {
           <Field label="Personality">
             <Input maxLength={200} value={draft.voice?.style ?? ""} placeholder="Warm, upbeat, brief" onChange={(e) => setVoice({ style: e.target.value })} />
           </Field>
+          <AgentVoiceEngineFields value={{ ...(draft.voice?.engine ? { engine: draft.voice.engine } : {}), ...(draft.voice?.realtimeVoice ? { realtimeVoice: draft.voice.realtimeVoice } : {}) }} onChange={setVoice} />
           {props.onPreviewVoice ? (
             <Row>
               <Button size="sm" onClick={() => void preview()} disabled={voiceState === "loading"} aria-live="polite">

@@ -50,6 +50,7 @@ import { uploadServiceFor } from "./uploads/index.js";
 import type { GatewayUsageMeter } from "./metering/meter.js";
 import { CreditsService, creditsMargin, type PaymentProvider } from "./tenancy/credits.js";
 import { ModelAccessService, readOwnModelKey, resolveModelAccess } from "./tenancy/model-access.js";
+import { installVoiceEngines, type VoiceEngineService } from "./voice-engine/index.js";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -96,6 +97,8 @@ export interface GatewayRuntime {
   meetings?: MeetingService;
   /** Images, video and audio through OpenRouter (see docs/media.md); absent without a key or with SIBYL_MEDIA=off. */
   media?: MediaService;
+  /** Voice engines: Sibyl voice and GPT Realtime (its OpenAI key, the workspace switch; see docs/voice.md). */
+  voiceEngines?: VoiceEngineService;
   close(): Promise<void>;
 }
 
@@ -248,6 +251,8 @@ export async function createRuntime(input: RuntimeOptions): Promise<GatewayRunti
     ...(credits ? { creditsBalance: () => credits.balanceUsd() } : {}),
     log: options.log
   });
+  // GPT Realtime, the premium voice engine: the organization's OpenAI key (vault) or the server's.
+  const voiceEngines = await installVoiceEngines({ store, ownerId, vault: installed.secrets?.vault, env: input.env, hosted, log: options.log });
   // Agents in Slack and Teams (through the connectors) and the Slack/Teams notifiers.
   presence = connectors
     ? await installPresence({ store, ownerId, tools, meter, env: options.env, log: options.log, connectors, agents, notifications, routines })
@@ -278,6 +283,7 @@ export async function createRuntime(input: RuntimeOptions): Promise<GatewayRunti
     ...(realtime ? { realtime } : {}),
     meetings,
     ...(media ? { media } : {}),
+    voiceEngines,
     close: async () => {
       await realtime?.close();
       media?.close();

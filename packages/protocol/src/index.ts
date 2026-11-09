@@ -256,7 +256,7 @@ export interface ModelCatalog {
   presets?: ModelPreset[];
 }
 
-export interface SessionSettings {
+export interface SessionSettings extends VoiceEngineSettings {
   /** Voice brain: hears the user's audio and replies conversationally. */
   voiceModel?: string;
   /** Deep brain (or the only model when no voice brain is configured). */
@@ -277,6 +277,8 @@ export interface SessionCapabilities {
   realtimeStt: boolean;
   /** LiveKit is configured: voice runs over WebRTC (see RealtimeCapability). */
   realtime?: RealtimeCapability;
+  /** Voice engines: Sibyl voice, and GPT Realtime when available (see VoiceEngineCapability). */
+  voiceEngines?: VoiceEngineCapability;
 }
 
 export type WsEvent = (typeof WS_EVENTS)[keyof typeof WS_EVENTS];
@@ -1026,7 +1028,8 @@ export function parseServerMessage(input: unknown): ServerMessageValidationResul
         genUi: caps.genUi,
         tts: caps.tts,
         realtimeStt: caps.realtimeStt,
-        ...(isRealtimeCapability(caps.realtime) ? { realtime: caps.realtime } : {})
+        ...(isRealtimeCapability(caps.realtime) ? { realtime: caps.realtime } : {}),
+        ...(isVoiceEngineCapability(caps.voiceEngines) ? { voiceEngines: caps.voiceEngines } : {})
       }
     });
   }
@@ -1072,7 +1075,9 @@ function parseSettingsPatch(
     if (typeof value !== "boolean") return fail(`${key} must be a boolean`);
     out[key] = value;
   }
-  return ok(out);
+  const engine = parseVoiceEngineSettings(input);
+  if (!engine.success) return engine;
+  return ok({ ...out, ...engine.data });
 }
 
 function parseModelOptions(input: unknown): ParseResult<TtsModelOption[]> {
@@ -3343,7 +3348,7 @@ export interface AgentInput {
   name: string;
   description: string;
   avatar: AgentAvatarView;
-  voice?: { ttsModel?: string; ttsVoice?: string; style?: string };
+  voice?: { ttsModel?: string; ttsVoice?: string; style?: string } & AgentVoiceEngine;
   instructions: string;
   modelPreset?: string;
   access: AgentAccessView;
@@ -3609,6 +3614,9 @@ export function parseAgentInput(input: unknown): ParseResult<AgentInput> {
       if (typeof value !== "string" || value.length > max) return fail(`voice ${key} is invalid`);
       voice[key] = value.trim();
     }
+    const engine = parseAgentVoiceEngine(input.voice);
+    if (!engine.success) return engine;
+    Object.assign(voice, engine.data);
   }
   if (input.modelPreset !== undefined && input.modelPreset !== null && (typeof input.modelPreset !== "string" || input.modelPreset.length > 200)) {
     return fail("modelPreset is invalid");
@@ -6011,4 +6019,163 @@ export interface SharedMeetingView {
   /** Only when the host shared the transcript. */
   transcript?: MeetingSegmentView[];
   expiresAt: number;
+}
+
+/* ── Voice engines (Sibyl voice / GPT Realtime premium voice) ── */
+/*
+ * Live voice runs on one of two engines (apps/gateway/src/voice-engine/):
+ *
+ * - "sibyl": Sibyl's own pipeline (voice brain + deep brain, TTS, turn-taking). The default.
+ * - "gpt-realtime": OpenAI's Realtime speech-to-speech model, connected by the gateway
+ *   (keys stay on the gateway). Tools and visuals stay Sibyl's: the model hands work to
+ *   the deep brain through one function (`ask_sibyl`). Needs an OpenAI key.
+ *
+ * The browser keeps sending the same live-turn messages (vad.speech_start, audio.chunk,
+ * vad.speech_end, interrupt) and gets the same replies (transcript.*, llm.delta, tts.*,
+ * brain.*). The engine is chosen per session (session.update `voiceEngine`), and an
+ * agent can override it (AgentInput.voice.engine).
+ *
+ *   GET    /api/voice-engine              → VoiceEngineView                 (chat.use)
+ *   PUT    /api/voice-engine/key {key}    → VoiceEngineView                 (org.settings; checked with OpenAI first; 400 invalid_key)
+ *   POST   /api/voice-engine/key/test     → { ok, message }                 (org.settings; tests the key in use)
+ *   DELETE /api/voice-engine/key          → VoiceEngineView                 (org.settings)
+ *   PUT    /api/voice-engine/policy {allowRealtime} → VoiceEngineView       (workspace.settings; the caller's workspace)
+ */
+
+export const VOICE_ENGINES = ["sibyl", "gpt-realtime"] as const;
+export type VoiceEngineId = (typeof VOICE_ENGINES)[number];
+
+/**
+ * When GPT Realtime decides you have finished:
+ * - quick: Sibyl's own speech detector (about 0.4 s of silence; the lowest latency);
+ * - balanced: OpenAI's semantic turn detection (it waits when you sound unfinished);
+ * - patient: semantic turn detection that lets you take your time.
+ */
+export const REALTIME_TURN_DETECTION = ["quick", "balanced", "patient"] as const;
+export type RealtimeTurnDetection = (typeof REALTIME_TURN_DETECTION)[number];
+
+/** Built-in OpenAI Realtime voices (marin and cedar sound the most natural). */
+export const REALTIME_VOICES = ["marin", "cedar", "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"] as const;
+
+/** Voice engine fields of SessionSettings (session.update; stored in the browser like model choices). */
+export interface VoiceEngineSettings {
+  /** The engine for live voice (default: the server's SIBYL_REALTIME_ENGINE_DEFAULT, else "sibyl"). */
+  voiceEngine?: VoiceEngineId;
+  /** GPT Realtime model id (e.g. gpt-realtime-2.1, gpt-realtime-2.1-mini). */
+  realtimeModel?: string;
+  /** GPT Realtime voice (REALTIME_VOICES). */
+  realtimeVoice?: string;
+  realtimeTurn?: RealtimeTurnDetection;
+}
+
+/** An agent's own engine and GPT Realtime voice (agent editor → Voice). */
+export interface AgentVoiceEngine {
+  /** Talk to this agent on this engine (absent: the session's engine). */
+  engine?: VoiceEngineId;
+  /** Its GPT Realtime voice (absent: the closest to its Sibyl voice and style). */
+  realtimeVoice?: string;
+}
+
+export interface RealtimeModelOption {
+  id: string;
+  label: string;
+  description?: string;
+  /** Estimated USD per minute of conversation (configurable price table; see docs/voice.md). */
+  usdPerMinute: number;
+  /** Published prices in USD per 1M tokens. */
+  prices: { audioIn: number; audioInCached: number; audioOut: number; textIn: number; textInCached: number; textOut: number };
+}
+
+/** Why GPT Realtime can't be used here. */
+export type RealtimeUnavailableReason =
+  /** No OpenAI key (the organization's vault, or OPENAI_API_KEY on a self-hosted server). */
+  | "no_key"
+  /** A workspace admin turned the premium engine off for this workspace. */
+  | "blocked"
+  /** The server turned it off (SIBYL_REALTIME_ENGINE=off). */
+  | "disabled";
+
+export interface VoiceEngineCapability {
+  /** The engine new sessions start with. */
+  default: VoiceEngineId;
+  realtime: {
+    available: boolean;
+    unavailableReason?: RealtimeUnavailableReason;
+    models: RealtimeModelOption[];
+    voices: string[];
+    defaultModel: string;
+    defaultVoice: string;
+  };
+  /** Sibyl voice's estimated USD per minute on the current models (for comparison). */
+  sibylUsdPerMinute?: number;
+}
+
+export interface VoiceEngineKeyInfo {
+  /** Last four characters (never more). */
+  last4: string;
+  checkedAt: number;
+  /** The key can open the default GPT Realtime model (checked with OpenAI). */
+  realtimeAccess?: boolean;
+}
+
+export interface VoiceEngineView extends VoiceEngineCapability {
+  /** Where GPT Realtime's key comes from: the organization's vault, the server (OPENAI_API_KEY), or none. */
+  keySource: "org" | "server" | "none";
+  /** The organization's own key, when it has one. */
+  key?: VoiceEngineKeyInfo;
+  /** The caller's workspace allows the premium engine (workspace setting). */
+  allowRealtime: boolean;
+  hosted: boolean;
+}
+
+function isRealtimeId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9._:-]{1,100}$/.test(value);
+}
+
+/** Voice engine fields of a session.update (called from parseSettingsPatch). */
+export function parseVoiceEngineSettings(input: Record<string, unknown>): ParseResult<VoiceEngineSettings> {
+  const out: VoiceEngineSettings = {};
+  if (input.voiceEngine !== undefined) {
+    if (!isEnum(input.voiceEngine, VOICE_ENGINES)) return fail("voiceEngine must be sibyl or gpt-realtime");
+    out.voiceEngine = input.voiceEngine;
+  }
+  for (const key of ["realtimeModel", "realtimeVoice"] as const) {
+    if (input[key] === undefined) continue;
+    if (!isRealtimeId(input[key])) return fail(`${key} is invalid`);
+    out[key] = input[key] as string;
+  }
+  if (input.realtimeTurn !== undefined) {
+    if (!isEnum(input.realtimeTurn, REALTIME_TURN_DETECTION)) return fail("realtimeTurn must be quick, balanced or patient");
+    out.realtimeTurn = input.realtimeTurn;
+  }
+  return ok(out);
+}
+
+/** An agent's engine fields (called from the agent input parser). */
+export function parseAgentVoiceEngine(input: Record<string, unknown>): ParseResult<AgentVoiceEngine> {
+  const out: AgentVoiceEngine = {};
+  if (input.engine !== undefined && input.engine !== null && input.engine !== "") {
+    if (!isEnum(input.engine, VOICE_ENGINES)) return fail("voice engine is invalid");
+    out.engine = input.engine;
+  }
+  if (input.realtimeVoice !== undefined && input.realtimeVoice !== null && input.realtimeVoice !== "") {
+    if (!isRealtimeId(input.realtimeVoice)) return fail("voice realtimeVoice is invalid");
+    out.realtimeVoice = input.realtimeVoice;
+  }
+  return ok(out);
+}
+
+/** session.config capabilities.voiceEngines (checked by the browser's parser). */
+export function isVoiceEngineCapability(value: unknown): value is VoiceEngineCapability {
+  if (!isRecord(value) || !isEnum(value.default, VOICE_ENGINES) || !isRecord(value.realtime)) return false;
+  const realtime = value.realtime;
+  return (
+    typeof realtime.available === "boolean" &&
+    Array.isArray(realtime.models) &&
+    realtime.models.every((model) => isRecord(model) && isNonEmptyString(model.id) && isNonEmptyString(model.label) && typeof model.usdPerMinute === "number") &&
+    Array.isArray(realtime.voices) &&
+    realtime.voices.every((voice) => typeof voice === "string") &&
+    isNonEmptyString(realtime.defaultModel) &&
+    isNonEmptyString(realtime.defaultVoice)
+  );
 }

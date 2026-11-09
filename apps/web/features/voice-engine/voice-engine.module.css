@@ -1,0 +1,92 @@
+/* Voice engine choice: only what is specific to it. Buttons, fields, badges,
+   cards and notices come from components/ui. */
+
+.engines {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.engine {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 6px;
+  padding: 12px 14px;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.engine:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.engine:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.selected,
+.selected:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.engineTop {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.price {
+  color: var(--text-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.engineText {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.section {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+}
+
+/* ── composer model menu ── */
+
+.menuPrice {
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.menuNote {
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 2px 12px 6px;
+}

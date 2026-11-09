@@ -12,6 +12,7 @@ import { paths } from "../../lib/routes";
 import type { LatencySnapshot } from "../../lib/latency-metrics";
 import type { VadSnapshot } from "../../lib/vad-engine";
 import { useVoiceDiagnostics } from "../chat/diagnostics";
+import { VoiceEngineCard } from "../../features/voice-engine";
 
 /** Settings sections backed by the live gateway connection. */
 
@@ -38,13 +39,21 @@ export function ModelsSection() {
 export function VoiceSection() {
   const gateway = useGateway();
   return (
-    <VoiceSettings
-      catalog={gateway.catalog}
-      settings={gateway.settings}
-      capabilities={gateway.capabilities}
-      disabled={!gateway.connected}
-      onChange={(patch) => gateway.updateSettings(patch)}
-    />
+    <>
+      <VoiceEngineCard
+        settings={gateway.settings}
+        capability={gateway.capabilities?.voiceEngines}
+        disabled={!gateway.connected}
+        onChange={(patch) => gateway.updateSettings(patch)}
+      />
+      <VoiceSettings
+        catalog={gateway.catalog}
+        settings={gateway.settings}
+        capabilities={gateway.capabilities}
+        disabled={!gateway.connected}
+        onChange={(patch) => gateway.updateSettings(patch)}
+      />
+    </>
   );
 }
 
