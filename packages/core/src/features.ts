@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuditEvent, AuditSink, Governance, SecondApprover, ToolPolicyHook } from "./governance";
 import type { ScheduledJobType } from "./jobs";
 import type { LicenseVerification } from "./license";
+import type { EmailMessage } from "./email";
 import type { NotificationKind, NotificationLinks } from "./notifications";
 import type { Policy, Principal } from "./permissions";
 import type { Store } from "./store";
@@ -109,9 +110,9 @@ export interface EnterpriseNotice {
   links?: NotificationLinks;
 }
 
-/** The gateway's one mailer (absent when SMTP isn't configured). */
+/** The gateway's one mailer (absent when SMTP isn't configured). It renders the content through the shared email layout. */
 export interface EnterpriseMailer {
-  send(message: { to: string; subject: string; text: string }): Promise<void>;
+  send(message: EmailMessage): Promise<void>;
 }
 
 /** The secrets vault, bound to the organisation (absent without SIBYL_SECRET_KEY / a vault key). */

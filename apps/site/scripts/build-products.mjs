@@ -9,7 +9,7 @@
  */
 import { writeFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { SITE, GITHUB, esc, chrome, head } from "./chrome.mjs";
+import { SITE, GITHUB, PUBLIC_URL, esc, chrome, head } from "./chrome.mjs";
 import { PRODUCTS } from "./products.mjs";
 
 const OUT = join(SITE, "products");
@@ -55,7 +55,7 @@ function others(p) {
 function page(p) {
   return `<!doctype html>
 <html lang="en">
-${head({ title: `${p.name} — ${p.line}`, description: p.lede, generatedFrom: "apps/site/scripts/build-products.mjs from scripts/products.mjs" })}
+${head({ title: `${p.name} — ${p.line}`, description: p.lede, path: `products/${p.slug}.html`, generatedFrom: "apps/site/scripts/build-products.mjs from scripts/products.mjs" })}
 <body>
   <a class="skip" href="#main">Skip to content</a>
 ${header}
@@ -108,4 +108,12 @@ ${footer}
 mkdirSync(OUT, { recursive: true });
 for (const f of readdirSync(OUT)) if (f.endsWith(".html")) rmSync(join(OUT, f));
 for (const p of PRODUCTS) writeFileSync(join(OUT, `${p.slug}.html`), page(p));
+
+// sitemap.xml for the whole site (runs after the docs build, so docs/ is complete).
+const docPages = readdirSync(join(SITE, "docs")).filter((f) => f.endsWith(".html")).sort();
+const urls = ["", ...PRODUCTS.map((p) => `products/${p.slug}.html`), ...docPages.map((f) => `docs/${f}`)];
+writeFileSync(
+  join(SITE, "sitemap.xml"),
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${PUBLIC_URL}/${u}</loc></url>`).join("\n")}\n</urlset>\n`
+);
 console.log(`products: ${PRODUCTS.length} pages`);

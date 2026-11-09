@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 export const SITE = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const REPO = join(SITE, "..", "..");
 export const GITHUB = "https://github.com/Suryanandx/sibyl";
+/** Where the site is published (canonical links, share cards, sitemap). */
+export const PUBLIC_URL = "https://opensibyl.world";
 
 export const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -42,12 +44,23 @@ export function chrome(folder) {
 }
 
 /** The <head> every sub-page shares (stylesheets and scripts one folder up). */
-export function head({ title, description, generatedFrom, extraCss = [], extraJs = [] }) {
+export function head({ title, description, path, generatedFrom, extraCss = [], extraJs = [] }) {
+  const url = `${PUBLIC_URL}/${path}`;
   return `<head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(description)}" />
+  <link rel="canonical" href="${esc(url)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="${esc(url)}" />
+  <meta property="og:title" content="${esc(title)}" />
+  <meta property="og:description" content="${esc(description)}" />
+  <meta property="og:image" content="${PUBLIC_URL}/assets/brand/og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="${PUBLIC_URL}/assets/brand/og-card.png" />
   <meta name="color-scheme" content="light dark" />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#161817" media="(prefers-color-scheme: dark)" />

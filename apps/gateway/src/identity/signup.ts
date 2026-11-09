@@ -35,8 +35,9 @@
  */
 import { createHash, createHmac, hkdfSync, randomInt, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
-import { normalizeEmail, type ExternalLogin, type SignupTicket, type Store, type UserRecord } from "@open-gpt-live/core";
+import { normalizeEmail, type EmailMessage, type ExternalLogin, type SignupTicket, type Store, type UserRecord } from "@open-gpt-live/core";
 import type { SignupEmailSent, SignupOptionsView, SignupProvider, SignupTicketView } from "@open-gpt-live/protocol";
+import { signInLinkEmail, signUpCodeEmail, signUpLinkEmail } from "../email/templates.js";
 import type { Mailer } from "../notifications/mailer.js";
 import { hashPassword, hashToken, passwordProblem, randomToken } from "./crypto.js";
 import { OidcClients, browserBindingMatches, newBrowserBinding, safeNext, type OidcClientSettings, type OidcIdentity } from "./oidc.js";
@@ -207,11 +208,7 @@ export class SignupService {
       const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
       const record: PendingCode = { email, codeHash: this.codeHash(email, code), passwordHash, ...(name ? { name } : {}), next, expiresAt: now + CODE_TTL_MS, attempts: 0 };
       await this.store.kv.set(SIGNUP_OWNER, codeKey(email), record);
-      await this.send(mailer, {
-        to: email,
-        subject: `${code} is your Sibyl code`,
-        text: [`Your Sibyl code is ${code}`, "", "Enter it on the sign-up page. It expires in 15 minutes.", "", "If you didn't ask for it, ignore this email."].join("\n")
-      });
+      await this.send(mailer, { to: email, email: signUpCodeEmail({ code, minutes: Math.round(CODE_TTL_MS / 60_000) }) });
       this.options.log?.("signup.code_sent", {});
       return { sent: true, email, method, expiresAt: record.expiresAt };
     }
@@ -224,16 +221,8 @@ export class SignupService {
       const record: PendingLink = { email, ...(name ? { name } : {}), next, expiresAt };
       await this.store.kv.set(SIGNUP_OWNER, linkKey(token), record);
       const url = `${appUrl.replace(/\/+$/, "")}/signup/link?token=${encodeURIComponent(token)}`;
-      await this.send(mailer, {
-        to: email,
-        subject: exists ? "Your Sibyl sign-in link" : "Finish signing up for Sibyl",
-        text: [
-          exists ? "Sign in to Sibyl:" : "Finish creating your Sibyl account:",
-          url,
-          "",
-          "The link works once and expires in 15 minutes. If you didn't ask for it, ignore this email."
-        ].join("\n")
-      });
+      const link = { url, minutes: Math.round(LINK_TTL_MS / 60_000) };
+      await this.send(mailer, { to: email, email: exists ? signInLinkEmail(link) : signUpLinkEmail(link) });
       this.options.log?.("signup.link_sent", { existing: exists });
     }
     return { sent: true, email, method, expiresAt };
@@ -472,7 +461,7 @@ export class SignupService {
     }
   }
 
-  private async send(mailer: Mailer, message: { to: string; subject: string; text: string }): Promise<void> {
+  private async send(mailer: Mailer, message: EmailMessage): Promise<void> {
     try {
       await mailer.send(message);
     } catch (error) {

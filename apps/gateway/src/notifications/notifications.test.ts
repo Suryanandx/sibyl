@@ -96,9 +96,12 @@ describe("publishing", () => {
       { channel: "slack", status: "unavailable", detail: expect.stringMatching(/Slack/) }
     ]);
     expect(mail).toEqual([
-      expect.objectContaining({ to: "alice@x.test", subject: "Sibyl: 1 new match for “Deals”: Acme.", text: expect.stringContaining("https://crm.test/d1") })
+      expect.objectContaining({ to: "alice@x.test", subject: "1 new match for “Deals”: Acme.", text: expect.stringContaining("https://crm.test/d1") })
     ]);
-    expect(mail[0]!.text).toContain("Open in Sibyl: https://sibyl.test/monitors");
+    // Rendered through the shared layout: HTML and text, both with the link into the app.
+    expect(mail[0]!.text).toContain("Open Monitors:\nhttps://sibyl.test/monitors");
+    expect(mail[0]!.html).toContain('href="https://sibyl.test/monitors"');
+    expect(mail[0]!.html).toContain('href="https://crm.test/d1"');
 
     await inviteMailer(notifications.mailer)!.sendInvite({ to: "z@x.test", inviterName: "Olive", workspaceName: "Sales", role: "admin", url: "https://sibyl.test/invite/t", expiresAt: Date.now() + 86_400_000 });
     expect(mail[1]).toMatchObject({ to: "z@x.test", subject: "Olive invited you to Sales on Sibyl", text: expect.stringContaining("as an admin") });

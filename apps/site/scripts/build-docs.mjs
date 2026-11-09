@@ -174,7 +174,7 @@ const searchBox = `<div class="docsSearch" role="search">
 function shell({ title, description, body, slug }) {
   return `<!doctype html>
 <html lang="en">
-${head({ title: `${title} · Sibyl docs`, description, generatedFrom: `apps/site/scripts/build-docs.mjs from ${slug === "index" ? "docs/" : sources.get(slug)}`, extraCss: ["docs.css"], extraJs: ["docs.js"] })}
+${head({ title: `${title} · Sibyl docs`, description, path: `docs/${slug}.html`, generatedFrom: `apps/site/scripts/build-docs.mjs from ${slug === "index" ? "docs/" : sources.get(slug)}`, extraCss: ["docs.css"], extraJs: ["docs.js"] })}
 <body class="docsBody">
   <a class="skip" href="#main">Skip to content</a>
 ${header}

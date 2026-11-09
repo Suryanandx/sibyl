@@ -4,12 +4,13 @@
  * - inbox: always available and always used (registered by the
  *   NotificationService: store + live push).
  * - email: the gateway's one mailer (SIBYL_SMTP_URL) to the recipient's
- *   account email.
+ *   account email, written by the shared notification template.
  * - slack / teams: registered as unavailable until their connectors land; a
  *   connector calls `registry.register({ channel: "slack", ... })` to replace
  *   the placeholder. Nothing else needs to change.
  */
 import type { NotificationChannel, NotificationRecord } from "@open-gpt-live/core";
+import { notificationEmail } from "../email/templates.js";
 import type { Mailer } from "./mailer.js";
 
 export interface NotifyRecipient {
@@ -99,9 +100,8 @@ export function emailNotifier(options: { mailer: Mailer | undefined; appUrl?: st
     async send({ record, recipient }) {
       if (!mailer) throw new Error("Email isn't set up on this server (SIBYL_SMTP_URL).");
       if (!recipient.email) throw new Error("No email address for the recipient.");
-      const link = options.appUrl ? `${options.appUrl.replace(/\/+$/, "")}${notificationPath(record)}` : undefined;
-      const text = [record.body || record.title, ...(link ? ["", `Open in Sibyl: ${link}`] : [])].join("\n");
-      await mailer.send({ to: recipient.email, subject: `Sibyl: ${record.title}`, text });
+      const url = options.appUrl ? `${options.appUrl.replace(/\/+$/, "")}${notificationPath(record)}` : undefined;
+      await mailer.send({ to: recipient.email, email: notificationEmail({ kind: record.kind, title: record.title, body: record.body, ...(url ? { url } : {}) }) });
     }
   };
 }

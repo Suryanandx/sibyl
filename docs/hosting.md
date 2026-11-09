@@ -54,7 +54,7 @@ An invitation page (`/invite/<token>`) also offers **Continue with Google** and 
 
 | Needed for | Settings |
 |---|---|
-| Links and codes | `SIBYL_SMTP_URL` (and `SIBYL_SMTP_FROM`). Without email, only Google and Microsoft are offered. |
+| Links and codes | `SIBYL_SMTP_URL` (and `SIBYL_SMTP_FROM`). Without email, only Google and Microsoft are offered. For Amazon SES see [configuration.md](configuration.md#sending-through-amazon-ses). |
 | Continue with Google | A Google OAuth client (type "Web application") with the redirect URI `<gateway>/api/signup/oauth/google/callback`; `SIBYL_SIGNIN_GOOGLE_CLIENT_ID`, `SIBYL_SIGNIN_GOOGLE_CLIENT_SECRET`. |
 | Continue with Microsoft | An app registration in Microsoft Entra ID (accounts in any organization and personal Microsoft accounts) with the web redirect URI `<gateway>/api/signup/oauth/microsoft/callback`, the `email` optional claim, and a client secret; `SIBYL_SIGNIN_MICROSOFT_CLIENT_ID`, `SIBYL_SIGNIN_MICROSOFT_CLIENT_SECRET`. |
 | Links in emails | `SIBYL_APP_URL` (the web app); `SIBYL_PUBLIC_GATEWAY_URL` when the gateway is behind a proxy. |

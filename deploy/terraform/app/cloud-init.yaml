@@ -1,0 +1,33 @@
+#cloud-config
+# First boot of the Sibyl app host: Docker, the data volume, automatic security
+# updates. Sibyl itself is started by the deploy workflow (deploy/app/deploy.sh).
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - unattended-upgrades
+  - awscli
+write_files:
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /etc/docker/daemon.json
+    content: |
+      { "log-driver": "local", "log-opts": { "max-size": "20m", "max-file": "5" } }
+runcmd:
+  # Docker Engine + compose plugin from Docker's own repository.
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - systemctl enable --now docker
+  # The data volume (attached as /dev/sdf, seen as an NVMe device on Nitro hosts).
+  - |
+    for i in $(seq 1 60); do DEV=$(readlink -f /dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_* 2>/dev/null | grep -v "$(findmnt -no SOURCE / | sed 's/p[0-9]*$//')" | head -1); [ -n "$DEV" ] && break; sleep 5; done
+    blkid "$DEV" || mkfs.ext4 -L sibyl-data "$DEV"
+    mkdir -p /srv/sibyl
+    grep -q sibyl-data /etc/fstab || echo "LABEL=sibyl-data /srv/sibyl ext4 defaults,nofail 0 2" >> /etc/fstab
+    mount -a
+    mkdir -p /srv/sibyl/data /srv/sibyl/caddy /srv/sibyl/slides /srv/sibyl/recordings

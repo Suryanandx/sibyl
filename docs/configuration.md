@@ -350,7 +350,7 @@ Emailed links and codes, and Continue with Google / Microsoft. Hosted Sibyl uses
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SIBYL_SMTP_URL` | unset | Needed for sign-in links and sign-up codes (the gateway's one mailer). Unset: those options are hidden. |
+| `SIBYL_SMTP_URL` | unset | Needed for sign-in links and sign-up codes (the gateway's one mailer). Unset: those options are hidden. See [Email](#email). |
 | `SIBYL_SIGNIN_GOOGLE_CLIENT_ID`, `SIBYL_SIGNIN_GOOGLE_CLIENT_SECRET` | unset | The platform's Google sign-in app. Both set: "Continue with Google" appears. Not the Google connector (`SIBYL_GOOGLE_*`). |
 | `SIBYL_SIGNIN_MICROSOFT_CLIENT_ID`, `SIBYL_SIGNIN_MICROSOFT_CLIENT_SECRET` | unset | The platform's Microsoft sign-in app. Both set: "Continue with Microsoft" appears. Not the Microsoft connector (`SIBYL_MICROSOFT_*`). |
 | `SIBYL_SIGNIN_MICROSOFT_TENANT` | `common` | Which Microsoft accounts may sign in: `common` (work and personal), `organizations`, `consumers`, or one tenant id. |
@@ -358,6 +358,61 @@ Emailed links and codes, and Continue with Google / Microsoft. Hosted Sibyl uses
 | `SIBYL_SIGNIN_ALLOW_PRIVATE_NETWORK` | `false` | Allow an issuer on a private network or plain http (local testing only). |
 | `SIBYL_APP_URL` | the request's origin | The web app's address, used in emailed links and after Google / Microsoft. |
 | `SIBYL_PUBLIC_GATEWAY_URL` | the request's origin | The gateway's public address, for the Google / Microsoft redirect URI. |
+
+## Email
+
+Every email Sibyl sends goes through the gateway's one mailer and one layout (`apps/gateway/src/email`): HTML and plain text, light and dark, with a line saying why the reader got it. No tracking pixels.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SIBYL_SMTP_URL` | unset | The SMTP server, as a URL: `smtp://user:pass@host:587` (STARTTLS) or `smtps://user:pass@host:465` (TLS). Options go in the query, for example `?requireTLS=true`. Unset: no email (people copy invitation links; sign-in links and codes are hidden). |
+| `SIBYL_SMTP_FROM` | `Sibyl <no-reply@localhost>` | The From address. Set it: real servers refuse `localhost`. |
+| `SIBYL_EMAIL_ASSET_BASE_URL` | `https://opensibyl.world/assets/` | Where the logo in emails is loaded from (`brand/sibyl-mark-light.png` under it). Emails only load images from here. |
+| `SIBYL_APP_URL` | the request's origin | The web app's address. Buttons in notification emails need it; without it they say "Open Sibyl". |
+
+### Sending through Amazon SES
+
+Sibyl sends from `opensibyl.world` through Amazon SES in `eu-central-1` (Frankfurt). Any SES region works the same way with its own host.
+
+1. In SES, verify the domain `opensibyl.world` (DKIM records in DNS) and, while the account is in the sandbox, every address you send to. Ask AWS for production access before real users sign up.
+2. Create **SMTP credentials**: SES → SMTP settings → Create SMTP credentials. This makes an IAM user and shows an SMTP user name (it starts with `AKIA`) and an SMTP password once. These are not the IAM user's access keys: an access key's secret does not work as an SMTP password, and the SMTP password only works for SMTP in the region it was made for.
+3. Set:
+
+```dotenv
+SIBYL_SMTP_URL=smtp://AKIAEXAMPLEUSER:URL-ENCODED-SMTP-PASSWORD@email-smtp.eu-central-1.amazonaws.com:587?requireTLS=true
+SIBYL_SMTP_FROM=Sibyl <no-reply@opensibyl.world>
+```
+
+- Port **587** with STARTTLS; `requireTLS=true` refuses to send if the server doesn't upgrade the connection. Port 465 with `smtps://` (TLS from the start) works too.
+- The SMTP password often contains `/`, `+` or `=`. Percent-encode it in the URL (`/` → `%2F`, `+` → `%2B`, `=` → `%3D`), for example with `node -e 'console.log(encodeURIComponent(process.argv[1]))' 'the-password'`.
+- The From address must be on the verified domain. `no-reply@opensibyl.world` is fine; nobody reads replies.
+- Keep the URL in your secret store, not in the repository.
+
+Check it with a sign-in link: open `/login`, choose "Email me a sign-in link" for an account that exists, and watch the gateway log for `signup.email_failed`.
+
+### What Sibyl sends
+
+| Email | Subject | Sent when |
+|---|---|---|
+| Sign-in link | Your Sibyl sign-in link | Someone asks for a sign-in link on `/login` or `/signup` and has an account. Works once, for 15 minutes. |
+| Sign-up link | Finish signing up for Sibyl | Hosted Sibyl: someone without an account asks for a link on `/signup`. |
+| Sign-up code | `123456` is your Sibyl code | Hosted Sibyl: someone signs up with a password; the 6-digit code confirms the address. 15 minutes. |
+| Invitation | Ana invited you to Sales (Acme) on Sibyl | An admin invites someone by email, or sends an invitation again. 7 days. |
+| Approval needed | The approval's title | An action waits for an approval (a routine, or a second approval that policy requires), when email is asked for. |
+| Routine finished / didn't finish | Routine finished: name / Routine didn't finish: name | A routine run ends, when email is asked for. |
+| Paused by a budget | The notice's title | A budget stops an agent's computer or a routine, when email is asked for. |
+| Monitor found something | The match summary | A monitor fires and its notify action includes email. |
+| Monitor paused | The reason | A monitor pauses itself and its notify action includes email. |
+| Agent acted on its own | Dot acted on its own | An agent acts on its own and its settings say to tell you by email. |
+| Deck ready | Your deck is ready: title | A deck you asked for is built, when email is asked for. |
+| Invitation accepted | Max joined Sales | Someone accepts your invitation, when email is asked for. |
+| Meeting notes | Notes ready: meeting | A meeting ends and its notes are written, when email is asked for. |
+| Voicemail | Voicemail from number | Someone leaves a voicemail on a Sibyl phone line, when email is asked for. |
+| Usage alert (Agent Serve) | Sibyl usage: Ana used 80% of their monthly budget | Advanced usage controls: someone crosses an alert threshold, or reaches the budget. Also "Send a test alert". |
+
+Notifications always land in the Inbox; email is a second channel. Today monitors (their notify action) and agents ("tell me" settings) ask for it; the other notices use the same template when a sender asks for email.
+
+To see them all, run `corepack pnpm --filter @open-gpt-live/gateway run email:preview`. It writes each email with sample data to `apps/gateway/email-preview/` (`index.html`, one `.html` and `.txt` per email) and takes desktop, mobile and dark screenshots with headless Chromium (`--no-screenshots` to skip; `CHROMIUM_PATH` for another browser).
 
 ## Media (images, video, audio)
 

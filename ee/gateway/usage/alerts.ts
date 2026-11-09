@@ -14,7 +14,9 @@
  * Receivers recompute the HMAC with the key shown once in the admin screen.
  */
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import type { EmailContent } from "../../../packages/core/src/email";
 import type { EnterpriseMailer, EnterpriseSecrets } from "../../../packages/core/src/features";
+import { usageAlertEmail } from "../../../apps/gateway/src/email/templates";
 import type { Store } from "../../../packages/core/src/store";
 import { fetchPublic, type FetchLike } from "../../../apps/gateway/src/net/safe-fetch";
 import { money, type UsageControls } from "./controls";
@@ -88,7 +90,8 @@ export class AlertSender {
     const user = await this.options.store.identity.users.get(this.options.ownerId, alert.userId).catch(() => undefined);
     const name = user?.name || user?.email || describeUser(alert.userId);
     const workspace = alert.workspaceId ? await this.options.store.workspaces.get(this.options.ownerId, alert.workspaceId).catch(() => undefined) : undefined;
-    const { subject, text } = composeAlert(alert, name, workspace?.name ?? alert.workspaceId, this.options.appUrl);
+    const content = composeAlert(alert, name, workspace?.name ?? alert.workspaceId, this.options.appUrl);
+    const subject = content.subject;
 
     const recipients = new Set(controls.alerts.emails);
     if (controls.alerts.notifyUser && user?.email) recipients.add(user.email);
@@ -96,7 +99,7 @@ export class AlertSender {
     if (this.options.mailer) {
       for (const to of recipients) {
         try {
-          await this.options.mailer.send({ to, subject, text });
+          await this.options.mailer.send({ to, email: content });
           email.push({ to, ok: true });
         } catch (error) {
           this.options.log("usage_controls.email_failed", { error: errorText(error) });
@@ -201,21 +204,18 @@ export async function rebindWebhookKey(secrets: EnterpriseSecrets, webhookUrl: s
   }
 }
 
-export function composeAlert(alert: UsageAlert, name: string, workspace: string | undefined, appUrl?: string): { subject: string; text: string } {
-  const period = alert.period === "daily" ? "daily" : "monthly";
-  const subject = alert.blocked
-    ? `Sibyl usage: ${name} reached their ${period} budget`
-    : `Sibyl usage: ${name} used ${alert.thresholdPercent}% of their ${period} budget`;
-  const lines = [
-    alert.blocked
-      ? `${name} was stopped by their ${period} budget: ${money(alert.spentUsd)} of ${money(alert.capUsd)} used.`
-      : `${name} has used ${money(alert.spentUsd)} of their ${money(alert.capUsd)} ${period} budget (${alert.thresholdPercent}%).`,
-    ...(workspace ? [`Workspace: ${workspace}`] : []),
-    alert.period === "daily" ? "The daily budget resets at midnight (server time)." : "The monthly budget resets on the 1st.",
-    "",
-    `Change budgets in Admin → Usage controls${appUrl ? `: ${appUrl.replace(/\/+$/, "")}/admin/usage` : "."}`
-  ];
-  return { subject, text: lines.join("\n") };
+/** The alert email, written by the shared template (apps/gateway/src/email/templates.ts). */
+export function composeAlert(alert: UsageAlert, name: string, workspace: string | undefined, appUrl?: string): EmailContent {
+  return usageAlertEmail({
+    name,
+    period: alert.period === "daily" ? "daily" : "monthly",
+    thresholdPercent: alert.thresholdPercent,
+    blocked: alert.blocked,
+    spent: money(alert.spentUsd),
+    cap: money(alert.capUsd),
+    ...(workspace ? { workspace } : {}),
+    ...(appUrl ? { settingsUrl: `${appUrl.replace(/\/+$/, "")}/admin/usage` } : {})
+  });
 }
 
 function describeUser(userId: string): string {

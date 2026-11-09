@@ -1,0 +1,116 @@
+name: Website
+
+# Builds the website (apps/site: landing, product pages, docs) and publishes it to
+# https://opensibyl.world. AWS access is a short-lived role assumed over OIDC; no
+# keys are stored in GitHub. Infrastructure: deploy/terraform/site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/site/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/site.yml"
+  pull_request:
+    paths:
+      - "apps/site/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install the site's dependencies
+        run: pnpm install --frozen-lockfile --filter site...
+
+      - name: Build docs and product pages
+        run: pnpm --filter site run docs
+
+      - name: Check the build is committed
+        # The generated pages live in git so the site can be browsed from the repo.
+        # A mismatch means someone changed docs/ without rebuilding.
+        run: git diff --exit-code -- apps/site || (echo "::error::Run 'corepack pnpm --filter site run docs' and commit the result." && exit 1)
+
+      - name: Collect the files to publish
+        run: |
+          mkdir -p out
+          rsync -a --exclude node_modules --exclude scripts --exclude package.json --exclude '*.md' apps/site/ out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: out
+          retention-days: 7
+
+  deploy:
+    # Runs once the infrastructure exists (deploy/terraform/site) and its outputs are set as repository variables.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.SITE_BUCKET != ''
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: website
+      url: https://opensibyl.world
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: out
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_SITE_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Upload
+        env:
+          BUCKET: ${{ vars.SITE_BUCKET }}
+        run: |
+          # Fingerprint-free assets: cache for a day; pages and data: always revalidate.
+          aws s3 sync out/ "s3://$BUCKET/" --delete --only-show-errors \
+            --exclude "*.html" --exclude "*.json" --exclude "*.xml" --exclude "*.txt" \
+            --cache-control "public, max-age=86400"
+          aws s3 sync out/ "s3://$BUCKET/" --delete --only-show-errors \
+            --exclude "*" --include "*.html" --include "*.json" --include "*.xml" --include "*.txt" \
+            --cache-control "public, max-age=0, must-revalidate"
+
+      - name: Refresh the CDN
+        env:
+          DISTRIBUTION: ${{ vars.SITE_DISTRIBUTION_ID }}
+        run: |
+          id=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*" --query Invalidation.Id --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$id"
+
+      - name: Check the live site
+        run: |
+          for path in / /docs/ /products/assistant.html /robots.txt /sitemap.xml; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://opensibyl.world$path")
+            echo "$path $code"; [ "$code" = 200 ] || exit 1
+          done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' https://www.opensibyl.world/)" = 301 ]

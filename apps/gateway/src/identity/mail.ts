@@ -1,8 +1,10 @@
 /**
  * Invitation email, sent through the gateway's one mailer
- * (notifications/mailer.ts). Only active when that mailer is (SIBYL_SMTP_URL);
- * otherwise the inviter copies the link.
+ * (notifications/mailer.ts) with the shared template (email/templates.ts).
+ * Only active when that mailer is (SIBYL_SMTP_URL); otherwise the inviter
+ * copies the link.
  */
+import { invitationEmail } from "../email/templates.js";
 import type { Mailer } from "../notifications/mailer.js";
 
 export interface InviteMail {
@@ -26,22 +28,17 @@ export function inviteMailer(mailer: Mailer | undefined, now: () => number = Dat
   return {
     async sendInvite(mail) {
       const days = Math.max(1, Math.round((mail.expiresAt - now()) / 86_400_000));
-      const where = mail.orgName ? `the ${mail.workspaceName} workspace of ${mail.orgName}` : `the ${mail.workspaceName} workspace`;
-      const text = [
-        `${mail.inviterName} invited you to ${where} on Sibyl as ${article(mail.role)} ${mail.role}.`,
-        "",
-        `Accept the invitation: ${mail.url}`,
-        "",
-        `The link works once and expires in ${days} day${days === 1 ? "" : "s"}. If you weren't expecting this, ignore this email.`
-      ].join("\n");
-      const subject = mail.orgName
-        ? `${mail.inviterName} invited you to ${mail.workspaceName} (${mail.orgName}) on Sibyl`
-        : `${mail.inviterName} invited you to ${mail.workspaceName} on Sibyl`;
-      await mailer.send({ to: mail.to, subject, text });
+      await mailer.send({
+        to: mail.to,
+        email: invitationEmail({
+          inviterName: mail.inviterName,
+          workspaceName: mail.workspaceName,
+          ...(mail.orgName ? { orgName: mail.orgName } : {}),
+          role: mail.role,
+          url: mail.url,
+          days
+        })
+      });
     }
   };
-}
-
-function article(word: string): string {
-  return /^[aeiou]/i.test(word) ? "an" : "a";
 }

@@ -1,0 +1,27 @@
+# HTTPS for the app host. Certificates come from Let's Encrypt automatically.
+{
+	email {$ACME_EMAIL}
+}
+
+app.{$SIBYL_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	# The gateway (WebSocket + HTTP API). Its URLs can carry the sign-in token, so no access log here.
+	handle_path /gateway/* {
+		reverse_proxy gateway:8787 {
+			flush_interval -1
+		}
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+rtc.{$SIBYL_DOMAIN} {
+	reverse_proxy livekit:7880
+}

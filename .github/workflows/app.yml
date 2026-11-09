@@ -1,0 +1,119 @@
+name: App
+
+# Builds the app's images and deploys them to the app host (deploy/terraform/app).
+# Manual only, and only from main: the hosted app is not launched yet. Starting it
+# also needs approval on the "app" environment. AWS access is a short-lived role
+# assumed over OIDC; no keys are stored in GitHub.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to build and deploy this commit to app.opensibyl.world'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  PUBLIC_ORIGIN: https://app.opensibyl.world
+
+jobs:
+  images:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: app
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { name: gateway, dockerfile: Dockerfile.gateway }
+          - { name: web, dockerfile: Dockerfile.web }
+          - { name: slides, dockerfile: Dockerfile.slides }
+          - { name: computer, dockerfile: Dockerfile.computer }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.ecr.outputs.registry }}/sibyl/${{ matrix.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # The web app compiles its public URLs in at build time.
+          build-args: |
+            NEXT_PUBLIC_GATEWAY_WS_URL=wss://app.opensibyl.world/gateway/
+            NEXT_PUBLIC_GATEWAY_HTTP_URL=https://app.opensibyl.world/gateway
+            SIBYL_SLIDES_WEB_URL=http://slides:3100
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: app
+      url: https://app.opensibyl.world
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_APP_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy on the host
+        env:
+          INSTANCE: ${{ vars.APP_INSTANCE_ID }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          raw="https://raw.githubusercontent.com/$REPO/$SHA"
+          cmd_id=$(aws ssm send-command --instance-ids "$INSTANCE" --document-name AWS-RunShellScript \
+            --comment "sibyl $SHA" --timeout-seconds 1200 \
+            --parameters commands="[
+              \"set -e\",
+              \"mkdir -p /srv/sibyl/release /srv/sibyl/livekit\",
+              \"curl -fsSL $raw/deploy/app/docker-compose.yml -o /srv/sibyl/release/docker-compose.yml\",
+              \"curl -fsSL $raw/deploy/app/Caddyfile -o /srv/sibyl/release/Caddyfile\",
+              \"curl -fsSL $raw/deploy/app/deploy.sh -o /srv/sibyl/release/deploy.sh\",
+              \"curl -fsSL $raw/deploy/livekit/livekit.yaml -o /srv/sibyl/livekit/livekit.yaml\",
+              \"bash /srv/sibyl/release/deploy.sh $SHA $REGISTRY\"
+            ]" --query Command.CommandId --output text)
+          echo "SSM command $cmd_id"
+          aws ssm wait command-executed --command-id "$cmd_id" --instance-id "$INSTANCE" || true
+          aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE" \
+            --query '[Status,StandardOutputContent,StandardErrorContent]' --output text
+          [ "$(aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE" --query Status --output text)" = Success ]
+
+      - name: Check the live app
+        run: |
+          curl -fsS "$PUBLIC_ORIGIN/gateway/healthz" | grep -q '"status":"ok"'
+          curl -fsS -o /dev/null "$PUBLIC_ORIGIN/"

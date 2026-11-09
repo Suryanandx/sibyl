@@ -73,7 +73,7 @@ describe("hosted sign-up", () => {
   let registry: TenantRegistry<TenantHandle & { runtime: GatewayRuntime; providers: GatewayProviders }>;
   let shared: Awaited<ReturnType<typeof openSharedRuntime>>;
   let base = "";
-  const lastCode = () => /Your Sibyl code is (\d{6})/.exec(mail.at(-1)!.text)![1]!;
+  const lastCode = () => /^(\d{6}) is your Sibyl code$/.exec(mail.at(-1)!.subject)![1]!;
   const lastLink = () => /token=([A-Za-z0-9_%-]+)/.exec(mail.at(-1)!.text)![1]!;
 
   beforeAll(async () => {

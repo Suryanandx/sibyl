@@ -24,6 +24,7 @@ export * from "./vad";
 export * from "./meetings";
 export * from "./calls";
 export * from "./tenancy";
+export * from "./email";
 
 /** Single-owner deployments use this owner id. */
 export const DEFAULT_OWNER_ID = "owner";

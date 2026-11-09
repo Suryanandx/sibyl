@@ -8,6 +8,8 @@ dist
 *.log
 *.tsbuildinfo
 coverage
+# Email previews (corepack pnpm --filter @open-gpt-live/gateway run email:preview)
+apps/gateway/email-preview/
 models.config.json
 .model-scout.json
 mcp.config.json
@@ -25,3 +27,10 @@ apps/slides/servers/nextjs/.next-build/
 # Licence signing keys (see ee/README.md) — never commit a private key
 *.pem
 sibyl-license-*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

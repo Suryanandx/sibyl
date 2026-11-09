@@ -11,6 +11,7 @@ import { createMemoryStore, type Store } from "../../../packages/core/src/store"
 import { createToolRegistry } from "../../../packages/core/src/tools";
 import { createOpenGovernance } from "../../../packages/core/src/governance";
 import type { Principal } from "../../../packages/core/src/permissions";
+import type { EmailMessage } from "../../../packages/core/src/email";
 import { GatewayUsageMeter } from "../../../apps/gateway/src/metering/meter";
 import { bindCaller } from "../../../apps/gateway/src/http/index";
 import { SecretVault } from "../../../apps/gateway/src/secrets/vault";
@@ -46,7 +47,7 @@ function vaultSecrets(store: Store): EnterpriseSecrets {
 async function setup(options: { orgDailyUsd?: number; env?: NodeJS.ProcessEnv; withPolicy?: boolean } = {}) {
   const store = createMemoryStore();
   let now = NOW;
-  const mail: Array<{ to: string; subject: string; text: string }> = [];
+  const mail: EmailMessage[] = [];
   const secrets = vaultSecrets(store);
   const meter = new GatewayUsageMeter({ store, limits: options.orgDailyUsd === undefined ? {} : { dailyUsd: options.orgDailyUsd }, now: () => now });
   const service = await new UsageControlsService({
@@ -207,7 +208,7 @@ describe("alerts", () => {
     spend(0.01); // 70%: nothing new
     await service.alerts.flush();
     expect(mail.map((m) => m.to).sort()).toEqual(["ana@example.com", "ops@example.com"]);
-    expect(mail[0]!.subject).toBe("Sibyl usage: Ana used 50% of their daily budget");
+    expect(mail[0]!.email.subject).toBe("Sibyl usage: Ana used 50% of their daily budget");
     expect(hook.hits).toHaveLength(1);
     const [hit] = hook.hits;
     const expected = `sha256=${createHmac("sha256", webhookKey!).update(`${hit!.headers["x-sibyl-timestamp"]}.${hit!.body}`).digest("hex")}`;

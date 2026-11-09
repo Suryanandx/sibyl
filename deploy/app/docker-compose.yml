@@ -1,0 +1,86 @@
+# Production compose for the app host (deploy/terraform/app). Images come from
+# ECR, tagged with the Git commit they were built from (IMAGE_TAG). Settings
+# come from /srv/sibyl/.env, written by deploy.sh from SSM Parameter Store.
+name: sibyl
+
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SIBYL_DOMAIN: ${SIBYL_DOMAIN:-opensibyl.world}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/sibyl/caddy:/data
+    depends_on: [web, gateway]
+
+  gateway:
+    image: ${REGISTRY:?set REGISTRY}/sibyl/gateway:${IMAGE_TAG:?set IMAGE_TAG}
+    restart: unless-stopped
+    env_file: /srv/sibyl/.env
+    environment:
+      NODE_ENV: production
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 8787
+      SIBYL_SLIDES_URL: http://slides:8000
+      LIVEKIT_URL: ws://livekit:7880
+      # Agent computers: the gateway starts sandboxes on this dedicated host.
+      SIBYL_COMPUTER_NETWORK: sibyl_default
+      SIBYL_COMPUTER_PROXY_HOST: gateway
+      SIBYL_COMPUTER_PROXY_BIND: 0.0.0.0
+      SIBYL_COMPUTER_IMAGE: ${REGISTRY}/sibyl/computer:${IMAGE_TAG}
+    volumes:
+      - /srv/sibyl/data:/app/data
+      - /srv/sibyl/recordings:/app/data/recordings
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  web:
+    image: ${REGISTRY}/sibyl/web:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    depends_on:
+      gateway: { condition: service_healthy }
+
+  slides:
+    image: ${REGISTRY}/sibyl/slides:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file: /srv/sibyl/.env
+    environment:
+      NODE_ENV: production
+      SIBYL_SLIDES_HOST: 0.0.0.0
+      SIBYL_APP_URL: https://app.${SIBYL_DOMAIN:-opensibyl.world}
+      APP_DATA_DIRECTORY: /app_data
+    volumes:
+      - /srv/sibyl/slides:/app_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 15s
+      timeout: 4s
+      retries: 8
+      start_period: 60s
+
+  # Realtime (meetings, voice rooms). Started with --profile realtime.
+  redis:
+    image: redis:7-alpine
+    profiles: ["realtime"]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    profiles: ["realtime"]
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml", "--node-ip", "${PUBLIC_IP:?set PUBLIC_IP}"]
+    env_file: /srv/sibyl/livekit.env
+    volumes:
+      - ../livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports: ["7881:7881", "7882:7882/udp"]
+    depends_on: [redis]
