@@ -1545,6 +1545,12 @@ class GatewayConnection implements VoiceSessionPort {
         else next[key] = fresh[key];
       }
     }
+    // A voice belongs to its speech model: if the model changed under it, take a voice it has.
+    const ttsModel = catalog?.tts.find((model) => model.id === next.ttsModel);
+    if (ttsModel?.voices?.length && (!next.ttsVoice || !ttsModel.voices.includes(next.ttsVoice))) {
+      next.ttsVoice = fresh.ttsVoice && ttsModel.voices.includes(fresh.ttsVoice) ? fresh.ttsVoice : (ttsModel.defaultVoice ?? ttsModel.voices[0]);
+      this.session.userChosen.delete("ttsVoice");
+    }
     this.session.settings = next;
     this.sendSessionConfig();
     this.warmUpVoice();
@@ -1615,12 +1621,16 @@ class GatewayConnection implements VoiceSessionPort {
         next.ttsVoice = ttsModel.defaultVoice ?? ttsModel.voices[0];
       }
     }
+    let ignoredVoice = false;
     if (patch.ttsVoice !== undefined) {
       const ttsModel = catalog?.tts.find((model) => model.id === next.ttsModel);
       if (ttsModel?.voices?.length && !ttsModel.voices.includes(patch.ttsVoice)) {
-        return reject(`Voice ${patch.ttsVoice} is not available for ${ttsModel.id}`);
+        // A voice remembered from another speech model: keep the current, valid one.
+        ignoredVoice = true;
+        this.config.logger.info("session.voice_ignored", { sessionId: this.session.sessionId, voice: patch.ttsVoice, model: ttsModel.id });
+      } else {
+        next.ttsVoice = patch.ttsVoice;
       }
-      next.ttsVoice = patch.ttsVoice;
     }
     if (patch.genUi !== undefined) {
       next.genUi = patch.genUi && Boolean(this.config.genUiSystemPrompt);
@@ -1631,6 +1641,7 @@ class GatewayConnection implements VoiceSessionPort {
 
     this.session.settings = next;
     for (const key of Object.keys(patch) as Array<keyof SessionSettings>) {
+      if (key === "ttsVoice" && ignoredVoice) continue;
       this.session.userChosen.add(key);
     }
     this.config.logger.info("session.settings_updated", {

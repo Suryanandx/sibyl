@@ -147,6 +147,23 @@ test("session.update switches models per turn and rejects unknown models", async
   });
 });
 
+test("a remembered voice from another speech model is ignored quietly", async () => {
+  const calls: Calls = { llm: [], stt: [], tts: [] };
+  await withClient(providers(["Hello there."], calls), async (client) => {
+    await client.waitFor(isConfig);
+    // A browser restoring a voice that belonged to a different speech model.
+    client.send({ type: WS_EVENTS.SESSION_UPDATE, settings: { ttsModel: "elevenlabs/eleven-flash-v2.5", ttsVoice: "af_heart" } });
+    const updated = (await client.waitFor(
+      (m) => isConfig(m) && m.settings.ttsModel === "elevenlabs/eleven-flash-v2.5"
+    )) as ServerSessionConfigMessage;
+    assert.equal(updated.settings.ttsVoice, "george");
+    client.send({ type: WS_EVENTS.USER_TEXT, requestId: "r1", text: "hi" });
+    await client.waitFor((m) => m.type === WS_EVENTS.TTS_END && m.requestId === "r1");
+    assert.equal(calls.tts[0]?.voice, "george");
+    assert.equal(client.messages.some((m) => m.type === "error"), false);
+  });
+});
+
 test("generative UI is streamed as ui.delta and never spoken", async () => {
   const calls: Calls = { llm: [], stt: [], tts: [] };
   const reply = ["Here is **the** chart.\n\n``", "`openui-lang\nroot = Card([t])\n", 't = TextContent("x")\n```\n'];

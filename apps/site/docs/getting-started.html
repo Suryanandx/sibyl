@@ -108,7 +108,9 @@
 cd sibyl
 corepack enable
 corepack pnpm install</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
-<p>If <code>corepack enable</code> needs permissions you don&#39;t have, skip it and prefix every pnpm command with <code>corepack</code>, as in the rest of these docs.</p>
+<p><code>corepack enable</code> puts the right pnpm on your PATH, and the project&#39;s scripts rely on it (they call <code>pnpm</code> themselves). If it needs permissions you don&#39;t have, install pnpm 11 another way instead, for example <code>npm install -g pnpm@11</code>, and run the commands without the <code>corepack</code> prefix.</p>
+<p>Node.js 25 and newer no longer include corepack. Install it once with <code>npm install -g corepack</code>, then run <code>corepack enable</code>.</p>
+<p>If <code>pnpm</code> fails with &quot;No such file or directory&quot; even after <code>corepack enable</code>, an older global pnpm earlier on your PATH is shadowing it; run <code>which -a pnpm</code> to find it, and remove it or move it later on your PATH.</p>
 <h2 id="2-configure"><a class="anchor" href="#2-configure" aria-hidden="true" tabindex="-1">#</a>2. Configure</h2>
 <div class="codeBlock"><span class="codeLang">bash</span><pre><code class="language-bash">cp .env.example .env</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
 <p>Open <code>.env</code> and set your key:</p>

@@ -50,7 +50,7 @@ Sibyl is an open-source assistant your team hosts itself. Talk to it or type to 
 
 ## Quickstart
 
-You need Node.js 22.13 or newer and an [OpenRouter](https://openrouter.ai/keys) API key. pnpm comes through corepack, which ships with Node.
+You need Node.js 22.13 or newer and an [OpenRouter](https://openrouter.ai/keys) API key. pnpm comes through corepack, which ships with Node up to version 24 (on Node 25 or newer, run `npm install -g corepack` first).
 
 ```bash
 git clone https://github.com/Suryanandx/sibyl.git

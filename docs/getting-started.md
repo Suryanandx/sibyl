@@ -18,7 +18,11 @@ corepack enable
 corepack pnpm install
 ```
 
-If `corepack enable` needs permissions you don't have, skip it and prefix every pnpm command with `corepack`, as in the rest of these docs.
+`corepack enable` puts the right pnpm on your PATH, and the project's scripts rely on it (they call `pnpm` themselves). If it needs permissions you don't have, install pnpm 11 another way instead, for example `npm install -g pnpm@11`, and run the commands without the `corepack` prefix.
+
+Node.js 25 and newer no longer include corepack. Install it once with `npm install -g corepack`, then run `corepack enable`.
+
+If `pnpm` fails with "No such file or directory" even after `corepack enable`, an older global pnpm earlier on your PATH is shadowing it; run `which -a pnpm` to find it, and remove it or move it later on your PATH.
 
 ## 2. Configure
 
