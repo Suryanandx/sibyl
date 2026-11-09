@@ -7,7 +7,8 @@ import type {
   STTProvider,
   StreamingSTTProvider,
   StreamingSTTSession,
-  TTSProvider
+  TTSProvider,
+  ToolChatProvider
 } from "@open-gpt-live/adapters";
 import {
   WS_EVENTS,
@@ -29,6 +30,8 @@ import {
 import { WebSocket, WebSocketServer } from "ws";
 import { isAuthorized } from "./auth.js";
 import { ConversationRecorder, historyFromMessages } from "./conversations.js";
+import { ApprovalBroker } from "./brain/approvals.js";
+import { runToolLoop, toolSystemPrompt } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
@@ -43,6 +46,8 @@ export interface GatewayProviders {
   stt: STTProvider;
   streamingStt?: StreamingSTTProvider;
   tts?: TTSProvider;
+  /** Tool-calling chat stream for the deep brain (enables the tool loop). */
+  toolLlm?: ToolChatProvider;
 }
 
 export interface GatewayServerOptions {
@@ -400,6 +405,7 @@ class GatewayConnection {
   private economyMode = false;
   private messageQueue = Promise.resolve();
   private readonly conversations: ConversationRecorder;
+  private readonly approvals: ApprovalBroker;
 
   constructor(
     private readonly socket: WebSocket,
@@ -421,6 +427,14 @@ class GatewayConnection {
       createId: config.createId,
       log: (event, fields) => config.logger.warn(event, { sessionId: this.session.sessionId, ...fields }),
       onListChanged: (items) => this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items })
+    });
+    this.approvals = new ApprovalBroker({
+      store: config.runtime.store,
+      ownerId: config.runtime.ownerId,
+      send: (message) => this.send(message),
+      createId: config.createId,
+      now: config.now,
+      log: (event, fields) => config.logger.info(event, { sessionId: this.session.sessionId, ...fields })
     });
   }
 
@@ -577,7 +591,9 @@ class GatewayConnection {
     switch (message.type) {
       // ── approvals (brain tool loop) ──
       case WS_EVENTS.APPROVAL_DECISION:
-        this.notAvailable(message.type);
+        void this.approvals.decide(message.id, message.decision, message.remember).catch((error: unknown) => {
+          this.send({ type: "error", message: `Approval failed: ${toError(error).message}` });
+        });
         return;
 
       // ── metering ──
@@ -1704,17 +1720,50 @@ class GatewayConnection {
       }
     };
 
+    const tools = this.config.runtime.tools.list({ enabledOnly: true });
+    const toolLlm = this.providers.toolLlm;
     try {
-      for await (const chunk of this.providers.llm.streamText(
-        [
-          { role: "system", content: live.brainPrompt(genUi) },
-          ...this.conversation(),
-          { role: "user", content: `Task from the voice: ${task}` }
-        ],
-        { signal: controller.signal, model, extraBody: this.llmParamsFor(model), meta: this.usageMeta("brain", brainId) }
-      )) {
-        if (controller.signal.aborted || this.disposed) return;
-        emit(splitter ? splitter.push(chunk.delta) : { speech: chunk.delta, ui: "" });
+      if (toolLlm && tools.length > 0) {
+        const runtime = this.config.runtime;
+        const result = await runToolLoop({
+          provider: toolLlm,
+          messages: [
+            { role: "system", content: live.brainPrompt(genUi) + toolSystemPrompt(tools) },
+            ...this.conversation(),
+            { role: "user", content: `Task from the voice: ${task}` }
+          ],
+          model,
+          extraBody: this.llmParamsFor(model),
+          tools,
+          signal: controller.signal,
+          runId: brainId,
+          conversationId: this.conversations.conversationId,
+          ownerId: runtime.ownerId,
+          store: runtime.store,
+          meter: runtime.meter,
+          log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields }),
+          onText: (delta) => {
+            if (!controller.signal.aborted && !this.disposed) emit(splitter ? splitter.push(delta) : { speech: delta, ui: "" });
+          },
+          onToolStarted: (call) => this.send({ type: WS_EVENTS.TOOL_STARTED, requestId: brainId, ...call }),
+          onToolFinished: ({ callId, status, summary }) =>
+            this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: brainId, callId, status, ...(summary ? { summary } : {}) }),
+          approve: ({ tool, input }) =>
+            this.approvals.request({ runId: brainId, conversationId: this.conversations.conversationId, tool, input, signal: controller.signal })
+        });
+        if (result.aborted || controller.signal.aborted || this.disposed) return;
+      } else {
+        for await (const chunk of this.providers.llm.streamText(
+          [
+            { role: "system", content: live.brainPrompt(genUi) },
+            ...this.conversation(),
+            { role: "user", content: `Task from the voice: ${task}` }
+          ],
+          { signal: controller.signal, model, extraBody: this.llmParamsFor(model), meta: this.usageMeta("brain", brainId) }
+        )) {
+          if (controller.signal.aborted || this.disposed) return;
+          emit(splitter ? splitter.push(chunk.delta) : { speech: chunk.delta, ui: "" });
+        }
       }
       if (splitter) emit(splitter.finish());
       if (controller.signal.aborted || this.disposed) return;
@@ -2314,6 +2363,7 @@ class GatewayConnection {
     }
     this.session.brainRuns.clear();
     this.session.pendingSpeech = undefined;
+    this.approvals.dispose();
   }
 
   private send(message: ServerMessage): void {

@@ -1,5 +1,6 @@
 import {
   OpenAILLMProvider,
+  OpenAIToolChatClient,
   OpenAIRealtimeSTTProvider,
   OpenAITTSProvider,
   OpenAIWhisperProvider,
@@ -143,6 +144,10 @@ async function main(): Promise<void> {
     ...(process.env.SIBYL_OWNER_TOKEN?.trim() ? { ownerToken: process.env.SIBYL_OWNER_TOKEN.trim() } : {}),
     providers: {
       llm: new OpenAILLMProvider({
+        ...config.llm,
+        extraHeaders: config.extraHeaders
+      }),
+      toolLlm: new OpenAIToolChatClient({
         ...config.llm,
         extraHeaders: config.extraHeaders
       }),
