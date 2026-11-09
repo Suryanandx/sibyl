@@ -10,14 +10,16 @@ import type {
   UsageView
 } from "@open-gpt-live/protocol";
 import { Icon } from "./Icon";
+import { MemoryTab } from "./MemoryTab";
 
-export type SettingsTab = "presets" | "models" | "voice" | "usage" | "diagnostics";
+export type SettingsTab = "presets" | "models" | "voice" | "memory" | "usage" | "diagnostics";
 type Tab = SettingsTab;
 
 const TAB_LABELS: Record<Tab, string> = {
   presets: "Presets",
   models: "Models",
   voice: "Voice",
+  memory: "Memory",
   usage: "Usage",
   diagnostics: "Diagnostics"
 };
@@ -83,7 +85,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </header>
 
         <div className="segmented" role="tablist" aria-label="Settings sections">
-          {(["presets", "models", "voice", "usage", "diagnostics"] as Tab[]).map((id) => (
+          {(["presets", "models", "voice", "memory", "usage", "diagnostics"] as Tab[]).map((id) => (
             <button
               key={id}
               type="button"
@@ -97,7 +99,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
           ))}
         </div>
 
-        {tab === "usage" ? (
+        {tab === "memory" ? (
+          <MemoryTab />
+        ) : tab === "usage" ? (
           <UsageTab usage={props.usage ?? null} />
         ) : !catalog || !settings ? (
           <p className="muted center">Waiting for Sibyl to connect…</p>

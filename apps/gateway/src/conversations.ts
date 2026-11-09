@@ -12,7 +12,8 @@
 import timersPromises from "node:timers/promises";
 import type { LLMMessage } from "@open-gpt-live/adapters";
 import type { ConversationRecord, Store, StoredMessage } from "@open-gpt-live/core";
-import type { ConversationSummary } from "@open-gpt-live/protocol";
+import type { AttachmentRef, ConversationSummary } from "@open-gpt-live/protocol";
+import { attachmentNote } from "./uploads/attachments.js";
 
 export const TITLE_MAX_LENGTH = 60;
 const LIST_LIMIT = 100;
@@ -35,7 +36,13 @@ interface PendingTurn {
   entry: LLMMessage;
   source: "text" | "audio";
   createdAt: number;
+  /** What the user typed (when the model's entry also carries file text). */
+  text?: string;
+  attachments?: AttachmentRef[];
 }
+
+/** Stored user message with attachment references (extra JSON field; the store keeps it). */
+type StoredWithAttachments = StoredMessage & { attachments?: AttachmentRef[] };
 
 export function conversationTitle(text: string): string {
   const clean = text.replace(/\s+/g, " ").trim() || "New conversation";
@@ -46,9 +53,11 @@ export function conversationTitle(text: string): string {
 export function historyFromMessages(messages: StoredMessage[]): LLMMessage[] {
   const visual = " (A visual with the details is on the user's screen.)";
   return messages
-    .filter((message) => message.content.trim() || message.ui?.trim())
+    .filter((message) => message.content.trim() || message.ui?.trim() || (message as StoredWithAttachments).attachments?.length)
     .map((message): LLMMessage => {
-      if (message.role === "user") return { role: "user", content: message.content };
+      if (message.role === "user") {
+        return { role: "user", content: `${message.content}${attachmentNote((message as StoredWithAttachments).attachments)}` };
+      }
       const ui = message.ui?.trim() ? visual : "";
       return {
         role: "assistant",
@@ -104,12 +113,25 @@ export class ConversationRecorder {
    * Earlier turns that never got a reply (interrupted) are saved on their own
    * when still in the history, so the store matches what the model sees.
    */
-  beginTurn(requestId: string, entry: LLMMessage, source: "text" | "audio", inHistory: (entry: LLMMessage) => boolean): void {
+  beginTurn(
+    requestId: string,
+    entry: LLMMessage,
+    source: "text" | "audio",
+    inHistory: (entry: LLMMessage) => boolean,
+    extra: { text?: string; attachments?: AttachmentRef[] } = {}
+  ): void {
     for (const [id, turn] of this.pending) {
       this.pending.delete(id);
       if (inHistory(turn.entry)) this.enqueue(() => this.write(turn.conversationId, [this.userMessage(id, turn)]));
     }
-    this.pending.set(requestId, { conversationId: this.conversationId, entry, source, createdAt: this.now() });
+    this.pending.set(requestId, {
+      conversationId: this.conversationId,
+      entry,
+      source,
+      createdAt: this.now(),
+      ...(extra.text !== undefined ? { text: extra.text } : {}),
+      ...(extra.attachments?.length ? { attachments: extra.attachments } : {})
+    });
   }
 
   /** The turn was not meant for the assistant (silence/noise): forget it. */
@@ -195,14 +217,16 @@ export class ConversationRecorder {
   }
 
   private userMessage(requestId: string, turn: PendingTurn): StoredMessage {
-    return {
+    const message: StoredWithAttachments = {
       id: this.options.createId(),
       role: "user",
-      content: typeof turn.entry.content === "string" ? turn.entry.content : textOf(turn.entry.content),
+      content: turn.text ?? (typeof turn.entry.content === "string" ? turn.entry.content : textOf(turn.entry.content)),
       requestId,
       source: turn.source,
+      ...(turn.attachments?.length ? { attachments: turn.attachments } : {}),
       createdAt: turn.createdAt
     };
+    return message;
   }
 
   private async write(conversationId: string, messages: StoredMessage[]): Promise<void> {
@@ -221,7 +245,10 @@ export class ConversationRecorder {
       await store.conversations.upsert({
         id: conversationId,
         ownerId,
-        title: conversationTitle(firstUser.content),
+        title: conversationTitle(
+          firstUser.content.trim() ||
+            ((firstUser as StoredWithAttachments).attachments ?? []).map((file) => file.name).join(", ")
+        ),
         createdAt,
         updatedAt: Math.max(...messages.map((message) => message.createdAt)),
         messages

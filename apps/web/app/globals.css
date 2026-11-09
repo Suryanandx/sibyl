@@ -3966,3 +3966,375 @@ textarea.connInput {
   font-size: 11.5px;
   padding: 0 4px;
 }
+
+/* ── Memory & uploads ── */
+
+.composerBar .attachBtn {
+  color: var(--text-2);
+  flex: none;
+}
+
+.composerBar .attachBtn ~ .composerActions {
+  margin-left: auto;
+}
+
+.attachmentInput {
+  display: none;
+}
+
+.composerCard.dragging {
+  border-color: var(--accent);
+  position: relative;
+}
+
+.attachmentDrop {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
+  border: 1.5px dashed var(--accent);
+  border-radius: 22px;
+  color: var(--accent);
+  display: flex;
+  font-size: 14px;
+  font-weight: 600;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.attachmentTray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.attachmentChip {
+  align-items: center;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  display: inline-flex;
+  gap: 8px;
+  max-width: 240px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 8px 6px 6px;
+  position: relative;
+  text-align: left;
+}
+
+.attachmentChip.error {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.attachmentChip.error .attachmentMeta {
+  color: var(--danger);
+}
+
+button.attachmentChip.sent {
+  background: var(--surface);
+  cursor: pointer;
+}
+
+button.attachmentChip.sent:hover {
+  background: var(--hover);
+}
+
+.attachmentThumb {
+  border-radius: 8px;
+  flex: none;
+  height: 34px;
+  object-fit: cover;
+  width: 34px;
+}
+
+.attachmentGlyph {
+  align-items: center;
+  background: var(--tint-slate);
+  border-radius: 8px;
+  color: var(--text-2);
+  display: inline-flex;
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  height: 34px;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  width: 34px;
+}
+
+.attachmentText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.attachmentName {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentMeta {
+  color: var(--text-3);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentProgress {
+  background: var(--border);
+  bottom: 0;
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.attachmentProgress > i {
+  background: var(--accent);
+  display: block;
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.attachmentRemove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-3);
+  display: inline-flex;
+  flex: none;
+  font-size: 17px;
+  height: 22px;
+  justify-content: center;
+  line-height: 1;
+  width: 22px;
+}
+
+.attachmentRemove:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.attachmentList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  white-space: normal;
+}
+
+.bubble > .attachmentList:not(:first-child) {
+  margin-top: 8px;
+}
+
+.attachmentImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachmentImage {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: block;
+  height: 120px;
+  overflow: hidden;
+  width: 120px;
+}
+
+.attachmentImage img,
+.attachmentImagePlaceholder {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.attachmentImagePlaceholder {
+  background: var(--hover);
+}
+
+.attachmentFiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.memorySavedChip {
+  align-items: center;
+  align-self: flex-start;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 5px;
+  margin: 2px 0 6px;
+  padding: 3px 10px 3px 8px;
+  width: fit-content;
+}
+
+.memoryTab .memoryNotice,
+.memoryNotice {
+  background: var(--subtle);
+  border-radius: 14px;
+  color: var(--text-2);
+  padding: 14px;
+}
+
+.memoryError {
+  background: var(--danger-soft);
+  border-radius: 12px;
+  color: var(--danger);
+  font-size: 13px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.memoryAdd,
+.memoryEdit {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.memoryInput {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  flex: 1;
+  font-size: 14px;
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.memoryInput:focus {
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.memoryList {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  list-style: none;
+  margin: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.memoryList.off {
+  opacity: 0.55;
+}
+
+.memoryItem {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 6px 8px 6px 14px;
+}
+
+.memoryItem + .memoryItem {
+  border-top: 1px solid var(--border);
+}
+
+.memoryItem .memoryEdit {
+  flex: 1;
+}
+
+.memoryText {
+  font-size: 14px;
+  line-height: 1.45;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.memoryActions {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+
+.memoryPin {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  height: 26px;
+  margin-right: 4px;
+  padding: 0 10px;
+}
+
+.memoryPin.on {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+}
+
+.memoryFooter {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.memoryConfirm {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.darkBtn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.memoryEmpty {
+  margin: 8px 0;
+}
+
+@media (max-width: 520px) {
+  .attachmentChip {
+    max-width: 100%;
+  }
+
+  .attachmentImage {
+    height: 96px;
+    width: 96px;
+  }
+
+  .memoryItem {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+  }
+
+  .memoryActions {
+    align-self: flex-end;
+  }
+
+  .memoryAdd .darkBtn {
+    padding: 0 12px;
+  }
+}

@@ -38,6 +38,16 @@ import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { routeSlidesRequest, takeSlidesArtifact } from "./slides/index.js";
 import { handleConnectionsMessage } from "./tools/ws.js";
 import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
+import { handleMemoryHttp, withUserMemory } from "./memory/index.js";
+import {
+  handleUploadsHttp,
+  pickVisionModel,
+  prepareAttachments,
+  uploadServiceFor,
+  withoutImages,
+  type UploadService
+} from "./uploads/index.js";
+import type { AttachmentRef } from "@open-gpt-live/protocol";
 
 export const DEFAULT_MAX_AUDIO_TURN_BYTES = 25 * 1024 * 1024;
 
@@ -99,6 +109,10 @@ export interface GatewayServerOptions {
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
   /** Store, tool registry and usage meter (defaults to an in-memory runtime). */
   runtime?: GatewayRuntime;
+  /** Uploaded files (default: $SIBYL_DATA_DIR/uploads via the runtime's store). */
+  uploads?: UploadService;
+  /** Feature switches (SIBYL_MEMORY, SIBYL_VISION_MODEL, uploads); defaults to process.env. */
+  env?: NodeJS.ProcessEnv;
   createId?: () => string;
   now?: () => number;
   logger?: GatewayLogger;
@@ -158,6 +172,8 @@ interface GatewayConfig {
   turnMergeWindowMs: number;
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
   runtime: GatewayRuntime;
+  uploads: UploadService;
+  env: NodeJS.ProcessEnv;
   /** Rolling first-token latency per voice model, learned from live turns. */
   voiceLatency: Map<string, number>;
   createId: () => string;
@@ -306,11 +322,22 @@ export async function createGatewayServer(
     turnMergeWindowMs: options.turnMergeWindowMs ?? 3_000,
     hedge: options.hedge,
     runtime: options.runtime ?? createTestRuntime(),
+    // Replaced below once the runtime is known.
+    uploads: options.uploads!,
+    env: options.env ?? process.env,
     voiceLatency: new Map(),
     createId: options.createId ?? randomUUID,
     now: options.now ?? (() => performance.now()),
     logger: options.logger ?? noopLogger
   };
+  config.uploads ??= uploadServiceFor({
+    store: config.runtime.store,
+    ownerId: config.runtime.ownerId,
+    env: config.env,
+    log: (event, fields) => config.logger.info(event, fields)
+  });
+  const httpGuard = { ownerToken: options.ownerToken, allowedOrigins: options.allowedOrigins ?? [] };
+  const httpLog = (event: string, fields?: Record<string, unknown>) => config.logger.warn(event, fields);
 
   validateConfig(config);
 
@@ -347,6 +374,8 @@ export async function createGatewayServer(
     ) {
       return;
     }
+    if (handleUploadsHttp({ ...httpGuard, uploads: config.uploads, log: httpLog }, request, response)) return;
+    if (handleMemoryHttp({ ...httpGuard, store: config.runtime.store, ownerId: config.runtime.ownerId, env: config.env, log: httpLog }, request, response)) return;
     response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
     response.end(JSON.stringify({ error: "not_found" }));
   });
@@ -575,7 +604,7 @@ class GatewayConnection {
 
     if (message.type === WS_EVENTS.USER_TEXT) {
       const text = message.text.trim();
-      if (!text) {
+      if (!text && !message.attachments?.length) {
         this.send({
           type: "error",
           message: "user.text requires non-empty text"
@@ -584,7 +613,9 @@ class GatewayConnection {
       }
       void this.handleUserText(
         message.requestId ?? this.config.createId(),
-        text
+        text,
+        undefined,
+        message.attachments
       );
       return;
     }
@@ -849,10 +880,15 @@ class GatewayConnection {
     timing: RequestTiming = {
       kind: "text",
       requestStartedAt: this.config.now()
-    }
+    },
+    attachments?: AttachmentRef[]
   ): Promise<void> {
     if (this.session.current) {
       this.interruptCurrentRun("new user message");
+    }
+    if (attachments?.length) {
+      await this.handleAttachedText(requestId, text, timing, attachments);
+      return;
     }
 
     if (this.isLive() && timing.kind !== "text") {
@@ -869,6 +905,64 @@ class GatewayConnection {
     this.session.history.push(entry);
     this.beginStoredTurn(requestId, entry, timing);
     await this.streamAssistantResponse(requestId, timing, undefined, { typed });
+  }
+
+  /**
+   * A typed message with uploaded files: file text goes into the user turn,
+   * images as image parts (answered by a vision-capable model when the chat
+   * model can't see). Images are dropped from the history afterwards.
+   */
+  private async handleAttachedText(
+    requestId: string,
+    text: string,
+    timing: RequestTiming,
+    attachments: AttachmentRef[]
+  ): Promise<void> {
+    const typed = this.isLive();
+    if (typed) this.session.turnCounter += 1;
+    const prepared = await prepareAttachments(
+      this.config.uploads,
+      text || "(The user sent these files without a message. Look at them and help.)",
+      attachments
+    );
+    if (prepared.missing.length) {
+      this.send({ type: "error", requestId, message: `Attachment not found: ${prepared.missing.join(", ")}` });
+    }
+    const step = (callId: string, title: string, status: "ok" | "error", summary: string) => {
+      this.send({ type: WS_EVENTS.TOOL_STARTED, requestId, callId, toolName: "attachment", title });
+      this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId, callId, status, summary });
+    };
+    for (const file of prepared.files) {
+      if (file.kind !== "image") step(`file-${file.id}`, `Read ${file.name}`, "ok", file.summary);
+    }
+    let model: string | undefined;
+    if (prepared.imageCount > 0) {
+      const current = this.session.settings.llmModel;
+      const vision = pickVisionModel(current, (this.config.modelCatalog?.llm ?? []).map((option) => option.id), this.config.env);
+      if (!vision) {
+        step(`vision-${requestId}`, "No model here can see images", "error", "Set SIBYL_VISION_MODEL to a vision-capable model; only the file names were sent.");
+        prepared.content = prepared.content.filter((part) => part.type === "text");
+      } else if (vision.switched) {
+        model = vision.model;
+        step(`vision-${requestId}`, `Looking at the image with ${vision.model}`, "ok", `${current ?? "The chat model"} can't see images, so this message uses ${vision.model}.`);
+      }
+    }
+    const entry: LLMMessage = { role: "user", content: prepared.content };
+    this.session.history.push(entry);
+    this.conversations.beginTurn(requestId, entry, "text", (item) => this.session.history.includes(item), {
+      text,
+      attachments: prepared.refs
+    });
+    try {
+      await this.streamAssistantResponse(requestId, timing, undefined, { typed, ...(model ? { model } : {}) });
+    } finally {
+      entry.content = withoutImages(entry.content);
+    }
+  }
+
+  /** System prompt plus "What you know about the user" (memory), for every brain. */
+  private withMemory(prompt: string): Promise<string> {
+    return withUserMemory(prompt, { store: this.config.runtime.store, ownerId: this.config.runtime.ownerId, env: this.config.env });
   }
 
   private async handleAudioChunk(message: AudioChunkMessage): Promise<void> {
@@ -1639,13 +1733,14 @@ class GatewayConnection {
     this.session.history.push(userEntry);
     this.beginStoredTurn(requestId, userEntry, timing);
     const voiceModel = this.pickVoiceModel();
+    const voicePrompt = await this.withMemory(this.config.live!.voicePrompt);
     await this.streamAssistantResponse(requestId, timing, {
       parser: "voice",
       model: voiceModel,
       backupModel: this.backupVoiceModel(voiceModel),
       extraBody: this.llmParamsFor(voiceModel),
       messages: [
-        { role: "system", content: this.config.live!.voicePrompt },
+        { role: "system", content: voicePrompt },
         ...previous,
         { role: "user", content: currentContent ?? userEntry.content }
       ],
@@ -1753,6 +1848,7 @@ class GatewayConnection {
 
     const tools = this.config.runtime.tools.list({ enabledOnly: true });
     const toolLlm = this.providers.toolLlm;
+    const brainPrompt = await this.withMemory(live.brainPrompt(genUi));
     try {
       if (toolLlm && tools.length > 0) {
         const result = await runToolLoop({
@@ -1762,7 +1858,7 @@ class GatewayConnection {
             model,
             tools,
             messages: [
-              { role: "system", content: live.brainPrompt(genUi) + toolSystemPrompt(tools) },
+              { role: "system", content: brainPrompt + toolSystemPrompt(tools) },
               ...this.conversation(),
               { role: "user", content: `Task from the voice: ${task}` }
             ]
@@ -1775,7 +1871,7 @@ class GatewayConnection {
       } else {
         for await (const chunk of this.providers.llm.streamText(
           [
-            { role: "system", content: live.brainPrompt(genUi) },
+            { role: "system", content: brainPrompt },
             ...this.conversation(),
             { role: "user", content: `Task from the voice: ${task}` }
           ],
@@ -1873,10 +1969,16 @@ class GatewayConnection {
     requestId: string,
     timing: RequestTiming,
     plan?: ResponsePlan,
-    chat: { typed?: boolean } = {}
+    chat: { typed?: boolean; model?: string } = {}
   ): Promise<void> {
     const feature = plan?.parser === "voice" ? "voice" : "brain";
-    let model = plan ? plan.model : this.session.settings.llmModel;
+    let model = plan ? plan.model : chat.model ?? this.session.settings.llmModel;
+    // Typed chat: the system prompt carries the user's memory (read before the run starts).
+    const chatSystemPrompt = plan
+      ? undefined
+      : await this.withMemory(
+          this.session.settings.genUi && this.config.genUiSystemPrompt ? this.config.genUiSystemPrompt : this.config.systemPrompt
+        );
     if (plan?.speakOnly === undefined) {
       const budget = this.budgetFor(feature, model, requestId);
       if (!budget) {
@@ -1963,7 +2065,7 @@ class GatewayConnection {
     if (!plan) {
       this.session.history[0] = {
         role: "system",
-        content: genUi ? this.config.genUiSystemPrompt! : this.config.systemPrompt
+        content: chatSystemPrompt ?? (genUi ? this.config.genUiSystemPrompt! : this.config.systemPrompt)
       };
     }
     let speechText = "";

@@ -20,6 +20,7 @@ import { installSibylTools, type InstalledTools } from "./tools/index.js";
 import type { ConnectionsManager } from "./tools/connections.js";
 import { openStore } from "@open-gpt-live/store";
 import { installSlides, type SlidesService } from "./slides/index.js";
+import { installMemoryAndUploadTools } from "./memory/install.js";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -68,6 +69,8 @@ async function installTools(input: {
 }): Promise<InstalledTools & { slides?: SlidesService }> {
   // Slides first, so the persisted per-tool switches below apply to them too.
   const slides = await installSlides({ ...input, env: input.options.env, log: input.options.log });
+  // Memory (remember/forget/recall, unless SIBYL_MEMORY=false) and read_file for uploads.
+  installMemoryAndUploadTools({ tools: input.tools, store: input.store, ownerId: input.ownerId, env: input.options.env, log: input.options.log });
   // Built-in tools, MCP servers (mcp.config.json) and persisted per-tool switches.
   const installed = await installSibylTools({ ...input, env: input.options.env, log: input.options.log });
   return slides ? { ...installed, slides } : installed;

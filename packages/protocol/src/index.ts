@@ -159,6 +159,8 @@ export interface ConversationMessageView {
   task?: string;
   model?: string;
   steps?: Array<{ callId: string; toolName: string; title: string; status: "ok" | "error" | "declined" }>;
+  /** Files attached to a user message (wave 2). */
+  attachments?: AttachmentRef[];
   createdAt: number;
 }
 
@@ -289,6 +291,8 @@ export interface UserTextMessage {
   type: typeof WS_EVENTS.USER_TEXT;
   requestId?: string;
   text: string;
+  /** Uploaded files sent with the message (wave 2; text may then be empty). */
+  attachments?: AttachmentRef[];
 }
 
 export interface AudioChunkMessage {
@@ -516,11 +520,18 @@ export function parseClientMessage(input: unknown): ClientMessageValidationResul
       if (!isOptionalNonEmptyString(input.requestId)) {
         return invalid("user.text requestId must be a non-empty string");
       }
-      return valid({
-        type: WS_EVENTS.USER_TEXT,
-        text: input.text,
-        ...(input.requestId === undefined ? {} : { requestId: input.requestId })
-      });
+      {
+        const attachments = parseAttachments(input.attachments);
+        if (!attachments.success) {
+          return invalid(`user.text ${attachments.error}`);
+        }
+        return valid({
+          type: WS_EVENTS.USER_TEXT,
+          text: input.text,
+          ...(input.requestId === undefined ? {} : { requestId: input.requestId }),
+          ...(attachments.data?.length ? { attachments: attachments.data } : {})
+        });
+      }
 
     case WS_EVENTS.AUDIO_CHUNK:
       if (!isNonEmptyString(input.requestId)) {
@@ -1532,4 +1543,42 @@ export function parseConnectionsServerMessage(input: Record<string, unknown>): S
       return validServer(input as unknown as ConnectionsTestResultMessage);
   }
   return undefined;
+}
+
+/* ── Memory & uploads (wave 2) ── */
+
+/** A file uploaded with POST /api/uploads and attached to a user message. */
+export interface AttachmentRef {
+  /** Upload id from the gateway (`up_…`). */
+  id: string;
+  /** Display name. */
+  name: string;
+  mime: string;
+  /** Bytes. */
+  size?: number;
+}
+
+export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+
+const ATTACHMENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Strict validation of `user.text` attachments (undefined when absent). */
+export function parseAttachments(
+  value: unknown
+): { success: true; data: AttachmentRef[] | undefined } | { success: false; error: string } {
+  if (value === undefined) return { success: true, data: undefined };
+  if (!Array.isArray(value)) return { success: false, error: "attachments must be an array" };
+  if (value.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    return { success: false, error: `at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message` };
+  }
+  const out: AttachmentRef[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) return { success: false, error: "each attachment must be an object" };
+    if (typeof item.id !== "string" || !ATTACHMENT_ID.test(item.id)) return { success: false, error: "attachment id is invalid" };
+    if (!isNonEmptyString(item.name) || item.name.length > 255) return { success: false, error: "attachment name must be 1-255 characters" };
+    if (!isNonEmptyString(item.mime) || item.mime.length > 127) return { success: false, error: "attachment mime must be 1-127 characters" };
+    if (item.size !== undefined && !isNonNegativeInteger(item.size)) return { success: false, error: "attachment size must be a non-negative integer" };
+    out.push({ id: item.id, name: item.name, mime: item.mime, ...(item.size === undefined ? {} : { size: item.size }) });
+  }
+  return { success: true, data: out };
 }

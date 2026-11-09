@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { ModelCatalog, ModelPreset, SessionSettings } from "@open-gpt-live/protocol";
 import { Icon } from "./Icon";
 import { VoiceWave } from "./VoiceWave";
 import { VOICE_LABELS, type VoiceState } from "./voice-state";
+import { ATTACHMENT_ACCEPT, type ComposerAttachment } from "./AttachmentClient";
+import { AttachmentIcon, AttachmentTray } from "./AttachmentChips";
 
 interface ComposerProps {
   value: string;
@@ -32,6 +34,11 @@ interface ComposerProps {
   sessionUsd?: number;
   economyMode?: boolean;
   onOpenUsage?: () => void;
+  /** Files attached to the next message (uploading or ready). */
+  attachments?: ComposerAttachment[];
+  /** Attach button, drag-and-drop and pasted images. */
+  onAddFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (localId: string) => void;
 }
 
 const HOLD_DELAY_MS = 320;
@@ -43,8 +50,12 @@ const HOLD_DELAY_MS = 320;
  */
 export function Composer(props: ComposerProps) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const holdTimer = useRef<number | null>(null);
   const holding = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const canAttach = Boolean(props.onAddFiles);
+  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
 
   useEffect(() => {
     const input = inputRef.current;
@@ -82,12 +93,30 @@ export function Composer(props: ComposerProps) {
   return (
     <div className={`composer${voiceActive ? " voiceOn" : ""}`}>
       <form
-        className="composerCard"
+        className={`composerCard${dragging ? " dragging" : ""}`}
         onSubmit={(event) => {
           event.preventDefault();
           props.onSubmit();
         }}
+        onDragOver={(event) => {
+          if (!canAttach || !hasFiles(event)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          if (!dragging) setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(event) => {
+          if (!canAttach || !hasFiles(event)) return;
+          event.preventDefault();
+          setDragging(false);
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length) props.onAddFiles?.(files);
+        }}
       >
+        {dragging ? <div className="attachmentDrop" aria-hidden>Drop files to attach</div> : null}
+        <AttachmentTray items={props.attachments ?? []} onRemove={(id) => props.onRemoveAttachment?.(id)} />
         {voiceActive ? (
           <div className="voiceRow" aria-live="polite">
             <VoiceWave state={props.voiceState} level={props.level} />
@@ -110,6 +139,14 @@ export function Composer(props: ComposerProps) {
           placeholder={props.liveMode ? "Or type a message…" : "Ask Sibyl anything…"}
           value={props.value}
           onChange={(event) => props.onChange(event.target.value)}
+          onPaste={(event) => {
+            if (!canAttach) return;
+            const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
+            if (files.length === 0) return;
+            // Pasting a screenshot attaches it; pasted text still goes in the box.
+            if (!event.clipboardData.getData("text/plain")) event.preventDefault();
+            props.onAddFiles?.(files);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
@@ -119,6 +156,34 @@ export function Composer(props: ComposerProps) {
         />
 
         <div className="composerBar">
+          {canAttach ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept={ATTACHMENT_ACCEPT}
+                className="attachmentInput"
+                tabIndex={-1}
+                aria-hidden
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  event.target.value = "";
+                  if (files.length) props.onAddFiles?.(files);
+                }}
+              />
+              <button
+                type="button"
+                className="roundBtn attachBtn"
+                aria-label="Attach files"
+                title="Attach images, PDFs, documents or data"
+                disabled={!props.connected}
+                onClick={() => fileRef.current?.click()}
+              >
+                <AttachmentIcon size={18} />
+              </button>
+            </>
+          ) : null}
           <ModelMenu
             catalog={props.catalog}
             settings={props.settings}

@@ -33,6 +33,16 @@ import { sibylDarkTheme, sibylLightTheme } from "../lib/sibyl-theme";
 import { titleFor, toMarkdown, type ConversationMessageView, type ConversationSummary } from "../lib/conversations";
 import { SignIn, gatewayRequiresLogin, readOwnerToken, withOwnerToken, writeOwnerToken } from "../components/SignIn";
 import { SpokenText } from "../components/SpokenText";
+import type { AttachmentRef } from "@open-gpt-live/protocol";
+import { AttachmentList } from "../components/AttachmentChips";
+import {
+  MAX_ATTACHMENTS,
+  isImageMime,
+  toAttachmentRefs,
+  uploadFile,
+  type ComposerAttachment
+} from "../components/AttachmentClient";
+import { MemorySavedChip } from "../components/MemoryTab";
 import { StreamPlayer } from "../lib/stream-player";
 import { LiveCaptions, liveCaptionsSupported } from "../lib/live-captions";
 import { blobToWav } from "../lib/audio-wav";
@@ -85,10 +95,16 @@ interface ChatMessage {
   tools?: ToolStep[];
   /** Approval cards for "write" tools in this run. */
   approvals?: ApprovalEntry[];
+  /** Files sent with a user message. */
+  attachments?: AttachmentRef[];
 }
+
+/** A queued message keeps the files it was sent with. */
+type QueuedItem = QueuedMessage & { attachments?: AttachmentRef[] };
 
 interface ToolStep {
   callId: string;
+  toolName?: string;
   title: string;
   status: "running" | "ok" | "error" | "declined";
   summary?: string;
@@ -288,7 +304,10 @@ export default function Home() {
   const [showJump, setShowJump] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [openSources, setOpenSources] = useState<Set<string>>(new Set());
-  const [queue, setQueue] = useState<QueuedMessage[]>([]);
+  const [queue, setQueue] = useState<QueuedItem[]>([]);
+  /** Files attached in the composer (uploading or ready). */
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const uploadAbortsRef = useRef<Map<string, () => void>>(new Map());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
   const [speaking, setSpeaking] = useState(false);
@@ -318,8 +337,11 @@ export default function Home() {
   }
 
   const canSend = useMemo(
-    () => connected && input.trim().length > 0,
-    [connected, input]
+    () =>
+      connected &&
+      !attachments.some((item) => item.status === "uploading") &&
+      (input.trim().length > 0 || attachments.some((item) => item.status === "ready")),
+    [connected, input, attachments]
   );
 
   useEffect(() => {
@@ -635,7 +657,7 @@ export default function Home() {
                 ...item,
                 tools: [
                   ...(item.tools ?? []).filter((tool) => tool.callId !== message.callId),
-                  { callId: message.callId, title: message.title, status: "running" as const }
+                  { callId: message.callId, toolName: message.toolName, title: message.title, status: "running" as const }
                 ]
               }
             : item
@@ -1057,11 +1079,12 @@ export default function Home() {
   function sendMessage(
     overrideText?: string,
     displayText?: string,
-    source: "text" | "ui" = "text"
+    source: "text" | "ui" = "text",
+    files?: AttachmentRef[]
   ): void {
     const text = (overrideText ?? input).trim();
     const socket = socketRef.current;
-    if (!socket || !connected || activeRequestIdRef.current || !text) {
+    if (!socket || !connected || activeRequestIdRef.current || (!text && !files?.length)) {
       return;
     }
     void playerRef.current?.unlock();
@@ -1079,7 +1102,8 @@ export default function Home() {
         role: "user",
         content: displayText ?? text,
         requestId,
-        source
+        source,
+        ...(files?.length ? { attachments: files } : {})
       },
       {
         id: createRequestId(),
@@ -1092,7 +1116,8 @@ export default function Home() {
     if (!sendRaw(socket, {
       type: WS_EVENTS.USER_TEXT,
       requestId,
-      text
+      text,
+      ...(files?.length ? { attachments: files } : {})
     })) {
       cancelRequest(requestId);
       setError("The message was not sent because the gateway disconnected.");
@@ -1986,7 +2011,7 @@ export default function Home() {
       const [next, ...rest] = queue;
       if (!next) return;
       setQueue(rest);
-      sendWithTransition(next.text);
+      sendWithTransition(next.text, next.attachments);
     }, 450);
     return () => window.clearTimeout(timer);
   }, [connected, activeRequestId, recording, queue]);
@@ -2081,13 +2106,65 @@ export default function Home() {
   /** Send now if Sibyl is free, otherwise add to the queue. */
   function submitText(raw: string, fromComposer = false): void {
     const text = raw.trim();
-    if (!text) return;
-    if (fromComposer) setInput("");
+    const files = fromComposer ? toAttachmentRefs(attachments) : [];
+    if (fromComposer && attachments.some((item) => item.status === "uploading")) return;
+    if (!text && files.length === 0) return;
+    if (fromComposer) {
+      setInput("");
+      clearAttachments();
+    }
     if (activeRequestIdRef.current || recording || queue.length > 0) {
-      setQueue((items) => [...items, { id: createRequestId(), text }]);
+      setQueue((items) => [...items, { id: createRequestId(), text, ...(files.length ? { attachments: files } : {}) }]);
       return;
     }
-    sendWithTransition(text);
+    sendWithTransition(text, files);
+  }
+
+  /** Upload files picked, dropped or pasted into the composer. */
+  function addFiles(files: File[]): void {
+    const room = MAX_ATTACHMENTS - attachments.length;
+    if (room <= 0) {
+      setError(`At most ${MAX_ATTACHMENTS} files per message.`);
+      return;
+    }
+    for (const file of files.slice(0, room)) {
+      const localId = createRequestId();
+      const name = file.name || `pasted-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.png`;
+      const named = file.name ? file : new File([file], name, { type: file.type });
+      const previewUrl = isImageMime(file.type) ? URL.createObjectURL(file) : undefined;
+      setAttachments((items) => [
+        ...items,
+        { localId, name, size: file.size, mime: file.type || "application/octet-stream", status: "uploading", progress: 0, ...(previewUrl ? { previewUrl } : {}) }
+      ]);
+      const patch = (change: Partial<ComposerAttachment>) =>
+        setAttachments((items) => items.map((item) => (item.localId === localId ? { ...item, ...change } : item)));
+      const upload = uploadFile(named, {
+        conversationId: conversationIdRef.current,
+        onProgress: (progress) => patch({ progress })
+      });
+      uploadAbortsRef.current.set(localId, upload.abort);
+      upload.promise.then(
+        (uploaded) => patch({ status: "ready", progress: 1, id: uploaded.id, mime: uploaded.mime, size: uploaded.size, name: uploaded.name }),
+        (cause: unknown) => patch({ status: "error", error: (cause as Error).message })
+      ).finally(() => uploadAbortsRef.current.delete(localId));
+    }
+    if (files.length > room) setError(`At most ${MAX_ATTACHMENTS} files per message; the rest were skipped.`);
+  }
+
+  function removeAttachment(localId: string): void {
+    uploadAbortsRef.current.get(localId)?.();
+    setAttachments((items) => {
+      const item = items.find((entry) => entry.localId === localId);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return items.filter((entry) => entry.localId !== localId);
+    });
+  }
+
+  function clearAttachments(): void {
+    setAttachments((items) => {
+      for (const item of items) if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return [];
+    });
   }
 
   function sendQueuedNow(id: string): void {
@@ -2095,7 +2172,7 @@ export default function Home() {
     if (!item) return;
     setQueue((items) => items.filter((entry) => entry.id !== id));
     if (activeRequestIdRef.current) stopResponse();
-    sendWithTransition(item.text);
+    sendWithTransition(item.text, item.attachments);
   }
 
   function editQueued(id: string): void {
@@ -2103,6 +2180,18 @@ export default function Home() {
     if (!item) return;
     setQueue((items) => items.filter((entry) => entry.id !== id));
     setInput((current) => (current.trim() ? `${current.trim()}\n${item.text}` : item.text));
+    if (item.attachments?.length) {
+      const restored = item.attachments.map((file): ComposerAttachment => ({
+        localId: createRequestId(),
+        id: file.id,
+        name: file.name,
+        mime: file.mime,
+        size: file.size ?? 0,
+        status: "ready",
+        progress: 1
+      }));
+      setAttachments((items) => [...items, ...restored].slice(0, MAX_ATTACHMENTS));
+    }
   }
 
   function moveQueuedUp(id: string): void {
@@ -2117,25 +2206,27 @@ export default function Home() {
 
   function sendQueueTogether(): void {
     if (queue.length === 0) return;
-    const combined = queue.map((entry) => entry.text).join("\n\n");
+    const combined = queue.map((entry) => entry.text).filter(Boolean).join("\n\n");
+    const files = queue.flatMap((entry) => entry.attachments ?? []).slice(0, MAX_ATTACHMENTS);
+    const merged: QueuedItem = { id: createRequestId(), text: combined, ...(files.length ? { attachments: files } : {}) };
     if (activeRequestIdRef.current) {
-      setQueue([{ id: createRequestId(), text: combined }]);
+      setQueue([merged]);
       return;
     }
     setQueue([]);
-    sendWithTransition(combined);
+    sendWithTransition(combined, files);
   }
 
-  function sendWithTransition(text: string): void {
+  function sendWithTransition(text: string, files?: AttachmentRef[]): void {
     // Glide the composer from the centre to the bottom on the first message.
     const doc = document as Document & { startViewTransition?: (callback: () => void) => unknown };
     if (messages.length === 0 && doc.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       doc.startViewTransition(() => {
-        flushSync(() => sendMessage(text));
+        flushSync(() => sendMessage(text, undefined, "text", files));
       });
       return;
     }
-    sendMessage(text);
+    sendMessage(text, undefined, "text", files);
   }
 
   const vadState = vadSnapshot?.state;
@@ -2326,7 +2417,9 @@ export default function Home() {
                           <div className="bubble">
                             {group.user.source === "audio" ? <Icon name="mic" size={13} className="bubbleIcon" /> : null}
                             {group.user.source === "ui" ? <Icon name="layers" size={13} className="bubbleIcon" /> : null}
-                            {group.user.content || <span className="typing"><i /><i /><i /></span>}
+                            {group.user.content ||
+                              (group.user.attachments?.length ? null : <span className="typing"><i /><i /><i /></span>)}
+                            <AttachmentList attachments={group.user.attachments} />
                           </div>
                         </article>
                       ) : null}
@@ -2401,6 +2494,11 @@ export default function Home() {
                                     <SlidesCard key={`deck:${tool.callId}`} artifact={tool.artifact} onRevise={setInput} />
                                   ) : null
                                 )}
+                                {message.tools?.some((tool) => tool.toolName === "remember" && tool.status === "ok") ? (
+                                  <MemorySavedChip
+                                    summary={message.tools.find((tool) => tool.toolName === "remember" && tool.status === "ok")?.summary}
+                                  />
+                                ) : null}
                                 {message.approvals?.map((entry) => (
                                   <ApprovalCard
                                     key={entry.view.id}
@@ -2456,7 +2554,12 @@ export default function Home() {
                                     aria-label="Ask again"
                                     title="Ask again"
                                     disabled={!connected}
-                                    onClick={() => submitText(group.user!.content)}
+                                    onClick={() => {
+                                      const user = group.user!;
+                                      if (user.attachments?.length && !activeRequestIdRef.current && queue.length === 0) {
+                                        sendWithTransition(user.content, user.attachments);
+                                      } else submitText(user.content);
+                                    }}
                                   >
                                     <Icon name="history" size={15} />
                                   </button>
@@ -2545,6 +2648,9 @@ export default function Home() {
                 sessionUsd={usage?.sessionUsd}
                 economyMode={usage?.economyMode}
                 onOpenUsage={() => openSettings("usage")}
+                attachments={attachments}
+                onAddFiles={addFiles}
+                onRemoveAttachment={removeAttachment}
               />
           </div>
         </section>
@@ -2742,6 +2848,7 @@ function fromStoredMessage(message: ConversationMessageView): ChatMessage {
     ...(message.kind ? { kind: message.kind } : {}),
     ...(message.task ? { task: message.task } : {}),
     ...(message.model ? { model: message.model } : {}),
+    ...(message.attachments?.length ? { attachments: message.attachments } : {}),
     done: true
   };
 }
