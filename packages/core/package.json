@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./avatar": "./src/avatar.ts",
+    "./vad": "./src/vad.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

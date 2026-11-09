@@ -11,6 +11,8 @@
  *        → { presentation_id, path, edit_path }
  *   GET  /api/v1/ppt/presentation/{id}       → { id, title?, n_slides?, slides?: [...], ... }
  *   POST /api/v1/ppt/presentation/{id}/export { export_as: "pptx" | "pdf" } → { path, edit_path? }
+ *   GET  /api/v1/ppt/presentation/{id}/thumbnail → PNG of slide 1 (Sibyl addition, cached by the engine)
+ *   GET  /api/v1/sibyl/config                → { model, pricing: { prompt, completion } | null } (Sibyl addition)
  *   GET  /api/v1/ppt/template/all?page_size=100 → { items: [{ id, name, description?, ... }] } (or a bare array)
  *   GET  {path}                               → the exported file (path as returned above, relative to the engine root)
  */
@@ -20,7 +22,10 @@ export const ENGINE_PATHS = {
   generate: "/api/v1/ppt/presentation/generate",
   presentation: (id: string) => `/api/v1/ppt/presentation/${encodeURIComponent(id)}`,
   export: (id: string) => `/api/v1/ppt/presentation/${encodeURIComponent(id)}/export`,
-  templates: "/api/v1/ppt/template/all?page_size=100"
+  /** PNG of slide 1, rendered by the export runtime and cached by the engine. */
+  thumbnail: (id: string) => `/api/v1/ppt/presentation/${encodeURIComponent(id)}/thumbnail`,
+  templates: "/api/v1/ppt/template/all?page_size=100",
+  config: "/api/v1/sibyl/config"
 } as const;
 
 export type ExportFormat = "pptx" | "pdf";
@@ -43,6 +48,16 @@ export interface GeneratedDeck {
   path: string;
   /** Editor path on the engine, e.g. /presentation?id=… */
   editPath: string;
+  /** What the generation actually cost (OpenRouter usage accounting), when the engine reports it. */
+  costUsd?: number;
+  /** True when some model calls reported no cost, so costUsd is a lower bound. */
+  costEstimated?: boolean;
+}
+
+/** The engine's active deck model and its price per token (USD), the one source of truth. */
+export interface EngineConfig {
+  model?: string;
+  pricing?: { prompt: number; completion: number };
 }
 
 export interface EnginePresentation {
@@ -86,6 +101,7 @@ export interface SlidesClient {
   get(presentationId: string, signal?: AbortSignal): Promise<EnginePresentation>;
   export(presentationId: string, format: ExportFormat, signal?: AbortSignal): Promise<{ path: string; editPath?: string }>;
   templates(signal?: AbortSignal): Promise<EngineTemplate[]>;
+  config(signal?: AbortSignal): Promise<EngineConfig>;
   /** Stream a file the engine exported (path as returned by generate/export). */
   download(path: string, signal?: AbortSignal): Promise<Response>;
   /** True when the engine answers at all (any HTTP status). */
@@ -153,10 +169,12 @@ export function createSlidesClient(options: SlidesClientOptions = {}): SlidesCli
       );
       const presentationId = str(data.presentation_id) ?? str(data.id);
       if (!presentationId) throw new SlidesEngineError("Sibyl Slides did not return a presentation id.");
+      const costUsd = num(data.cost_usd);
       return {
         presentationId,
         path: str(data.path) ?? "",
-        editPath: str(data.edit_path) ?? `/presentation?id=${encodeURIComponent(presentationId)}`
+        editPath: str(data.edit_path) ?? `/presentation?id=${encodeURIComponent(presentationId)}`,
+        ...(costUsd !== undefined && costUsd >= 0 ? { costUsd, costEstimated: data.estimated === true } : {})
       };
     },
     async get(presentationId, signal) {
@@ -197,6 +215,16 @@ export function createSlidesClient(options: SlidesClientOptions = {}): SlidesCli
         const description = str(entry.description);
         return [{ id, name: str(entry.name) ?? id, ...(description ? { description } : {}) }];
       });
+    },
+    async config(signal) {
+      const data = record(await json(ENGINE_PATHS.config, { headers: headers(false) }, requestTimeoutMs, signal));
+      const pricing = record(data.pricing);
+      const prompt = num(pricing.prompt);
+      const completion = num(pricing.completion);
+      return {
+        ...(str(data.model) ? { model: str(data.model)! } : {}),
+        ...(prompt !== undefined && completion !== undefined ? { pricing: { prompt, completion } } : {})
+      };
     },
     async download(path, signal) {
       if (!path) throw new SlidesEngineError("This deck has no exported file yet.");

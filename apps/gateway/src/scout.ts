@@ -121,7 +121,7 @@ const TRUSTED_STT_AUTHORS = ["openai", "deepgram", "elevenlabs", "mistralai", "a
 const PREFERRED_VOICES = ["sarah", "af_heart", "Kore", "aura-2-thalia-en", "en_paul_neutral", "alloy", "jessica"];
 const MAX_AGE_DAYS = 600;
 /** Bump when scoring or probing changes so stale caches are re-scouted. */
-const CACHE_VERSION = 6;
+const CACHE_VERSION = 8;
 
 export async function scoutModels(options: ScoutOptions): Promise<ScoutResult> {
   const now = options.now ?? Date.now;
@@ -141,6 +141,7 @@ export async function scoutModels(options: ScoutOptions): Promise<ScoutResult> {
     );
     if (options.probe !== false) {
       candidates = await probeCandidates(candidates, options, log);
+      candidates = await applyTypicalPricing(candidates, options, log);
     }
   }
   // Always re-score: cached candidates may predate a scoring change.
@@ -158,6 +159,58 @@ export async function scoutModels(options: ScoutOptions): Promise<ScoutResult> {
     }
   }
   return result;
+}
+
+/**
+ * OpenRouter lists a model's cheapest provider price, but Sibyl routes chat
+ * and voice for speed, which often lands on a pricier provider (a 3-5x
+ * spread is common). Re-price the top chat/voice candidates with the median
+ * provider price so estimates match what is actually billed.
+ */
+export async function applyTypicalPricing(
+  candidates: ScoutCandidate[],
+  options: ScoutOptions,
+  log: (event: string, fields?: Record<string, unknown>) => void
+): Promise<ScoutCandidate[]> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  // Every chat/voice candidate: any of them can win once scored (scoring uses this price).
+  const targets = new Set(candidates.filter((c) => c.role === "llm" || c.role === "voice").map((c) => c.id));
+  const ratios = new Map<string, number>();
+  await mapWithConcurrency([...targets], 8, async (id) => {
+    try {
+      const response = await fetchImpl(`${trimSlash(options.baseUrl)}/models/${id}/endpoints`, {
+        headers: { ...options.extraHeaders, Authorization: `Bearer ${options.apiKey}` },
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (!response.ok) return;
+      const body = (await response.json()) as {
+        data?: { endpoints?: Array<{ pricing?: Record<string, string | number> }> };
+      };
+      const ratio = typicalPriceRatio(body.data?.endpoints ?? []);
+      if (ratio !== undefined) ratios.set(id, ratio);
+    } catch {
+      // Keep the listed price when endpoints can't be read.
+    }
+  });
+  if (ratios.size > 0) log("scout.typical_pricing", { models: ratios.size });
+  return candidates.map((c) => {
+    const ratio = ratios.get(c.id);
+    return ratio !== undefined && (c.role === "llm" || c.role === "voice")
+      ? { ...c, costPerTurn: c.costPerTurn * ratio }
+      : c;
+  });
+}
+
+/** Median provider price / cheapest provider price (input-weighted, as prompts dominate). */
+export function typicalPriceRatio(endpoints: Array<{ pricing?: Record<string, string | number> }>): number | undefined {
+  const blended = endpoints
+    .map((e) => Number(e.pricing?.prompt) * 0.9 + Number(e.pricing?.completion) * 0.1)
+    .filter((v) => Number.isFinite(v) && v > 0)
+    .sort((a, b) => a - b);
+  if (blended.length < 2) return undefined;
+  const median = blended[Math.floor((blended.length - 1) / 2)]!;
+  const ratio = median / blended[0]!;
+  return Number.isFinite(ratio) && ratio >= 1 ? Math.min(ratio, 10) : undefined;
 }
 
 async function fetchCatalog(options: ScoutOptions): Promise<OpenRouterModel[]> {
@@ -630,12 +683,15 @@ function buildResult(
       // The deep brain runs on some turns only; assume about one in three.
       return sum + (candidate ? candidate.costPerTurn * (role === "llm" ? 0.33 : 1) : 0);
     }, 0);
+    // Typed messages go straight to the chat model, every time, with no speech.
+    const typed = byRole("llm").find((c) => c.id === settings.llmModel)?.costPerTurn;
     return {
       id: s,
       label:
         s === "cheapest" ? "Cheapest" : s === "balanced" ? "Balanced" : s === "fastest" ? "Fastest" : "Best quality",
       settings,
-      costPer100Turns: round(cost * 100, 3)
+      costPer100Turns: round(cost * 100, 3),
+      ...(typed !== undefined ? { costPer100Messages: round(typed * 100, 3) } : {})
     };
   });
 

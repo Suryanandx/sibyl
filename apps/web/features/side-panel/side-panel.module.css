@@ -1,0 +1,413 @@
+/* The chat's side panel: beside the chat on wide screens, a full-screen sheet at 900px and below. */
+
+.workspace {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+}
+
+.workspace > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Next to the panel the chat is narrower: its topbar buttons drop their labels. */
+.workspace[data-panel-open] :global(.topActions .hideSm) {
+  display: none;
+}
+
+.workspace[data-panel-open] :global(.topActions .ghostBtn),
+.workspace[data-panel-open] :global(.topActions .darkBtn) {
+  padding: 0 11px;
+}
+
+.panel {
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex: 0 0 var(--side-panel-width, 480px);
+  flex-direction: column;
+  /* A width saved on a bigger screen still leaves the chat room. */
+  max-width: max(320px, 60vw);
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  width: var(--side-panel-width, 480px);
+}
+
+.sheet {
+  border-left: 0;
+  inset: 0;
+  max-width: none;
+  position: fixed;
+  width: auto;
+  z-index: 60;
+}
+
+/* ── resize handle ── */
+
+.handle {
+  bottom: 0;
+  cursor: col-resize;
+  left: -4px;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  width: 8px;
+  z-index: 2;
+}
+
+.handle::after {
+  background: transparent;
+  bottom: 0;
+  content: "";
+  left: 3px;
+  position: absolute;
+  top: 0;
+  transition: background 120ms ease;
+  width: 2px;
+}
+
+.handle:hover::after,
+.handle:focus-visible::after {
+  background: var(--border-strong);
+}
+
+.handle:focus-visible {
+  outline: none;
+}
+
+.handle:focus-visible::after {
+  background: var(--accent);
+}
+
+/* ── header ── */
+
+.header {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 12px 10px 16px;
+}
+
+.headerIcon {
+  align-items: center;
+  background: var(--subtle);
+  border-radius: 9px;
+  color: var(--text-2);
+  display: inline-flex;
+  flex: none;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.headerText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 14.5px;
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The heading takes focus when the panel opens (so screen readers start there); it isn't a control. */
+.title:focus {
+  outline: none;
+}
+
+.kind {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.iconButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.iconButton:hover {
+  background: var(--subtle);
+  color: var(--text);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Activity tabs ── */
+
+.tabs {
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 12px;
+  scrollbar-width: thin;
+}
+
+.tab {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-size: 12.5px;
+  gap: 6px;
+  height: 30px;
+  max-width: 200px;
+  padding: 0 11px;
+}
+
+.tab span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--subtle);
+  color: var(--text);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ink-text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dot {
+  background: var(--warning);
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 7px;
+  width: 7px;
+}
+
+.dot.failed {
+  background: var(--danger);
+}
+
+/* ── body ── */
+
+.body {
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.building {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.building p {
+  font-weight: 500;
+  margin: 0;
+}
+
+.paneTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.visual {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.source {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.slides {
+  display: grid;
+  gap: 12px;
+}
+
+.editorFrame,
+.pdf {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  height: max(420px, calc(100dvh - 300px));
+  width: 100%;
+}
+
+.file {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.image,
+.video {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: block;
+  max-height: calc(100dvh - 220px);
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.audio {
+  width: 100%;
+}
+
+.markdown {
+  font-size: 14px;
+  line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tableWrap {
+  display: grid;
+  gap: 8px;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th,
+.table td {
+  border: 1px solid var(--border);
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.table th {
+  background: var(--subtle);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.urlCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.urlHost {
+  align-items: center;
+  color: var(--text-2);
+  display: inline-flex;
+  font-size: 12.5px;
+  gap: 6px;
+}
+
+.urlTitle {
+  font-size: 16px;
+  margin: 0;
+}
+
+.urlFull {
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── topbar toggle ── */
+
+.count {
+  background: var(--subtle);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  text-align: center;
+}
+
+[aria-pressed="true"] > .count {
+  background: var(--ink);
+  color: var(--ink-text);
+}
+
+@media (max-width: 900px) {
+  .header {
+    min-height: 56px;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+
+  .body {
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .editorFrame,
+  .pdf {
+    height: calc(100dvh - 240px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handle::after {
+    transition: none;
+  }
+}

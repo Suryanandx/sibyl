@@ -1,0 +1,119 @@
+/* Admin → Usage controls: only what the shared primitives (components/ui) don't cover. */
+
+.screen {
+  max-width: 880px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row,
+.headRow,
+.reportRow {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+}
+
+.row,
+.reportRow {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.row:first-child,
+.reportRow:first-child {
+  border-top: none;
+}
+
+.headRow {
+  color: var(--text-3);
+  font-size: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 144px) minmax(0, 144px);
+}
+
+.reportRow {
+  grid-template-columns: minmax(0, 1fr) auto minmax(72px, auto);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.caps {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.reportBar {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.reportBar > label {
+  min-width: 150px;
+}
+
+.keyLabel {
+  margin: 0 0 4px;
+}
+
+.key {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .headRow {
+    display: none;
+  }
+
+  .reportRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .reportRow > .meta {
+    display: none;
+  }
+}

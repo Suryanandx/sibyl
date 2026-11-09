@@ -1,6 +1,7 @@
 import type { LLMProvider, STTProvider, ToolChatEvent, ToolChatProvider } from "@open-gpt-live/adapters";
-import { createMemoryStore, createToolRegistry, type ToolDefinition } from "@open-gpt-live/core";
+import { createMemoryStore, createToolRegistry, ownerPrincipal, type ToolDefinition } from "@open-gpt-live/core";
 import {
+  NOTIFICATION_EVENTS,
   ROUTINE_EVENTS,
   WS_EVENTS,
   parseClientMessage,
@@ -10,6 +11,7 @@ import {
 import { describe, expect, test } from "vitest";
 import { WebSocket } from "ws";
 import { createGatewayServer } from "../gateway.js";
+import { installNotifications } from "../notifications/index.js";
 import { createNoopMeter, createTestRuntime } from "../runtime.js";
 import { RoutineService } from "./service.js";
 
@@ -38,9 +40,9 @@ describe("routines protocol parsers", () => {
     const approval = { id: "a", runId: "r", routineId: "x", toolName: "t", title: "T", summary: "S", createdAt: 1 };
     expect(parseServerMessage({ type: "inbox.list", items: [approval] }).success).toBe(true);
     expect(parseServerMessage({ type: "inbox.list", items: [{ ...approval, createdAt: "now" }] }).success).toBe(false);
+    // Routine notices are notifications now; the old wire event is gone.
     const notification = { kind: "finished", routineId: "r", routineName: "N", runId: "x", message: "done", at: 1 };
-    expect(parseServerMessage({ type: "routine.notification", notification }).success).toBe(true);
-    expect(parseServerMessage({ type: "routine.notification", notification: { ...notification, kind: "party" } }).success).toBe(false);
+    expect(parseServerMessage({ type: "routine.notification", notification }).success).toBe(false);
   });
 });
 
@@ -75,10 +77,11 @@ test("routines and inbox over the gateway WebSocket", async () => {
     run: async (input) => (sent.push(input), { content: "ok" })
   };
   tools.register(note);
-  const routines = new RoutineService({ store, tools, meter, ownerId: "owner", env: { TZ: "UTC" }, log: () => undefined });
+  const notifications = installNotifications({ store, ownerId: "owner", env: {}, log: () => undefined });
+  const routines = new RoutineService({ store, tools, meter, ownerId: "owner", env: { TZ: "UTC" }, log: () => undefined, notifications });
   await routines.init();
   await routines.startScheduler({ provider: provider(), model: () => "brain/deep", systemPrompt: "BRAIN", scheduler: { tickMs: 60_000_000 } });
-  const runtime = createTestRuntime({ store, tools, meter, routines });
+  const runtime = createTestRuntime({ store, tools, meter, routines, notifications });
   const llm: LLMProvider = { async *streamText() { yield { delta: "hi" }; } };
   const stt: STTProvider = { transcribe: async () => ({ text: "" }) };
   const gateway = await createGatewayServer({ providers: { llm, stt }, host: "127.0.0.1", runtime });
@@ -111,7 +114,7 @@ test("routines and inbox over the gateway WebSocket", async () => {
     // Create one through the chat tool (as the brain would after approval).
     const result = await tools.get("create_routine")!.run(
       { name: "Notes", instruction: "Send me a note", cron: "0 9 * * *" },
-      { signal: new AbortController().signal, ownerId: "owner", runId: "x", store, meter, log: () => undefined }
+      { signal: new AbortController().signal, ownerId: "owner", runId: "x", principal: ownerPrincipal("owner", "local"), workspaceId: "default", store, meter, log: () => undefined }
     );
     expect(result.isError).toBeFalsy();
     const created = await waitFor<List>((m) => m.type === "routines.list" && m.items.length === 1);
@@ -133,11 +136,10 @@ test("routines and inbox over the gateway WebSocket", async () => {
     // Run now: it needs an approval → notification + inbox entry.
     mark = messages.length;
     send({ type: ROUTINE_EVENTS.ROUTINE_RUN_NOW, routineId: routine.id });
-    const needs = await waitFor<Extract<ServerMessage, { type: "routine.notification" }>>(
-      (m) => m.type === "routine.notification" && m.notification.kind === "needs_approval",
-      mark
-    );
-    const approvalId = needs.notification.approvalId!;
+    type Live = Extract<ServerMessage, { type: "notification" }>;
+    const needs = await waitFor<Live>((m) => m.type === NOTIFICATION_EVENTS.NOTIFICATION && m.notification.kind === "approval_needed", mark);
+    expect(needs.notification.links.routineId).toBe(routine.id);
+    const approvalId = needs.notification.links.approvalId!;
     const request = await waitFor<Extract<ServerMessage, { type: "approval.request" }>>((m) => m.type === "approval.request", mark);
     expect(request.approval).toMatchObject({ id: approvalId, routineId: routine.id, toolName: "send_note" });
     send({ type: ROUTINE_EVENTS.INBOX_REQUEST });
@@ -150,14 +152,18 @@ test("routines and inbox over the gateway WebSocket", async () => {
     mark = messages.length;
     send({ type: WS_EVENTS.APPROVAL_DECISION, id: approvalId, decision: "approve" });
     expect(await waitFor((m) => m.type === "approval.resolved", mark)).toMatchObject({ id: approvalId, status: "approved" });
-    const finished = await waitFor<Extract<ServerMessage, { type: "routine.notification" }>>(
-      (m) => m.type === "routine.notification" && m.notification.kind === "finished",
-      mark
-    );
-    expect(finished.notification.conversationId).toBeTruthy();
+    // Deciding reads the approval's notification; the run's outcome is a new one.
+    const read = await waitFor<Extract<ServerMessage, { type: "notifications.state" }>>((m) => m.type === NOTIFICATION_EVENTS.STATE, mark);
+    expect(read.ids).toEqual([needs.notification.id]);
+    const finished = await waitFor<Live>((m) => m.type === NOTIFICATION_EVENTS.NOTIFICATION && m.notification.kind === "routine_finished", mark);
+    expect(finished.notification.links.conversationId).toBeTruthy();
+    send({ type: NOTIFICATION_EVENTS.REQUEST });
+    const feed = await waitFor<Extract<ServerMessage, { type: "notifications.list" }>>((m) => m.type === NOTIFICATION_EVENTS.LIST, mark);
+    expect(feed.items.map((n) => n.kind)).toEqual(["routine_finished", "approval_needed"]);
+    expect(feed.unread).toEqual({ total: 1, byKind: { routine_finished: 1 } });
     expect(sent).toEqual([{ text: "hi" }]);
     await waitFor<Inbox>((m) => m.type === "inbox.list" && m.items.length === 0, mark);
-    const conversation = await store.conversations.get("owner", finished.notification.conversationId!);
+    const conversation = await store.conversations.get("owner", finished.notification.links.conversationId!);
     expect(conversation?.messages.at(-1)?.content).toBe("Note sent.");
     const done = await waitFor<List>((m) => m.type === "routines.list" && m.items[0]?.lastRun?.status === "succeeded", mark);
     expect(done.items[0]?.lastRun?.costUsd).toBeCloseTo(0.002);

@@ -6,7 +6,16 @@
  * 10 minutes, when the run is aborted, or when the socket closes. "Don't ask
  * again in this chat" auto-approves that tool for the rest of the session.
  */
-import type { ApprovalRecord, Store, ToolDefinition } from "@open-gpt-live/core";
+import {
+  DEFAULT_WORKSPACE_ID,
+  PERMISSIONS,
+  authorize,
+  isHighRiskTool,
+  type ApprovalRecord,
+  type Principal,
+  type Store,
+  type ToolDefinition
+} from "@open-gpt-live/core";
 import { WS_EVENTS, type ApprovalView, type ServerMessage } from "@open-gpt-live/protocol";
 
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
@@ -24,6 +33,8 @@ export interface ApprovalRequestInput {
 export interface ApprovalBrokerOptions {
   store: Store;
   ownerId: string;
+  /** Who is chatting and where, read when an approval is created (stored on the record). */
+  requester?(): { principal: Principal; workspaceId: string };
   send(message: ServerMessage): void;
   createId(): string;
   now(): number;
@@ -34,6 +45,43 @@ export interface ApprovalBrokerOptions {
 interface Waiter {
   toolName: string;
   resolve(outcome: ApprovalOutcome): void;
+}
+
+/** Chat approvals still waiting, by id → the session's broker (a decision may come from another tab). */
+const liveChatApprovals = new Map<string, ApprovalBroker>();
+
+/** The broker (session) waiting on this chat approval, if any. */
+export function chatApprovalBroker(id: string): ApprovalBroker | undefined {
+  return liveChatApprovals.get(id);
+}
+
+/** Who asked for an approval, as stored (user id, or "token"/"local" for the org owner). */
+export function requesterId(principal: Principal): string {
+  return principal.userId ?? principal.kind;
+}
+
+/** The workspace an approval belongs to (older records: their routine's or chat's, else the default). */
+export async function approvalWorkspace(store: Store, ownerId: string, record: ApprovalRecord): Promise<string> {
+  if (record.workspaceId) return record.workspaceId;
+  if (record.routineId) {
+    const routine = await store.routines.get(ownerId, record.routineId).catch(() => undefined);
+    if (routine) return routine.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  }
+  if (record.conversationId) {
+    const conversation = await store.conversations.get(ownerId, record.conversationId).catch(() => undefined);
+    if (conversation) return conversation.workspaceId ?? DEFAULT_WORKSPACE_ID;
+  }
+  return DEFAULT_WORKSPACE_ID;
+}
+
+/**
+ * May this person decide a chat approval? Only in the approval's workspace,
+ * with tools.write there, and only the person it was asked of (older records
+ * without a requester: the org owner).
+ */
+export function canDecideChatApproval(principal: Principal, record: ApprovalRecord, workspaceId: string): boolean {
+  if (!authorize(principal, PERMISSIONS.TOOLS_WRITE, { workspaceId })) return false;
+  return record.requestedBy === undefined ? principal.kind !== "user" : record.requestedBy === requesterId(principal);
 }
 
 export class ApprovalBroker {
@@ -59,40 +107,31 @@ export class ApprovalBroker {
 
     const createdAt = this.options.now();
     const details = approvalDetails(input);
-    const record: ApprovalRecord = {
+    const requester = this.options.requester?.();
+    const record = newApprovalRecord({
       id: this.options.createId(),
       ownerId: this.options.ownerId,
       runId: request.runId,
       ...(request.conversationId ? { conversationId: request.conversationId } : {}),
-      toolName: tool.name,
-      title: tool.title,
-      summary: summarizeApproval(tool, input, details),
-      input: redactInput(input),
-      status: "pending",
+      ...(requester ? { workspaceId: requester.workspaceId, requestedBy: requesterId(requester.principal) } : {}),
+      tool,
+      input,
+      details,
       createdAt,
-      expiresAt: createdAt + this.ttlMs
-    };
+      ttlMs: this.ttlMs
+    });
     await this.options.store.approvals.create(record);
 
     const outcome = new Promise<ApprovalOutcome>((resolve) => {
       this.waiters.set(record.id, { toolName: tool.name, resolve });
     });
+    liveChatApprovals.set(record.id, this);
     const timer = setTimeout(() => void this.expire(record.id, "timeout"), this.ttlMs);
     const onAbort = (): void => void this.expire(record.id, "aborted");
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted || this.disposed) onAbort();
 
-    const view: ApprovalView = {
-      id: record.id,
-      runId: record.runId,
-      ...(record.conversationId ? { conversationId: record.conversationId } : {}),
-      toolName: record.toolName,
-      title: record.title,
-      summary: record.summary,
-      details,
-      createdAt: record.createdAt,
-      expiresAt: record.expiresAt
-    };
+    const view = approvalView(record, details);
     this.options.send({ type: WS_EVENTS.APPROVAL_REQUEST, approval: view });
     this.options.log?.("approval.requested", { id: record.id, toolName: tool.name, runId: record.runId });
 
@@ -101,10 +140,11 @@ export class ApprovalBroker {
     } finally {
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
+      if (liveChatApprovals.get(record.id) === this) liveChatApprovals.delete(record.id);
     }
   }
 
-  /** Apply the user's decision from APPROVAL_DECISION. */
+  /** Apply the user's decision from APPROVAL_DECISION (the caller checked canDecideChatApproval). */
   async decide(id: string, decision: "approve" | "decline", remember?: "conversation"): Promise<void> {
     const status = decision === "approve" ? "approved" : "declined";
     const decided = await this.options.store.approvals.decide(this.options.ownerId, id, status, this.options.now());
@@ -237,4 +277,56 @@ function lowerFirst(value: string): string {
 
 function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+/** The stored approval for a tool call (chat, routines and monitors all use this). */
+export function newApprovalRecord(input: {
+  id: string;
+  ownerId: string;
+  runId: string;
+  conversationId?: string;
+  routineId?: string;
+  workspaceId?: string;
+  requestedBy?: string;
+  tool: ToolDefinition<any, any>;
+  input: Record<string, unknown>;
+  details?: Array<{ label: string; value: string }>;
+  createdAt: number;
+  ttlMs: number;
+}): ApprovalRecord {
+  const details = input.details ?? approvalDetails(input.input);
+  return {
+    id: input.id,
+    ownerId: input.ownerId,
+    runId: input.runId,
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    ...(input.routineId ? { routineId: input.routineId } : {}),
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    ...(input.requestedBy ? { requestedBy: input.requestedBy } : {}),
+    ...(isHighRiskTool(input.tool) ? { risk: "high" as const } : {}),
+    toolName: input.tool.name,
+    title: input.tool.title,
+    summary: summarizeApproval(input.tool, input.input, details),
+    input: redactInput(input.input),
+    status: "pending",
+    createdAt: input.createdAt,
+    expiresAt: input.createdAt + input.ttlMs
+  };
+}
+
+/** What the browser shows for an approval (approval card and inbox). */
+export function approvalView(record: ApprovalRecord, details = approvalDetails(record.input)): ApprovalView {
+  return {
+    id: record.id,
+    runId: record.runId,
+    ...(record.conversationId ? { conversationId: record.conversationId } : {}),
+    ...(record.routineId ? { routineId: record.routineId } : {}),
+    ...(record.risk ? { risk: record.risk } : {}),
+    toolName: record.toolName,
+    title: record.title,
+    summary: record.summary,
+    details,
+    createdAt: record.createdAt,
+    ...(record.expiresAt === undefined ? {} : { expiresAt: record.expiresAt })
+  };
 }

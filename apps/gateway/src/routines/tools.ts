@@ -4,8 +4,10 @@
  * are "write" tools, so the user approves each one; the approval sentence
  * states the schedule in plain words and the cost cap.
  */
-import type { RoutineRecord, Store, ToolDefinition, ToolResult, UsageMeter } from "@open-gpt-live/core";
+import { DEFAULT_WORKSPACE_ID, type RoutineRecord, type Store, type ToolContext, type ToolDefinition, type ToolResult, type UsageMeter } from "@open-gpt-live/core";
 import type { RoutinePatch } from "@open-gpt-live/protocol";
+import { creatorId } from "../agents/access.js";
+import { canChangeRoutine, canCreateRoutine, canSeeRoutine, type RoutineCaller } from "./access.js";
 import { describeSchedule } from "./cron.js";
 import {
   DEFAULT_ROUTINE_RUN_USD,
@@ -60,9 +62,24 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
   const defaultCap = (): number | undefined => (envCap() === undefined ? DEFAULT_ROUTINE_RUN_USD : undefined);
   const changed = (): void => options.onChanged?.();
 
-  const resolve = async (ownerId: string, ref: unknown): Promise<RoutineRecord | string> => {
+  /** Who is asking; routine tools never run without a principal (fail closed). */
+  const callerOf = (context: ToolContext): RoutineCaller | undefined =>
+    context.principal ? { principal: context.principal, workspaceId: context.workspaceId ?? DEFAULT_WORKSPACE_ID } : undefined;
+  const NO_CALLER = "Routines can only be managed by a signed-in person.";
+  /** The routines this caller may see in their workspace. */
+  const visible = async (context: ToolContext, caller: RoutineCaller): Promise<RoutineRecord[]> =>
+    (await context.store.routines.list(context.ownerId)).filter((routine) => canSeeRoutine(caller, routine));
+  /** A routine the caller may change, by id or exact name. */
+  const resolve = async (context: ToolContext, ref: unknown): Promise<RoutineRecord | string> => {
+    const caller = callerOf(context);
+    if (!caller) return NO_CALLER;
     if (typeof ref !== "string" || !ref.trim()) return "Say which routine (its id or exact name).";
-    const all = await options.store.routines.list(ownerId);
+    const all = await visible(context, caller);
+    const found = pick(all, ref);
+    if (typeof found === "string") return found;
+    return canChangeRoutine(caller, found) ? found : `Only its creator or someone who may manage routines can change "${found.name}".`;
+  };
+  const pick = (all: RoutineRecord[], ref: string): RoutineRecord | string => {
     const needle = ref.trim().toLowerCase();
     const byId = all.find((routine) => routine.id === ref.trim());
     if (byId) return byId;
@@ -98,6 +115,14 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
         maxRunUsd: {
           type: "number",
           description: "Optional cost cap per run in USD (e.g. 0.1). Defaults to the configured routine cap."
+        },
+        agentId: {
+          type: "string",
+          description: "Optional: run as one of the user's agents (its id). When an agent creates the routine, it runs as that agent."
+        },
+        once: {
+          type: "boolean",
+          description: "Optional: a one-time task. It runs at the next time the schedule matches, then pauses itself."
         }
       },
       required: ["name", "instruction", "cron"],
@@ -110,21 +135,33 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
       const timezone = typeof input.timezone === "string" && input.timezone.trim() ? input.timezone.trim() : options.timezone();
       const cap = typeof input.maxRunUsd === "number" ? input.maxRunUsd : effectiveRunCap({ maxRunUsd: defaultCap() }, envCap());
       const what = typeof input.instruction === "string" ? truncate(input.instruction.trim(), 140) : "";
-      return `Sibyl will create the routine “${String(input.name ?? "Untitled")}” to run ${describeSchedule(String(input.cron ?? ""), timezone)}, with ${capWords(cap)}${what ? `: ${what}` : "."}`;
+      const when = input.once === true ? `once, ${describeSchedule(String(input.cron ?? ""), timezone)}` : describeSchedule(String(input.cron ?? ""), timezone);
+      return `Sibyl will create the ${input.once === true ? "task" : "routine"} “${String(input.name ?? "Untitled")}” to run ${when}, with ${capWords(cap)}${what ? `: ${what}` : "."}`;
     },
     async run(input, context) {
+      const caller = callerOf(context);
+      if (!caller) return fail(NO_CALLER);
+      if (!canCreateRoutine(caller)) return fail("You don't have permission to create routines in this workspace.");
       try {
         const timezone = typeof input.timezone === "string" && input.timezone.trim() ? input.timezone.trim() : options.timezone();
         const maxRunUsd = typeof input.maxRunUsd === "number" ? input.maxRunUsd : defaultCap();
+        // An agent creating a routine makes it run as itself; otherwise an explicit agent id must exist.
+        const agentId = context.agent?.id ?? (typeof input.agentId === "string" && input.agentId.trim() ? input.agentId.trim() : undefined);
+        if (agentId && !context.agent) {
+          const agent = await context.store.agents.get(context.ownerId, agentId);
+          if (!agent || agent.workspaceId !== caller.workspaceId) return fail(`Could not create the routine: there is no agent "${agentId}".`);
+        }
         const record = createRoutineRecord(
           {
             name: input.name,
             instruction: input.instruction,
             cron: input.cron,
             timezone,
-            ...(maxRunUsd === undefined ? {} : { maxRunUsd })
+            ...(maxRunUsd === undefined ? {} : { maxRunUsd }),
+            ...(agentId ? { agentId } : {}),
+            ...(input.once === true ? { once: true } : {})
           },
-          { id: options.createId(), ownerId: context.ownerId, now: now() }
+          { id: options.createId(), ownerId: context.ownerId, now: now(), workspaceId: caller.workspaceId, createdBy: creatorId(caller.principal) }
         );
         await context.store.routines.upsert(record);
         changed();
@@ -152,7 +189,9 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
     source: "builtin",
     provider: "routines",
     async run(_input, context) {
-      const routines = await context.store.routines.list(context.ownerId);
+      const caller = callerOf(context);
+      if (!caller) return fail(NO_CALLER);
+      const routines = await visible(context, caller);
       if (routines.length === 0) return { content: "The user has no routines yet." };
       const lines = await Promise.all(
         routines.map(async (routine) => {
@@ -199,7 +238,7 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
       return `Sibyl will change the routine ${nameOf(input.routine)}: ${changes.join("; ") || "no changes"}.`;
     },
     async run(input, context) {
-      const routine = await resolve(context.ownerId, input.routine);
+      const routine = await resolve(context, input.routine);
       if (typeof routine === "string") return fail(routine);
       const patch: RoutinePatch = {};
       for (const key of ["name", "instruction", "cron", "timezone"] as const) {
@@ -242,7 +281,7 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
         : `Sibyl will pause the routine ${nameOf(input.routine)}; it won't run until resumed.`;
     },
     async run(input, context) {
-      const routine = await resolve(context.ownerId, input.routine);
+      const routine = await resolve(context, input.routine);
       if (typeof routine === "string") return fail(routine);
       const enabled = input.paused === false;
       const next = applyRoutinePatch(routine, { enabled }, now());
@@ -273,7 +312,7 @@ export function createRoutineTools(options: RoutineToolsOptions): RoutineTool[] 
       return `Sibyl will delete the routine ${nameOf(input.routine)}; it will not run again.`;
     },
     async run(input, context) {
-      const routine = await resolve(context.ownerId, input.routine);
+      const routine = await resolve(context, input.routine);
       if (typeof routine === "string") return fail(routine);
       await context.store.routines.remove(context.ownerId, routine.id);
       options.onDeleted?.(routine.id);

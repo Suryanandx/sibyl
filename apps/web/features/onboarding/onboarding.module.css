@@ -1,0 +1,751 @@
+/* Onboarding (/welcome/<step>) and the Getting started checklist. Design tokens only; light and dark; phone width. */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+  width: 100%;
+  justify-self: center;
+}
+
+.progressText {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.progressLabel {
+  color: var(--text-3);
+}
+
+.progressTrack {
+  display: flex;
+  gap: 4px;
+}
+
+.progressSegment {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color 0.2s ease;
+}
+
+.progressSegment[data-state="done"] {
+  background: var(--accent);
+}
+
+.progressSegment[data-state="current"] {
+  background: var(--ink);
+}
+
+.later {
+  font-size: 13px;
+  color: var(--text-2);
+  text-decoration: none;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.later:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 48px 20px 64px;
+}
+
+.step {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step:focus-within .title:focus {
+  outline: none;
+}
+
+.hero {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.footerEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skipNote {
+  font-size: 12px;
+  color: var(--text-3);
+  max-width: 220px;
+  text-align: right;
+}
+
+.loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--canvas);
+}
+
+.small {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.textButton {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  color: var(--text);
+}
+
+/* ── Welcome ── */
+
+.profile {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.profile > label {
+  flex: 1;
+}
+
+.avatarPick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Choices (styles, templates) ── */
+
+.choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.choice:hover {
+  border-color: var(--border-strong);
+}
+
+.choice[data-checked="true"] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.choice input {
+  accent-color: var(--ink);
+  margin: 0;
+  flex: none;
+}
+
+.choice:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.choice input:focus-visible {
+  outline: none;
+}
+
+.choiceMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.choiceTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.choiceTag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.choiceText {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+.prices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.prices strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.inlineForm {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.inlineForm > label {
+  flex: 1;
+}
+
+/* ── Model access ── */
+
+.optionCard,
+.doneCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.optionCard[aria-disabled="true"] {
+  background: var(--subtle);
+}
+
+.optionCard[aria-disabled="true"] strong {
+  color: var(--text-2);
+}
+
+.optionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.doneCard {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+
+.doneCard > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.doneCard p {
+  margin: 0;
+}
+
+.inlineActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Tools ── */
+
+.tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tileGlyph {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--subtle);
+  display: grid;
+  place-items: center;
+  color: var(--text);
+}
+
+.tileText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tileText span {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.tileAction {
+  flex: none;
+}
+
+/* ── Team ── */
+
+.teamRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inviteList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* ── First conversation ── */
+
+.prompts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.prompt {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.prompt:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--hover);
+}
+
+.prompt:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.promptUses {
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.talkHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--tint-sage);
+}
+
+.talkHint p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.talkIcon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--ink-text);
+  display: grid;
+  place-items: center;
+}
+
+/* ── Getting started (rail) ── */
+
+.checklistWrap {
+  position: relative;
+}
+
+.ringBtn {
+  position: relative;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 2.4;
+}
+
+.ringFill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s ease;
+}
+
+.ringCount {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-2);
+  pointer-events: none;
+}
+
+.checklist {
+  position: absolute;
+  left: calc(100% + 10px);
+  bottom: 0;
+  z-index: 60;
+  width: 280px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+}
+
+/* Phone menu (the rail is hidden on phones): a row, and the list in place below it. */
+.checklistRowWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.rowBtn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.checklistInline {
+  margin: 4px 0 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.checklistHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.checklistHead h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.checklistHead span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.checklistItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.checklistItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.checklistItem:hover {
+  background: var(--hover);
+}
+
+.checklistItem[data-done="true"] {
+  color: var(--text-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+}
+
+.checklistItem[data-done="true"] .check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.checklistFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.checklistContinue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.checklistContinue:hover {
+  text-decoration: underline;
+}
+
+/* ── Phones ── */
+
+@media (max-width: 640px) {
+  .top {
+    grid-template-columns: 1fr auto;
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+  }
+
+  .main {
+    padding: 28px 16px 40px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .profile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .avatarPick {
+    flex-direction: row;
+    gap: 14px;
+  }
+
+  .choice {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+
+  .prices {
+    flex-direction: row;
+    gap: 12px;
+    width: 100%;
+    padding-left: 28px;
+  }
+
+  .tile {
+    flex-wrap: wrap;
+  }
+
+  .tileAction {
+    margin-left: 54px;
+  }
+
+  .prompts {
+    grid-template-columns: 1fr;
+  }
+
+  .skipNote {
+    display: none;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressSegment,
+  .ringFill,
+  .choice,
+  .prompt {
+    transition: none;
+  }
+}

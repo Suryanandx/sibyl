@@ -1,0 +1,120 @@
+{
+  "plugins": [
+    {
+      "manifestVersion": 1,
+      "id": "meeting-notes-kit",
+      "name": "Meeting notes kit",
+      "version": "1.0.0",
+      "description": "Turn rough notes or a transcript into clear minutes with decisions and owned action items, draft the follow-up email, and get a weekly nudge on open actions.",
+      "author": "Sibyl",
+      "license": "MIT",
+      "skills": [
+        {
+          "name": "meeting-minutes",
+          "title": "Write meeting minutes",
+          "description": "Use when the user shares meeting notes, a transcript or a recording summary and wants minutes, a recap, decisions or action items.",
+          "instructions": "# Write meeting minutes\n\n1. Read everything the user gave you (use read_file for attachments). If the meeting's purpose or attendees are unclear, infer them from the notes and say so.\n2. Write, in this order:\n   - **Meeting:** title, date, attendees (as given).\n   - **Summary:** 2–3 sentences on what the meeting was for and what came out of it.\n   - **Decisions:** numbered, each one sentence, stated as decided (\"We will…\").\n   - **Action items:** a table — Action | Owner | Due. Every action starts with a verb. If no owner or date was said, write \"(unassigned)\" / \"(no date)\" rather than inventing one.\n   - **Open questions:** what was raised but not settled.\n3. Keep the user's wording for names, numbers and commitments. Don't add actions nobody agreed to.\n4. Offer to draft the follow-up email (skill: meeting-follow-up) or to remember open actions.",
+          "files": [
+            {
+              "name": "template.md",
+              "content": "**Meeting:** …  ·  **Date:** …  ·  **Attendees:** …\n\n**Summary**\n…\n\n**Decisions**\n1. …\n\n**Action items**\n| Action | Owner | Due |\n|---|---|---|\n| … | … | … |\n\n**Open questions**\n- …\n"
+            }
+          ]
+        },
+        {
+          "name": "meeting-follow-up",
+          "title": "Draft a meeting follow-up email",
+          "description": "Use when the user wants to send a recap or follow-up email after a meeting, with decisions and action items.",
+          "instructions": "# Draft a meeting follow-up email\n\n- Subject: \"Recap: <meeting> — <date>\".\n- Open with one line of thanks and the meeting's purpose.\n- Then: decisions (bullets), action items with owner and due date (bullets, owner first), and the next meeting if known.\n- Close by inviting corrections within a day.\n- Under 150 words, friendly and plain. Never send it yourself: show the draft and let the user send it, or use an email tool only after they approve."
+        }
+      ],
+      "routines": [
+        {
+          "name": "Monday action-item check",
+          "instruction": "Look through what you remember and my recent chats for open meeting action items assigned to me. List each with its due date, flag anything overdue, and suggest the one to do first.",
+          "cron": "0 9 * * 1"
+        }
+      ]
+    },
+    {
+      "manifestVersion": 1,
+      "id": "research-desk",
+      "name": "Research desk",
+      "version": "1.0.0",
+      "description": "Research briefs with sources you can check: searches the web and your own knowledge, keeps a \"Research sources\" knowledge base, and checks claims before you rely on them.",
+      "author": "Sibyl",
+      "license": "MIT",
+      "skills": [
+        {
+          "name": "research-brief",
+          "title": "Write a research brief",
+          "description": "Use when the user asks you to research a topic, compare options or answer a question that needs several sources, and wants a brief with citations.",
+          "instructions": "# Write a research brief\n\n1. Restate the question in one line and list 3–5 sub-questions that would answer it.\n2. Check the user's own knowledge first with search_knowledge (especially the \"Research sources\" base), then the web with web_search, and open the 3–6 most relevant sources with read_webpage. Prefer primary sources, recent dates and named authors.\n3. Write the brief:\n   - **Answer** — 3–4 sentences, the bottom line first.\n   - **Findings** — one short paragraph per sub-question, every factual claim followed by a citation [n].\n   - **Where sources disagree** — and which you trust more, and why.\n   - **Confidence** — high / medium / low, with what would change it.\n   - **Sources** — numbered list: title, publisher, date, URL.\n4. Never cite a page you did not open. Say plainly when evidence is thin.\n5. Offer to save the best sources to the \"Research sources\" knowledge base.",
+          "tools": ["search_knowledge", "web_search", "read_webpage"]
+        },
+        {
+          "name": "source-check",
+          "title": "Check a claim against sources",
+          "description": "Use when the user asks whether something is true, wants a fact checked, or wants to verify a statistic or quote before using it.",
+          "instructions": "# Check a claim against sources\n\n1. Split the claim into checkable parts (who, what, number, date).\n2. Look for the original source of each part (search_knowledge, then web_search + read_webpage). Note who first published it.\n3. Verdict per part: **Supported**, **Partly supported**, **Not supported** or **Can't tell**, with the evidence and a citation.\n4. If the number or quote is close but different, give the exact original.\n5. End with a one-line overall verdict and a corrected version of the claim the user can safely use.",
+          "tools": ["search_knowledge", "web_search", "read_webpage"]
+        }
+      ],
+      "knowledgeBases": [
+        {
+          "name": "Research sources",
+          "description": "Articles, reports and notes saved while researching. Searched by the research skills."
+        }
+      ]
+    },
+    {
+      "manifestVersion": 1,
+      "id": "github",
+      "name": "GitHub",
+      "version": "1.0.0",
+      "description": "Work with your GitHub repositories, issues and pull requests through GitHub's official MCP server, plus skills for triage and release notes.",
+      "author": "Sibyl",
+      "homepage": "https://github.com/github/github-mcp-server",
+      "license": "MIT",
+      "skills": [
+        {
+          "name": "github-triage",
+          "title": "Triage GitHub issues",
+          "description": "Use when the user wants to triage, label, prioritise or summarise GitHub issues or pull requests in a repository.",
+          "instructions": "# Triage GitHub issues\n\n1. Ask for the repository (owner/name) if it isn't clear. List open issues (newest first, skip ones already labelled as triaged).\n2. For each issue, decide: type (bug / feature / question / chore), priority (P0 outage or data loss, P1 broken for many, P2 normal, P3 nice to have), and whether it is a duplicate (search before saying so).\n3. Show the proposed triage as a table: # | Title | Type | Priority | Suggested label(s) | Note.\n4. Only after the user approves, apply labels or comments — one change per issue, never close issues without an explicit request.\n5. Finish with the top three issues to work on next and why."
+        },
+        {
+          "name": "release-notes",
+          "title": "Write release notes from merged pull requests",
+          "description": "Use when the user wants release notes, a changelog entry or a 'what shipped' summary from merged pull requests or commits.",
+          "instructions": "# Write release notes\n\n1. Get the merged pull requests since the last release or tag (ask which range if unclear).\n2. Group them: **New**, **Improved**, **Fixed**, **Breaking changes** (with migration steps), **Internal** (omit unless asked).\n3. One line per change, written for users: what they can now do or what no longer goes wrong — not the implementation. Credit the PR number (#123).\n4. Put breaking changes first if there are any.\n5. Under 250 words; offer a longer version for the changelog file."
+        }
+      ],
+      "mcpServers": {
+        "github": {
+          "transport": "http",
+          "url": "https://api.githubcopilot.com/mcp/",
+          "headers": {
+            "Authorization": "Bearer ${secret:GITHUB_TOKEN}"
+          }
+        }
+      },
+      "secrets": [
+        {
+          "name": "GITHUB_TOKEN",
+          "description": "A GitHub personal access token for GitHub's MCP server.",
+          "allowedHosts": ["api.githubcopilot.com"],
+          "howToGet": "GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Choose the repositories, give Issues and Pull requests read & write (Contents read), then copy the token.",
+          "docsUrl": "https://github.com/settings/personal-access-tokens/new"
+        }
+      ],
+      "routines": [
+        {
+          "name": "Weekly pull request digest",
+          "instruction": "Using GitHub, list pull requests in my repositories that are waiting for my review or have been open for more than a week. Group them by repository and suggest which to look at first.",
+          "cron": "0 9 * * 1"
+        }
+      ]
+    }
+  ]
+}

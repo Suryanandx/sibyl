@@ -2,6 +2,12 @@
 
 Sibyl's live conversation is built from swappable OpenRouter models, not a single vendor's realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, and what the measured latency looks like.
 
+## WebSocket or LiveKit
+
+By default the browser streams your voice to the gateway over its WebSocket, and Sibyl's voice comes back the same way. Nothing else is needed.
+
+When the gateway has [LiveKit](realtime.md) configured (`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`), hands-free voice runs over WebRTC instead: the microphone and Sibyl's voice travel through a LiveKit room, and the gateway's room agent detects your turns with the same speech detector. The brain, the turn rules, barge-in, hedging and budgets below are the same in both. Transcripts, replies, visuals and approvals stay on the WebSocket. If the room can't be joined, voice falls back to the WebSocket. LiveKit also brings calls with several people and agents, phone calls and streams; see [realtime.md](realtime.md).
+
 ## Three ways to talk
 
 Voice and typing share one conversation. Switch between them whenever you like; both brains see everything said, typed and shown so far.

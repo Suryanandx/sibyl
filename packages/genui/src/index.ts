@@ -28,6 +28,7 @@ Every reply has two parts, in this order:
    - No markdown, bullet lists, headings, tables, code, emojis, or URLs.
    - It must make sense on its own: the user may be listening without looking at the screen.
    - When you also show UI, summarize the key takeaway in speech instead of reading out every value.
+   - Never label the parts: no "Spoken part:", "Speaker notes:", "Visual:" or similar headings — just write the sentences.
 
 2. VISUAL PART (optional). When a visual genuinely helps — numbers, comparisons, lists, steps, schedules, recipes, forms, choices, charts, tables — append exactly ONE fenced code block tagged openui-lang containing a COMPLETE openui-lang program:
 
@@ -119,11 +120,22 @@ const BARE_ROOT = /^root\s*=/;
  * meant for the user: it is dropped. A second fenced program is kept as UI; it
  * redefines the same statements, so the corrected version wins.
  */
+/** A heading some models put before the spoken part ("**Speaker notes:**", "Spoken part:"). */
+const LEADING_LABEL = /^(?:\*\*|__)?\s*(?:speaker notes|spoken part|spoken answer|speech|voice(?: part)?|answer)\s*(?::\s*(?:\*\*|__)|(?:\*\*|__)\s*:|:)\s*/i;
+const LABELS = ["speaker notes", "spoken part", "spoken answer", "speech", "voice part", "voice", "answer"];
+/** Could the text so far still grow into a label (so hold it back a little)? */
+function couldBeLabel(text: string): boolean {
+  const words = text.replace(/[*_:]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  return LABELS.some((label) => label.startsWith(words));
+}
+
 export class SpeechUiSplitter {
   private mode: "speech" | "ui" | "ui_bare" | "fence_open" = "speech";
   private atLineStart = true;
   private held = "";
   private sawUi = false;
+  /** The reply's first characters, held until we know they aren't a label like "**Speaker notes:**". */
+  private lead: string | undefined = "";
 
   get hasUi(): boolean {
     return this.sawUi;
@@ -134,12 +146,29 @@ export class SpeechUiSplitter {
     for (const char of delta) {
       this.consume(char, out);
     }
+    out.speech = this.dropLeadingLabel(out.speech, false);
     return out;
+  }
+
+  private dropLeadingLabel(speech: string, final: boolean): string {
+    if (this.lead === undefined) return speech;
+    this.lead += speech;
+    const trimmed = this.lead.trimStart();
+    const label = LEADING_LABEL.exec(trimmed);
+    if (label) {
+      this.lead = undefined;
+      return trimmed.slice(label[0].length);
+    }
+    // Still possibly the start of a label: keep holding (briefly).
+    if (!final && trimmed.length < 40 && !trimmed.includes("\n") && couldBeLabel(trimmed)) return "";
+    const released = this.lead;
+    this.lead = undefined;
+    return released;
   }
 
   /** Flush anything still held back at end of stream. */
   finish(): SplitResult {
-    const out: SplitResult = { speech: "", ui: "" };
+    const out: SplitResult = { speech: this.dropLeadingLabel("", true), ui: "" };
     if (this.held) {
       if (this.mode === "speech") {
         if (BARE_ROOT.test(this.held.trimStart())) {

@@ -7,20 +7,17 @@ services:
       - ${OPEN_GPT_LIVE_ENV_FILE:-.env}
     environment:
       NODE_ENV: production
+      SIBYL_SLIDES_URL: ${SIBYL_SLIDES_URL:-http://slides:8000}
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: 8787
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
     ports:
       - "8787:8787"
-    depends_on:
-      ollama-model:
-        condition: service_completed_successfully
-        required: false
-      speaches-models:
-        condition: service_completed_successfully
-        required: false
+    volumes:
+      # Call recordings (Sibyl Enterprise), written by egress into the same volume.
+      - recordings:/app/data/recordings
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/healthz"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -30,6 +27,7 @@ services:
       context: .
       dockerfile: Dockerfile.web
       args:
+        SIBYL_SLIDES_WEB_URL: http://slides:3100
         NEXT_PUBLIC_GATEWAY_WS_URL: ${NEXT_PUBLIC_GATEWAY_WS_URL:-ws://localhost:8787}
         NEXT_PUBLIC_VAD_ADAPTIVE_ENABLED: ${NEXT_PUBLIC_VAD_ADAPTIVE_ENABLED:-true}
         NEXT_PUBLIC_VAD_CALIBRATION_MS: ${NEXT_PUBLIC_VAD_CALIBRATION_MS:-1000}
@@ -52,68 +50,146 @@ services:
     depends_on:
       gateway:
         condition: service_healthy
+      slides:
+        condition: service_healthy
     ports:
       - "3000:3000"
 
-  ollama:
-    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.30.8}
-    profiles: ["local-ai"]
+  # Sibyl Slides: deck engine (FastAPI :8000, reached by the gateway at
+  # SIBYL_SLIDES_URL) and the slide editor (:3100, served to browsers by the
+  # web app at /slides). Not published on the host: the web app and the
+  # gateway reach it on the compose network.
+  slides:
+    build:
+      context: .
+      dockerfile: Dockerfile.slides
+    env_file:
+      - ${OPEN_GPT_LIVE_ENV_FILE:-.env}
     environment:
-      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-15m}
-    ports:
-      - "127.0.0.1:${LOCAL_AI_OLLAMA_PORT:-11434}:11434"
+      NODE_ENV: production
+      SIBYL_SLIDES_HOST: 0.0.0.0
+      SIBYL_SLIDES_MODEL: ${SIBYL_SLIDES_MODEL:-}
+      SIBYL_SLIDES_IMAGE_PROVIDER: ${SIBYL_SLIDES_IMAGE_PROVIDER:-}
+      # Where the editor's links back to the app go when it is opened directly.
+      SIBYL_APP_URL: ${SIBYL_APP_URL:-http://localhost:3000}
+      APP_DATA_DIRECTORY: /app_data
     volumes:
-      - ollama-data:/root/.ollama
+      - slides-data:/app_data
+    expose:
+      - "8000"
+      - "3100"
     healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 15s
+      timeout: 4s
+      retries: 8
+      start_period: 60s
 
-  ollama-model:
-    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.30.8}
-    profiles: ["local-ai"]
-    restart: "no"
+  # Agent computers: the sandbox image the gateway starts one container from
+  # per agent (docs/agent-computers.md). Build it with
+  #   docker compose --profile computers build computer
+  # It is never run by Compose itself; the gateway starts and stops sandboxes.
+  computer:
+    profiles: ["computers"]
+    build:
+      context: .
+      dockerfile: Dockerfile.computer
+    image: sibyl-computer:1.64.1
+
+  # ── Realtime layer (optional, docs/realtime.md) ──
+  # docker compose --profile realtime up   → LiveKit + egress (recordings) + ingress (streams)
+  # docker compose --profile phone up      → also the SIP bridge for phone calls
+  # Then set LIVEKIT_URL=ws://livekit:7880, LIVEKIT_PUBLIC_URL=ws://localhost:7880,
+  # LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env and restart the gateway.
+  redis:
+    image: redis:7-alpine
+    profiles: ["realtime", "phone"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    expose:
+      - "6379"
+
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    profiles: ["realtime", "phone"]
+    command: ["--config", "/etc/livekit.yaml", "--node-ip", "${LIVEKIT_NODE_IP:-127.0.0.1}"]
     environment:
-      OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["/bin/ollama"]
-    command: ["pull", "${OLLAMA_MODEL:-qwen2.5:1.5b}"]
-    depends_on:
-      ollama:
-        condition: service_healthy
-
-  speaches:
-    image: ghcr.io/speaches-ai/speaches:${SPEACHES_IMAGE_TAG:-0.8.3-cpu}
-    profiles: ["local-ai"]
-    ports:
-      - "127.0.0.1:${LOCAL_AI_SPEACHES_PORT:-8000}:8000"
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-sibyl}: ${LIVEKIT_API_SECRET:-}"
     volumes:
-      - speaches-cache:/home/ubuntu/.cache/huggingface/hub
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://127.0.0.1:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-
-  speaches-models:
-    image: ghcr.io/speaches-ai/speaches:${SPEACHES_IMAGE_TAG:-0.8.3-cpu}
-    profiles: ["local-ai"]
-    restart: "no"
-    environment:
-      SPEACHES_BASE_URL: http://speaches:8000
-      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-small}
-      TTS_MODEL: ${TTS_MODEL:-speaches-ai/Kokoro-82M-v1.0-ONNX}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        uv run speaches-cli model download "$${STT_MODEL}" &&
-        uv run speaches-cli model download "$${TTS_MODEL}"
+      - ./deploy/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
     depends_on:
-      speaches:
-        condition: service_healthy
+      - redis
+
+  egress:
+    image: livekit/egress:v1.15.0
+    profiles: ["realtime"]
+    # Headless Chrome needs its sandbox (LiveKit's documented setting).
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      EGRESS_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY:-sibyl}
+        api_secret: ${LIVEKIT_API_SECRET:-}
+        ws_url: ws://livekit:7880
+        redis:
+          address: redis:6379
+        log_level: info
+    volumes:
+      # Same volume as the gateway's /app/data/recordings (SIBYL_RECORDINGS_EGRESS_DIR=/recordings).
+      - recordings:/recordings
+    depends_on:
+      - livekit
+
+  ingress:
+    image: livekit/ingress:v1.6.0
+    profiles: ["realtime"]
+    environment:
+      INGRESS_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY:-sibyl}
+        api_secret: ${LIVEKIT_API_SECRET:-}
+        ws_url: ws://livekit:7880
+        redis:
+          address: redis:6379
+        rtmp_port: 1935
+        whip_port: 8080
+        http_relay_port: 9090
+        rtc_config:
+          udp_port: 7885
+          use_external_ip: false
+        logging:
+          level: info
+    ports:
+      - "1935:1935"
+      - "${INGRESS_WHIP_PORT:-8080}:8080"
+      - "7885:7885/udp"
+    depends_on:
+      - livekit
+
+  sip:
+    image: livekit/sip:v1.23.0
+    profiles: ["phone"]
+    environment:
+      SIP_CONFIG_BODY: |
+        api_key: ${LIVEKIT_API_KEY:-sibyl}
+        api_secret: ${LIVEKIT_API_SECRET:-}
+        ws_url: ws://livekit:7880
+        redis:
+          address: redis:6379
+        sip_port: 5060
+        rtp_port: 10000-10100
+        use_external_ip: true
+        logging:
+          level: info
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10100:10000-10100/udp"
+    depends_on:
+      - livekit
 
 volumes:
-  ollama-data:
-  speaches-cache:
+  slides-data:
+  recordings:

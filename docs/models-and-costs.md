@@ -181,19 +181,34 @@ Reasoning settings make the biggest difference. For voice, prefer models with pr
 
 Model calls — voice brain, deep brain, transcription and speech — are recorded with the cost OpenRouter reports for it (or an estimate when a provider reports none). Web searches, model-scout probes and voice warm-up requests are metered too. Budgets are checked *before* a call is made, so a cap stops spending rather than reporting it afterwards.
 
-| Variable | Effect when reached |
+There are two kinds of budget, each daily and monthly:
+
+| Budget | Where it is set | Who can set it | Effect when reached |
+|---|---|---|---|
+| Organization | **Admin → Organization → Organization budget** | Organization owners and admins (`org.settings`) | Model calls pause everywhere until midnight (daily) or the 1st (monthly). |
+| Workspace | **Settings → Workspace → Workspace budget** | Workspace admins (`budgets.manage`) | Model calls pause in that workspace only. |
+
+The server's environment variables stay in charge of the organization budget:
+
+| Variable | Meaning |
 |---|---|
-| `SIBYL_BUDGET_DAILY_USD` | Model calls pause until midnight. |
-| `SIBYL_BUDGET_MONTHLY_USD` | Model calls pause until the first of the month. |
-| `SIBYL_BUDGET_ROUTINE_RUN_USD`, `SIBYL_BUDGET_ROUTINE_DAILY_USD` | Reserved for routines (on the roadmap). |
+| `SIBYL_BUDGET_DAILY_USD` | The organization's daily cap when nothing is set in the app, and the most the in-app daily budget can be. |
+| `SIBYL_BUDGET_MONTHLY_USD` | The same for the monthly cap. |
+| `SIBYL_BUDGET_ROUTINE_RUN_USD`, `SIBYL_BUDGET_ROUTINE_DAILY_USD` | Caps for one routine run and for one routine per day. |
 
-When a cap is reached, Sibyl tells you in the chat which budget was hit and which variable to raise. Close to a cap (85% of it), Sibyl switches to cheaper models and the Usage tab shows that it is in economy mode. Economy mode swaps the voice and deep-brain models for the Cheapest preset's; the speaking voice stays the same so it does not change mid-conversation.
+So an admin can lower the organization budget in the app, but not raise it above what the server allows. Leave the in-app field empty to use the environment value.
 
-The **Usage** tab in Models & voice shows what you have spent today, this month and in this session, your budgets, and spend broken down by feature.
+Spend counts toward the workspace the person was in when it happened. Usage recorded without a workspace (older data) counts toward the default workspace.
+
+When a budget is reached, Sibyl tells you in the chat which budget was hit and where to raise it. Close to a budget (85% of it), Sibyl switches to cheaper models and the Usage tab shows that it is in economy mode. The switch follows the tightest budget that applies: a workspace close to its own budget uses cheaper models even when the organization has plenty left. Economy mode swaps the voice and deep-brain models for the Cheapest preset's; the speaking voice stays the same so it does not change mid-conversation.
+
+Agent Serve adds budgets per person and per role, request and model caps, and rate limits (see [enterprise.md](enterprise.md)). They are checked after these budgets.
+
+**Settings → Usage** shows what you have spent today, this month and in this session, bars for the organization's budgets and for the current workspace's, and spend broken down by feature.
 
 ## Keeping costs predictable
 
 - Pick **Cheapest** or **Balanced** and check the estimate per 100 turns in the Presets tab.
-- Set `SIBYL_BUDGET_DAILY_USD` and `SIBYL_BUDGET_MONTHLY_USD`.
+- Set `SIBYL_BUDGET_DAILY_USD` and `SIBYL_BUDGET_MONTHLY_USD` as the ceiling, then an organization budget in Admin → Organization and budgets for busy workspaces in Settings → Workspace.
 - Turn **visual answers** off when you only want to talk; the deep brain prompt with the visual component library is the largest single cost.
 - Set a credit limit on your OpenRouter key as a second safety net. OpenRouter's activity page shows actual spend per model.

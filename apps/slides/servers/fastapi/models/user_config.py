@@ -1,0 +1,163 @@
+from typing import Literal, Optional
+from pydantic import BaseModel, Field, model_validator
+
+
+class UserConfig(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_dalle3_config(cls, data):
+        if isinstance(data, dict) and data.get("IMAGE_PROVIDER") == "dall-e-3":
+            data = {**data, "IMAGE_PROVIDER": "gpt-image-2"}
+            if not data.get("GPT_IMAGE_2_QUALITY"):
+                data["GPT_IMAGE_2_QUALITY"] = (
+                    "high" if data.get("DALL_E_3_QUALITY") == "hd" else "medium"
+                )
+        return data
+
+    LLM: Optional[str] = None
+
+    # OpenAI
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: Optional[str] = None
+
+    # Google
+    GOOGLE_API_KEY: Optional[str] = None
+    GOOGLE_MODEL: Optional[str] = None
+
+    # Vertex AI
+    VERTEX_API_KEY: Optional[str] = None
+    VERTEX_MODEL: Optional[str] = None
+    VERTEX_PROJECT: Optional[str] = None
+    VERTEX_LOCATION: Optional[str] = None
+    VERTEX_BASE_URL: Optional[str] = None
+
+    # Azure OpenAI
+    AZURE_OPENAI_API_KEY: Optional[str] = None
+    AZURE_OPENAI_MODEL: Optional[str] = None
+    AZURE_OPENAI_ENDPOINT: Optional[str] = None
+    AZURE_OPENAI_BASE_URL: Optional[str] = None
+    AZURE_OPENAI_API_VERSION: Optional[str] = None
+    AZURE_OPENAI_DEPLOYMENT: Optional[str] = None
+
+    # Amazon Bedrock
+    BEDROCK_REGION: Optional[str] = None
+    BEDROCK_API_KEY: Optional[str] = None
+    BEDROCK_AWS_ACCESS_KEY_ID: Optional[str] = None
+    BEDROCK_AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    BEDROCK_AWS_SESSION_TOKEN: Optional[str] = None
+    BEDROCK_PROFILE_NAME: Optional[str] = None
+    BEDROCK_MODEL: Optional[str] = None
+
+    # OpenRouter
+    OPENROUTER_API_KEY: Optional[str] = None
+    OPENROUTER_MODEL: Optional[str] = None
+    OPENROUTER_BASE_URL: Optional[str] = None
+    OPENROUTER_PROVIDER_ORDER: list[str] = Field(default_factory=list)
+    OPENROUTER_ALLOW_FALLBACKS: Optional[bool] = None
+    OPENROUTER_REQUIRE_PARAMETERS: Optional[bool] = None
+    OPENROUTER_DATA_COLLECTION: Optional[Literal["allow", "deny"]] = None
+    OPENROUTER_ZDR: Optional[bool] = None
+
+    # Fireworks
+    FIREWORKS_API_KEY: Optional[str] = None
+    FIREWORKS_MODEL: Optional[str] = None
+    FIREWORKS_BASE_URL: Optional[str] = None
+
+    # Together AI
+    TOGETHER_API_KEY: Optional[str] = None
+    TOGETHER_MODEL: Optional[str] = None
+    TOGETHER_BASE_URL: Optional[str] = None
+
+    # Cerebras
+    CEREBRAS_API_KEY: Optional[str] = None
+    CEREBRAS_MODEL: Optional[str] = None
+    CEREBRAS_BASE_URL: Optional[str] = None
+
+    # LiteLLM (OpenAI-compatible gateway / proxy)
+    LITELLM_BASE_URL: Optional[str] = None
+    LITELLM_API_KEY: Optional[str] = None
+    LITELLM_MODEL: Optional[str] = None
+
+    # LM Studio (local OpenAI-compatible server)
+    LMSTUDIO_BASE_URL: Optional[str] = None
+    LMSTUDIO_API_KEY: Optional[str] = None
+    LMSTUDIO_MODEL: Optional[str] = None
+
+    # Anthropic
+    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_MODEL: Optional[str] = None
+
+    # Ollama
+    OLLAMA_URL: Optional[str] = None
+    OLLAMA_MODEL: Optional[str] = None
+
+    # Custom LLM
+    CUSTOM_LLM_URL: Optional[str] = None
+    CUSTOM_LLM_API_KEY: Optional[str] = None
+    CUSTOM_MODEL: Optional[str] = None
+
+    # DeepSeek
+    DEEPSEEK_BASE_URL: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_MODEL: Optional[str] = None
+
+    # Image Provider
+    DISABLE_IMAGE_GENERATION: Optional[bool] = None
+    IMAGE_PROVIDER: Optional[str] = None
+    PEXELS_API_KEY: Optional[str] = None
+    PIXABAY_API_KEY: Optional[str] = None
+
+    # ComfyUI
+    COMFYUI_URL: Optional[str] = None
+    COMFYUI_WORKFLOW: Optional[str] = None
+
+    # Open WebUI Image Provider
+    OPEN_WEBUI_IMAGE_URL: Optional[str] = None
+    OPEN_WEBUI_IMAGE_API_KEY: Optional[str] = None
+
+    # OpenAI Compatible Image Provider
+    OPENAI_COMPAT_IMAGE_BASE_URL: Optional[str] = None
+    OPENAI_COMPAT_IMAGE_API_KEY: Optional[str] = None
+    OPENAI_COMPAT_IMAGE_MODEL: Optional[str] = None
+
+    # GPT Image 2 Quality
+    GPT_IMAGE_2_QUALITY: Optional[str] = None
+    # Gpt Image 1.5 Quality
+    GPT_IMAGE_1_5_QUALITY: Optional[str] = None
+
+    # Reasoning
+    DISABLE_THINKING: Optional[bool] = None
+    EXTENDED_REASONING: Optional[bool] = None
+
+    # Optional generation overrides
+    LLM_GENERATION_PROFILE: Optional[
+        Literal["fast", "balanced", "deep", "model_max"]
+    ] = None
+    LLM_MAX_OUTPUT_TOKENS: Optional[int] = Field(default=None, gt=0)
+    LLM_REASONING_MODE: Optional[Literal["auto", "enabled", "disabled"]] = None
+    LLM_REASONING_EFFORT: Optional[
+        Literal[
+            "default", "none", "minimal", "low", "medium", "high", "xhigh", "max"
+        ]
+    ] = None
+    LLM_REASONING_BUDGET_TOKENS: Optional[int] = Field(default=None, ge=0)
+
+    # Web Search
+    WEB_GROUNDING: Optional[bool] = None
+    WEB_SEARCH_PROVIDER: Optional[str] = None
+    WEB_SEARCH_MAX_RESULTS: Optional[str] = None
+    SEARXNG_BASE_URL: Optional[str] = None
+    TAVILY_API_KEY: Optional[str] = None
+    EXA_API_KEY: Optional[str] = None
+    BRAVE_SEARCH_API_KEY: Optional[str] = None
+    SERPER_API_KEY: Optional[str] = None
+
+    # Codex OAuth (ChatGPT)
+    CODEX_MODEL: Optional[str] = None
+    CODEX_ACCESS_TOKEN: Optional[str] = None
+    CODEX_REFRESH_TOKEN: Optional[str] = None
+    CODEX_TOKEN_EXPIRES: Optional[str] = None
+    CODEX_ACCOUNT_ID: Optional[str] = None
+    CODEX_USERNAME: Optional[str] = None
+    CODEX_EMAIL: Optional[str] = None
+    CODEX_IS_PRO: Optional[bool] = None

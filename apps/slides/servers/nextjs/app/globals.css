@@ -1,0 +1,746 @@
+:root {
+  /* Sibyl: the UI uses the Sibyl system font everywhere (font-syne/manrope
+     utility classes from upstream map to it). Slide fonts are per template. */
+  --font-syne: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-manrope: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: var(--font);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer base {
+  /* Chart palette used by chart widgets; UI colors come from app/sibyl.css. */
+  :root {
+    --chart-1: 133 10% 39%;
+    --chart-2: 158 43% 35%;
+    --chart-3: 210 25% 45%;
+    --chart-4: 30 50% 44%;
+    --chart-5: 255 20% 55%;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+strong {
+  @apply font-black;
+}
+
+
+
+/* Hide input number arrows */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+thead,
+tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+thead {
+  width: calc(100% - 1em);
+  /* scrollbar is average 1em/16px width, remove it from thead width */
+}
+
+/* Add this to your global CSS or a specific CSS module */
+@keyframes typing {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 100%;
+  }
+}
+
+.typing-effect {
+  overflow: hidden;
+  /* Ensures the text is hidden until revealed */
+  white-space: nowrap;
+  /* Prevents text from wrapping */
+  display: inline-block;
+  /* Ensures the width is respected */
+  animation: typing 2s steps(10, end);
+  /* Adjust duration and steps for effect */
+  animation-fill-mode: forwards;
+  /* Retain the final state of the animation */
+  animation-delay: 1s;
+  /* Optional: delay before starting the animation */
+}
+
+.typing-effect-complete {
+  border-right: none;
+  /* Remove the cursor after animation */
+}
+
+.blinking-cursor {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  from,
+  to {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes activity-dot-flow {
+  0%,
+  60%,
+  100% {
+    opacity: 0.38;
+    transform: translateY(1px) scale(0.82);
+  }
+
+  30% {
+    opacity: 0.95;
+    transform: translateY(-2px) scale(1);
+  }
+}
+
+.activity-flow-dots > span {
+  animation: activity-dot-flow 0.9s ease-in-out infinite;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.activity-flow-dots > span:nth-child(1) {
+  animation-delay: -0.3s;
+}
+
+.activity-flow-dots > span:nth-child(2) {
+  animation-delay: -0.15s;
+}
+
+.activity-flow-dots > span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  @apply hidden;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom_scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom_scrollbar::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.custom_scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+.custom_scrollbar::-webkit-scrollbar-track {
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+.custom_scrollbar::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+/* Firefox scrollbar styling */
+.custom_scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f9fafb;
+}
+
+/* word animation */
+
+@keyframes slideUp {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes slideDown {
+  0% {
+    transform: translateY(-50%);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 20s linear infinite;
+}
+
+.animate-slideDown {
+  animation: slideDown 20s linear infinite;
+}
+
+/* Add hover pause */
+.animate-slideUp:hover,
+.animate-slideDown:hover {
+  animation-play-state: paused;
+}
+
+/*  box animation */
+
+.research-mode-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.research-mode-bg::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(
+    circle,
+    rgba(56, 48, 161, 0.1) 0%,
+    transparent 70%
+  );
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  animation: rippleEffect 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes rippleEffect {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.8;
+  }
+
+  100% {
+    width: 200%;
+    height: 200%;
+    opacity: 1;
+  }
+}
+
+.slide-edit-stage {
+  isolation: isolate;
+}
+
+.slide-edit-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(89, 108, 93, 0.08) 0%,
+    rgba(89, 108, 93, 0.04) 100%
+  );
+  border: 1px solid rgba(196, 181, 253, 0.56);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 8px 26px rgba(89, 108, 93, 0.08);
+  overflow: hidden;
+  will-change: transform;
+}
+
+.slide-edit-overlay::before {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0.2) 48%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0.2) 52%,
+    rgba(255, 255, 255, 0) 58%
+  );
+  transform: translate3d(-60%, -60%, 0);
+  animation: slideEditDiagonalGlare 2.1s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.slide-edit-overlay::after {
+  content: none;
+}
+
+@keyframes slideEditDiagonalGlare {
+  0% {
+    transform: translate3d(-60%, -60%, 0);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.9;
+  }
+
+  65% {
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translate3d(60%, 60%, 0);
+    opacity: 0;
+  }
+}
+
+.chat-slide-glow {
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(216, 180, 254, 0.32),
+    0 0 0 5px rgba(89, 108, 93, 0.08),
+    0 10px 24px rgba(89, 108, 93, 0.08);
+  will-change: box-shadow;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-edit-overlay::before {
+    animation: none;
+  }
+}
+
+/* Markdown Styles */
+.markdown-content {
+  @apply prose prose-slate max-w-none;
+}
+
+.chat-markdown {
+  @apply prose prose-slate max-w-none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-markdown :where(*) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-markdown :where(p, ul, ol, pre, blockquote) {
+  margin-bottom: 0.75rem;
+}
+
+.chat-markdown
+  :where(
+    p:last-child,
+    ul:last-child,
+    ol:last-child,
+    pre:last-child,
+    blockquote:last-child
+  ) {
+  margin-bottom: 0;
+}
+
+.chat-markdown :where(ul, ol) {
+  padding-left: 1.25rem;
+}
+
+.chat-markdown :where(code) {
+  @apply rounded bg-[#F5F5F5] px-1 py-0.5 text-[0.85em];
+}
+
+.chat-markdown :where(pre) {
+  @apply overflow-x-hidden rounded-lg bg-[#F5F5F5] p-3;
+  white-space: pre-wrap;
+}
+
+.chat-markdown :where(pre code) {
+  white-space: inherit;
+}
+
+/* Override Tailwind Typography prose heading sizes for markdown editor */
+.prose h1 {
+  font-size: 18px !important;
+  font-weight: bold !important;
+  margin-bottom: 1rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h2 {
+  font-size: 16px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.75rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h3 {
+  font-size: 14px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.5rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h4 {
+  font-size: 12px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.5rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h5 {
+  font-size: 11px !important;
+  font-weight: bold !important;
+  margin-bottom: 0.25rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+.prose h6 {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  margin-bottom: 0.25rem !important;
+  color: rgb(17 24 39) !important;
+}
+
+/* MDXEditor styles */
+.mdxeditor-toolbar-group {
+  @apply flex items-center gap-1 p-1;
+}
+
+.mdxeditor-toolbar {
+  @apply flex items-center gap-2 p-2 border-b;
+}
+
+.mdxeditor-button {
+  @apply p-1 rounded hover:bg-gray-100 transition-colors;
+}
+
+.mdxeditor-button[data-active="true"] {
+  @apply bg-gray-100;
+}
+
+/* tippy-box  */
+.tippy-box {
+  max-width: 100% !important;
+}
+
+.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+@media print {
+  #presentation-slides-wrapper,
+  #presentation-slides-wrapper * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #presentation-slides-wrapper .backdrop-blur,
+  #presentation-slides-wrapper .backdrop-blur-sm,
+  #presentation-slides-wrapper .backdrop-blur-md,
+  #presentation-slides-wrapper .backdrop-blur-lg,
+  #presentation-slides-wrapper .backdrop-blur-xl,
+  #presentation-slides-wrapper .backdrop-blur-2xl,
+  #presentation-slides-wrapper .backdrop-blur-3xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* code editor */
+.container_editor_area {
+  tab-size: 4ch;
+  max-height: 400px;
+  overflow: auto;
+  margin: 1.67em 0;
+}
+
+.container__content {
+  width: 440px;
+  max-width: 100%;
+  padding: 10px;
+  text-align: center;
+}
+
+.container__content_area {
+  tab-size: 4ch;
+  /* max-height: 600px; */
+  overflow: auto;
+  margin: 1.67em 0;
+}
+
+.container__editor {
+  font-variant-ligatures: common-ligatures;
+  background-color: #fafafa;
+  border-radius: 3px;
+}
+
+.container__editor textarea {
+  outline: 0;
+}
+
+/* Syntax highlighting */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #90a4ae;
+}
+
+.token.punctuation {
+  color: #9e9e9e;
+}
+
+.namespace {
+  opacity: 0.7;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #e91e63;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #4caf50;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #795548;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #3f51b5;
+}
+
+.token.function {
+  color: #f44336;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #ff9800;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+@keyframes backgroundAnimation {
+}
+.background-animate {
+  animation: backgroundAnimation 3s linear infinite;
+}
+
+.generating-slides-background {
+  left: -18%;
+  top: -30%;
+  width: 76%;
+  height: 54%;
+  border-radius: 9999px;
+  background: #E9EEE8;
+  filter: blur(10px);
+  opacity: 0.95;
+  transform-origin: center;
+  animation: generatingSlidesBackgroundOrbit 3s linear infinite;
+  will-change: transform;
+}
+
+@keyframes generatingSlidesBackgroundOrbit {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+
+  18% {
+    transform: translate3d(82%, 0, 0) rotate(0deg);
+  }
+
+  25% {
+    transform: translate3d(102%, 48%, 0) rotate(45deg);
+  }
+
+  32% {
+    transform: translate3d(102%, 96%, 0) rotate(90deg);
+  }
+
+  43% {
+    transform: translate3d(102%, 152%, 0) rotate(90deg);
+  }
+
+  50% {
+    transform: translate3d(82%, 186%, 0) rotate(180deg);
+  }
+
+  68% {
+    transform: translate3d(0, 186%, 0) rotate(180deg);
+  }
+
+  75% {
+    transform: translate3d(-20%, 152%, 0) rotate(225deg);
+  }
+
+  82% {
+    transform: translate3d(-20%, 48%, 0) rotate(270deg);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0) rotate(360deg);
+  }
+}
+
+.configuration-loader {
+  width: 60px;
+  aspect-ratio: 2;
+  --_g-left: no-repeat radial-gradient(
+    circle closest-side,
+    rgb(122 90 248 / 20%) 90%,
+    transparent
+  );
+  --_g-center: no-repeat radial-gradient(
+    circle closest-side,
+    rgb(122 90 248 / 60%) 90%,
+    transparent
+  );
+  --_g-right: no-repeat radial-gradient(
+    circle closest-side,
+    var(--text) 90%,
+    transparent
+  );
+  background:
+    var(--_g-left) 0% 50%,
+    var(--_g-center) 50% 50%,
+    var(--_g-right) 100% 50%;
+  background-size: calc(100% / 3) 50%;
+  animation: configuration-loader-l3 1s infinite linear;
+}
+
+@keyframes configuration-loader-l3 {
+  20% {
+    background-position:
+      0% 0%,
+      50% 50%,
+      100% 50%;
+  }
+
+  40% {
+    background-position:
+      0% 100%,
+      50% 0%,
+      100% 50%;
+  }
+
+  60% {
+    background-position:
+      0% 50%,
+      50% 100%,
+      100% 0%;
+  }
+
+  80% {
+    background-position:
+      0% 50%,
+      50% 50%,
+      100% 100%;
+  }
+}
+
+.presenton-splash-surface {
+  transform-origin: center center;
+}
+
+.presenton-splash-wordmark-layer {
+  display: block;
+}
+
+@keyframes presenton-splash-surface-grow {
+  0% {
+    transform: translate3d(-50%, -50%, 0) scale(0.001);
+  }
+
+  100% {
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+}
+
+@keyframes presenton-splash-text-reveal {
+  0% {
+    clip-path: circle(0 at 50% 50%);
+  }
+
+  100% {
+    clip-path: circle(71vmax at 50% 50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-flow-dots > span {
+    animation: none;
+    opacity: 0.7;
+    transform: none;
+  }
+
+  .generating-slides-background {
+    animation: none;
+  }
+
+  .presenton-splash-surface {
+    animation: none !important;
+    transform: translate3d(-50%, -50%, 0) scale(1);
+  }
+
+  .presenton-splash-wordmark-reveal {
+    animation: none !important;
+    clip-path: circle(71vmax at 50% 50%);
+  }
+}

@@ -1,0 +1,54 @@
+/* Plugins: only what the shared primitives (components/ui) don't cover. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cards {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+/* Install button pinned to the bottom of each catalog card. */
+.cardFoot {
+  margin-top: auto;
+}
+
+.installedRow {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+}
+
+.installedRow:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.installedRow:last-child {
+  padding-bottom: 0;
+}
+
+select.kind {
+  width: auto;
+}
+
+input.address {
+  flex: 1;
+  min-width: 200px;
+  width: auto;
+}
+
+.detailList {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding-left: 18px;
+}

@@ -1,0 +1,41 @@
+/* Place tabs in a screen's top bar: beside the title on wide screens, their
+   own scrollable row under it on phones. */
+
+.row {
+  display: flex;
+  flex: none;
+  min-width: 0;
+}
+
+.tabs {
+  flex-wrap: nowrap;
+}
+
+.tabs a {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .bar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    padding-bottom: 8px;
+    row-gap: 0;
+  }
+
+  .bar > :global(.topTitle) {
+    min-height: 56px;
+  }
+
+  .row {
+    flex-basis: 100%;
+    order: 3;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .row::-webkit-scrollbar {
+    display: none;
+  }
+}

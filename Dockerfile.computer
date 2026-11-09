@@ -1,0 +1,30 @@
+# Sibyl agent computer: the sandbox an agent's browser runs in.
+#
+# The official Playwright image (Chromium and its system libraries) plus the
+# matching playwright-core and a small launcher that starts a Playwright
+# browser server whose network goes through the gateway's egress proxy. The
+# gateway starts one container per agent (non-root, read-only root
+# filesystem, no capabilities, CPU / memory / process limits, no host mounts)
+# and drives the browser over WebSocket.
+#
+# Keep the version in step with apps/gateway's playwright-core
+# (PLAYWRIGHT_VERSION in apps/gateway/src/computers/config.ts):
+#
+#   docker build -f Dockerfile.computer -t sibyl-computer:1.64.1 .
+#
+# See docs/agent-computers.md.
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
+
+WORKDIR /opt/sibyl
+RUN npm init -y >/dev/null \
+ && npm install --no-audit --no-fund --omit=dev playwright-core@1.64.1 \
+ && npm cache clean --force
+COPY apps/gateway/src/computers/sandbox/server.cjs /opt/sibyl/server.cjs
+
+USER pwuser
+WORKDIR /home/pwuser
+ENV HOME=/home/pwuser \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+EXPOSE 3000
+CMD ["node", "/opt/sibyl/server.cjs"]

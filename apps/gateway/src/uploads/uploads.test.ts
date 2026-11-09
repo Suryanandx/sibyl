@@ -123,11 +123,13 @@ describe("type detection and names", () => {
     expect(detectType(makePdf("x"), "doc.bin")?.kind).toBe("pdf");
     expect(detectType(DOCX(), "r.docx")?.kind).toBe("docx");
     expect(detectType(XLSX(), "r.xlsx")?.kind).toBe("xlsx");
-    expect(detectType(DOCX(), "r.zip")).toBeUndefined();
+    // A ZIP-based file renamed .zip is read as an archive; a zip renamed .txt is refused.
+    expect(detectType(DOCX(), "r.zip")?.kind).toBe("zip");
+    expect(detectType(DOCX(), "r.txt")).toBeUndefined();
     expect(detectType(Buffer.from("a,b\n1,2\n"), "data.csv")?.kind).toBe("csv");
     expect(detectType(Buffer.from("<svg onload=alert(1)>"), "x.svg")).toBeUndefined();
     expect(detectType(Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0]), "notes.txt")).toBeUndefined();
-    expect(detectType(Buffer.from("<html>"), "page.html")).toBeUndefined();
+    expect(detectType(Buffer.from("<html>"), "page.html")?.kind).toBe("html");
   });
 
   test("file names are display-only and stripped of paths", () => {
@@ -187,7 +189,7 @@ describe("UploadService", () => {
     expect(readdirSync(join(dir, view.id)).sort()).toEqual(["extracted.txt", "file"]);
     const record = await store.artifacts.get("owner", view.id);
     expect(record).toMatchObject({ kind: "file", title: "data.csv", meta: { name: "data.csv", mime: "text/csv", textPath: "extracted.txt" } });
-    expect(await uploads.get(view.id, "someone-else")).toBeUndefined();
+    expect(await uploads.get(view.id, { ownerId: "someone-else" })).toBeUndefined();
     expect(() => uploads.folderFor("../../etc")).toThrow(/Invalid file id/);
     expect(() => uploads.folderFor("up_../../x")).toThrow(/Invalid file id/);
     expect(await uploads.get("../x")).toBeUndefined();
@@ -296,6 +298,25 @@ describe("POST/GET /api/uploads", () => {
         }
       },
       { ownerToken: "tok", allowedOrigins: ["http://localhost:3000"] }
+    );
+  });
+
+  test("an upload belongs to its workspace: another workspace can't read it", async () => {
+    await withGateway(
+      async ({ base, uploads }) => {
+        const headers = (workspace: string) => ({ Authorization: "Bearer tok", "x-sibyl-workspace": workspace });
+        const created = await fetch(`${base}/api/uploads`, { method: "POST", headers: { ...headers("alpha"), "X-Filename": "a.png" }, body: PNG });
+        expect(created.status).toBe(201);
+        const { upload } = (await created.json()) as { upload: { id: string } };
+        expect((await fetch(`${base}/api/uploads/${upload.id}`, { headers: headers("alpha") })).status).toBe(200);
+        expect((await fetch(`${base}/api/uploads/${upload.id}`, { headers: headers("beta") })).status).toBe(404);
+        expect((await fetch(`${base}/api/uploads/${upload.id}`, { headers: { Authorization: "Bearer tok" } })).status).toBe(404);
+        // Nor can a chat in another workspace attach it, or read_file it.
+        const elsewhere = await prepareAttachments(uploads, "look", [{ id: upload.id, name: "a.png", mime: "image/png" }], "beta");
+        expect(elsewhere.missing).toEqual([upload.id]);
+        expect(await uploads.get(upload.id, { workspaceId: "alpha" })).toBeDefined();
+      },
+      { ownerToken: "tok" }
     );
   });
 

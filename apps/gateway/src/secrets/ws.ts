@@ -14,6 +14,7 @@ import {
   type SecretsClientMessage,
   type ServerMessage
 } from "@open-gpt-live/protocol";
+import { auditActor, type Principal } from "@open-gpt-live/core";
 import { normalizeHostList } from "./hosts.js";
 import { SecretError, type SecretVault } from "./vault.js";
 
@@ -45,6 +46,8 @@ interface SessionEntry {
   ownerId: string;
   send(message: ServerMessage): void;
   conversationId(): string | undefined;
+  /** Who is on this connection (audit: secret changes by name, never the value). */
+  principal?(): Principal | undefined;
   connectedAt: number;
 }
 
@@ -88,6 +91,7 @@ export class SecretsHub {
     ownerId: string;
     send(message: ServerMessage): void;
     conversationId(): string | undefined;
+    principal?(): Principal | undefined;
   }): SecretsSession {
     const entry: SessionEntry = { ...input, connectedAt: this.now() };
     this.sessions.add(entry);
@@ -182,14 +186,14 @@ export class SecretsHub {
             ...(message.service === undefined ? {} : { service: message.service }),
             ...(message.description === undefined ? {} : { description: message.description }),
             ...(message.allowedHosts === undefined ? {} : { allowedHosts: message.allowedHosts })
-          });
+          }, auditActor(session.principal?.()));
           // The vault's change listener pushes secrets.state to every open app.
         } catch (error) {
           session.send({ type: SECRET_EVENTS.STATE, secrets: await vault.list(session.ownerId), error: safeMessage(error) });
         }
         return;
       case SECRET_EVENTS.DELETE:
-        if (!(await vault.delete(session.ownerId, message.name))) {
+        if (!(await vault.delete(session.ownerId, message.name, auditActor(session.principal?.())))) {
           session.send({ type: SECRET_EVENTS.STATE, secrets: await vault.list(session.ownerId), error: `There is no secret named ${message.name}` });
         }
         return;
@@ -215,7 +219,7 @@ export class SecretsHub {
         service: view.service,
         description: view.description,
         allowedHosts: parsed.hosts
-      });
+      }, auditActor(session.principal?.()));
     } catch (error) {
       session.send({ type: SECRET_EVENTS.RESOLVED, id, name: view.name, status: "invalid", message: safeMessage(error) });
       return;

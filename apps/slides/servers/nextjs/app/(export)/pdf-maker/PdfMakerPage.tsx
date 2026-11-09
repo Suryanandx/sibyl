@@ -1,0 +1,321 @@
+"use client";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/store/store";
+import "@/app/(presentation-generator)/utils/prism-languages";
+import { Skeleton } from "@/components/ui/skeleton";
+import { notify } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { AlertCircle } from "lucide-react";
+import { setPresentationData } from "@/store/slices/presentationGeneration";
+import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
+import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
+import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
+import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
+import {
+  shouldRenderTemplateV2HtmlPreview,
+  TemplateV2HtmlSlidePreview,
+} from "@/app/(presentation-generator)/components/TemplateV2HtmlSlidePreview";
+import { normalizeBackendAssetUrls } from "@/utils/api";
+import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
+import { useSmartChartInjection } from "@/app/(presentation-generator)/components/useSmartChartInjection";
+
+const PDF_PRINT_STYLE = `
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #presentation-slides-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    gap: 0 !important;
+  }
+
+  #presentation-slides-wrapper {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    /*
+     * export-core measures PPTX elements in a 3000px-wide viewport. Keep the
+     * 1280px slide canvas at x=0 so its clipping rectangle and child element
+     * coordinates share the same origin.
+     */
+    align-items: flex-start !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #presentation-slides-wrapper .main-slide {
+    width: 1280px !important;
+    min-width: 1280px !important;
+    max-width: 1280px !important;
+    height: 720px !important;
+    min-height: 720px !important;
+    max-height: 720px !important;
+    flex: 0 0 720px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #presentation-slides-wrapper .slide-export-inner {
+    width: 1280px !important;
+    height: 720px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  @media print {
+    @page {
+      size: 1280px 720px;
+      margin: 0;
+    }
+
+    #presentation-slides-wrapper {
+      overflow: visible !important;
+    }
+
+    #presentation-slides-wrapper .main-slide {
+      break-after: page;
+      page-break-after: always;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    #presentation-slides-wrapper .main-slide:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+  }
+`;
+
+type PresentationPageProps = {
+  presentation_id: string;
+  exportCookie?: string;
+};
+
+const SmartHtmlPdfSlide = ({
+  slide,
+  index,
+}: {
+  slide: { id?: string | null; index?: number; html_content?: string | null };
+  index: number;
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const html = slide.html_content?.trim() ?? "";
+  const instanceId = useMemo(
+    () => `pdf-smart-${slide.id ?? index}`,
+    [index, slide.id]
+  );
+
+  useSmartChartInjection({
+    html,
+    instanceId,
+    domRevision: `${slide.index ?? "none"}:${index}`,
+    containerRef,
+  });
+
+  return (
+    <div className="smart-slide-export-root h-[720px] w-[1280px] overflow-hidden bg-white">
+      <div className="smart-slide-export-content h-[720px] w-[1280px] overflow-hidden bg-white">
+        <div
+          ref={containerRef}
+          data-smart-slide-instance={instanceId}
+          data-tailwind-runtime-scope
+          className="h-[720px] w-[1280px] overflow-hidden bg-white"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const PresentationPage = ({ presentation_id, exportCookie }: PresentationPageProps) => {
+  const pathname = usePathname();
+  const [contentLoading, setContentLoading] = useState(true);
+  const exportCookieFromHash =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
+        "exportCookie"
+      ) ?? undefined
+      : undefined;
+  const effectiveExportCookie = exportCookie ?? exportCookieFromHash;
+
+  const dispatch = useDispatch();
+  const { presentationData } = useSelector(
+    (state: RootState) => state.presentationGeneration
+  );
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (
+      presentationData?.slides?.some(
+        (slide: any) =>
+          slide?.layout?.includes("custom") ||
+          (typeof slide?.html_content === "string" && slide.html_content.trim())
+      )
+    ) {
+      ensureTailwindBrowserScript();
+    }
+  }, [presentationData]);
+  useEffect(() => {
+    fetchUserSlides();
+  }, []);
+
+  const fetchUserSlides = async () => {
+    try {
+      const data = effectiveExportCookie
+        ? await fetchPresentationForExport(presentation_id, effectiveExportCookie)
+        : await DashboardApi.getPresentation(presentation_id);
+      const normalizedData = normalizeBackendAssetUrls(data);
+      dispatch(setPresentationData(normalizedData));
+
+      if (normalizedData.fonts) {
+        useFontLoader(normalizedData.fonts);
+      }
+      if (normalizedData?.theme) {
+        try {
+          applyPresentationThemeToElement(
+            document.getElementById("presentation-slides-wrapper"),
+            normalizedData.theme,
+          );
+        } catch (themeError) {
+          // Theme issues should not block export rendering.
+          console.warn("Theme application skipped for pdf-maker:", themeError);
+        }
+      }
+    } catch (error) {
+      setError(true);
+      notify.error("Failed to load presentation", "The presentation could not be loaded. Please try again.");
+      console.error("Error fetching user slides:", error);
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const fetchPresentationForExport = async (
+    id: string,
+    cookieHeader: string
+  ) => {
+    const response = await fetch(`/api/export-presentation-data/${id}`, {
+      method: "GET",
+      headers: {
+        "x-export-cookie": cookieHeader,
+      },
+      cache: "no-store",
+    });
+
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Presentation not found"
+    );
+  };
+
+  const slides = presentationData?.slides ?? [];
+  const isLoading = contentLoading || slides.length === 0;
+
+  return (
+    <div className="m-0 flex flex-col overflow-visible p-0">
+      {error ? (
+        <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
+          <div
+            className="bg-white border border-red-300 text-red-700 px-6 py-8 rounded-lg shadow-lg flex flex-col items-center"
+            role="alert"
+          >
+            <AlertCircle className="w-16 h-16 mb-4 text-red-500" />
+            <strong className="font-bold text-4xl mb-2">Oops!</strong>
+            <p className="block text-2xl py-2">
+              We encountered an issue loading your presentation.
+            </p>
+            <p className="text-lg py-2">
+              Please check your internet connection or try again later.
+            </p>
+            <Button
+              className="mt-4 bg-red-500 text-white hover:bg-red-600 focus:ring-4 focus:ring-red-300"
+              onClick={() => {
+                trackEvent(MixpanelEvent.PdfMaker_Retry_Button_Clicked, { pathname });
+                window.location.reload();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <style jsx global>{PDF_PRINT_STYLE}</style>
+          <div
+            id="presentation-slides-wrapper"
+            className="relative m-0 flex w-full flex-col items-start overflow-visible p-0"
+          >
+            {isLoading ? (
+              <div className="relative m-0 flex w-full justify-center p-0">
+                <div className="m-0 p-0">
+                  {Array.from({ length: 2 }).map((_, index) => (
+                    <Skeleton
+                      key={index}
+                      className="m-0 h-[720px] w-[1280px] bg-gray-400 p-0"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              slides.map((slide: any, index: number) => {
+                const useTemplateV2HtmlPreview =
+                  shouldRenderTemplateV2HtmlPreview(
+                    slide,
+                    presentationData?.version
+                  );
+
+                return (
+                  <div
+                    key={`${slide.type}-${index}-${slide.index}`}
+                    id={`slide-${slide.index}`}
+                    className="main-slide relative flex items-center justify-center"
+                    data-speaker-note={slide.speaker_note ?? ""}
+                  >
+                    <div
+                      className="slide-export-inner group font-syne"
+                      data-layout={slide.layout}
+                      data-group={slide.layout_group}
+                    >
+                      {useTemplateV2HtmlPreview ? (
+                        <TemplateV2HtmlSlidePreview
+                          slide={slide}
+                          fonts={presentationData?.fonts}
+                          fixedSize
+                        />
+                      ) : typeof slide?.html_content === "string" &&
+                        slide.html_content.trim() ? (
+                        <SmartHtmlPdfSlide slide={slide} index={index} />
+                      ) : (
+                        <SlideScale
+                          slide={slide}
+                          theme={presentationData?.theme ?? null}
+                          isEditMode={false}
+                          fixedSize
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default PresentationPage;

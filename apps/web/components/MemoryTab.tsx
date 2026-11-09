@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { gatewayJson } from "./AttachmentClient";
+import { errorText, gatewayRequest } from "../lib/gateway-http";
 import { Icon } from "./Icon";
+import { Button, Card, CardHeader, Checkbox, EmptyState, Input, Muted, Notice, Row, Spacer, Stack, cx } from "./ui";
+import styles from "./settings/settings.module.css";
 
 interface MemoryItem {
   id: string;
@@ -31,10 +33,10 @@ export function MemoryTab() {
 
   const load = useCallback(async () => {
     try {
-      setState(await gatewayJson<MemoryState>("/api/memory"));
+      setState(await gatewayRequest<MemoryState>("/api/memory"));
       setError(null);
     } catch (cause) {
-      setError(`Couldn't load memory: ${(cause as Error).message}`);
+      setError(`Couldn't load memory: ${errorText(cause)}`);
     }
   }, []);
 
@@ -49,7 +51,7 @@ export function MemoryTab() {
       await load();
       return true;
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(errorText(cause));
       return false;
     } finally {
       setBusy(false);
@@ -60,59 +62,47 @@ export function MemoryTab() {
     event.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    if (await run(() => gatewayJson("/api/memory", { method: "POST", body: { text } }))) setDraft("");
+    if (await run(() => gatewayRequest("/api/memory", { method: "POST", body: { text } }))) setDraft("");
   }
 
   async function saveEdit(): Promise<void> {
     if (!editing) return;
     const { id, text } = editing;
-    if (await run(() => gatewayJson(`/api/memory/${encodeURIComponent(id)}`, { method: "PATCH", body: { text } }))) setEditing(null);
+    if (await run(() => gatewayRequest(`/api/memory/${encodeURIComponent(id)}`, { method: "PATCH", body: { text } }))) setEditing(null);
   }
 
   if (!state) {
-    return <p className="muted center">{error ?? "Loading memory…"}</p>;
+    return error ? <Notice tone="danger">{error}</Notice> : <Muted>Loading memory…</Muted>;
   }
 
   if (!state.available) {
-    return (
-      <div className="fieldStack">
-        <p className="memoryNotice">Memory is turned off on this Sibyl (SIBYL_MEMORY=false). Ask whoever runs it to turn it on.</p>
-      </div>
-    );
+    return <Notice tone="warning">Memory is turned off on this Sibyl (SIBYL_MEMORY=false). Ask whoever runs it to turn it on.</Notice>;
   }
 
+  const itemPath = (id: string) => `/api/memory/${encodeURIComponent(id)}`;
+
   return (
-    <div className="fieldStack memoryTab">
-      <label className="toggleRow">
-        <span>
-          <span className="fieldLabel">Remember things across chats</span>
-          <span className="fieldHint">
-            When you say &ldquo;remember that…&rdquo;, Sibyl saves a short fact here and uses it in every chat and voice
-            conversation. Passwords, keys and card numbers are never stored.
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          role="switch"
+    <Stack>
+      <Card>
+        <Checkbox
+          label={<strong>Remember things across chats</strong>}
           checked={state.enabled}
           disabled={busy}
           onChange={(event) => {
             const enabled = event.target.checked;
-            void run(() => gatewayJson("/api/memory/settings", { method: "PUT", body: { enabled } }));
+            void run(() => gatewayRequest("/api/memory/settings", { method: "PUT", body: { enabled } }));
           }}
         />
-        <span className="switch" aria-hidden />
-      </label>
+        <Muted>
+          When you say &ldquo;remember that…&rdquo;, Sibyl saves a short fact here and uses it in every chat and voice conversation. Passwords, keys and
+          card numbers are never stored.
+        </Muted>
+      </Card>
 
-      {error ? (
-        <p className="memoryError" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Notice tone="danger">{error}</Notice> : null}
 
-      <form className="memoryAdd" onSubmit={(event) => void add(event)}>
-        <input
-          className="memoryInput"
+      <form className={styles.inline} onSubmit={(event) => void add(event)}>
+        <Input
           placeholder="Add a fact, e.g. “I prefer metric units”"
           maxLength={MAX_CHARS}
           value={draft}
@@ -120,115 +110,113 @@ export function MemoryTab() {
           onChange={(event) => setDraft(event.target.value)}
           aria-label="New memory"
         />
-        <button type="submit" className="darkBtn" disabled={busy || !state.enabled || !draft.trim()}>
+        <Button type="submit" variant="primary" disabled={busy || !state.enabled || !draft.trim()}>
           <Icon name="plus" size={15} />
           Add
-        </button>
+        </Button>
       </form>
 
       {state.items.length === 0 ? (
-        <p className="muted center memoryEmpty">Nothing remembered yet.</p>
+        <EmptyState compact title="Nothing remembered yet" />
       ) : (
-        <ul className={`memoryList${state.enabled ? "" : " off"}`}>
-          {state.items.map((item) => (
-            <li key={item.id} className={`memoryItem${item.pinned ? " pinned" : ""}`}>
-              {editing?.id === item.id ? (
-                <form
-                  className="memoryEdit"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveEdit();
-                  }}
-                >
-                  <input
-                    className="memoryInput"
-                    autoFocus
-                    maxLength={MAX_CHARS}
-                    value={editing.text}
-                    onChange={(event) => setEditing({ id: item.id, text: event.target.value })}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") setEditing(null);
+        <Card>
+          <CardHeader
+            title="Remembered"
+            meta={`${state.items.length} fact${state.items.length === 1 ? "" : "s"} · pinned first, then most recent`}
+          />
+          <ul className={cx(styles.rows, !state.enabled && styles.off)}>
+            {state.items.map((item) => (
+              <li key={item.id} className={styles.row}>
+                {editing?.id === item.id ? (
+                  <form
+                    className={cx(styles.inline, styles.rowMain)}
+                    style={{ flexDirection: "row" }}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveEdit();
                     }}
-                    aria-label="Edit memory"
-                  />
-                  <button type="submit" className="iconBtn" aria-label="Save" disabled={busy || !editing.text.trim()}>
-                    <Icon name="check" size={16} />
-                  </button>
-                  <button type="button" className="iconBtn" aria-label="Cancel" onClick={() => setEditing(null)}>
-                    <Icon name="close" size={16} />
-                  </button>
-                </form>
-              ) : (
-                <>
-                  <span className="memoryText">{item.text}</span>
-                  <span className="memoryActions">
-                    <button
-                      type="button"
-                      className={`memoryPin${item.pinned ? " on" : ""}`}
-                      aria-pressed={Boolean(item.pinned)}
-                      title={item.pinned ? "Unpin" : "Pin (always included first)"}
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() =>
-                          gatewayJson(`/api/memory/${encodeURIComponent(item.id)}`, { method: "PATCH", body: { pinned: !item.pinned } })
-                        )
-                      }
-                    >
-                      {item.pinned ? "Pinned" : "Pin"}
-                    </button>
-                    <button
-                      type="button"
-                      className="iconBtn"
-                      aria-label={`Edit “${item.text}”`}
-                      disabled={busy}
-                      onClick={() => setEditing({ id: item.id, text: item.text })}
-                    >
-                      <Icon name="pencil" size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className="iconBtn"
-                      aria-label={`Delete “${item.text}”`}
-                      disabled={busy}
-                      onClick={() => void run(() => gatewayJson(`/api/memory/${encodeURIComponent(item.id)}`, { method: "DELETE" }))}
-                    >
-                      <Icon name="close" size={15} />
-                    </button>
-                  </span>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+                  >
+                    <Input
+                      autoFocus
+                      maxLength={MAX_CHARS}
+                      value={editing.text}
+                      onChange={(event) => setEditing({ id: item.id, text: event.target.value })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setEditing(null);
+                      }}
+                      aria-label="Edit memory"
+                    />
+                    <Button type="submit" variant="ghost" iconOnly aria-label="Save" disabled={busy || !editing.text.trim()}>
+                      <Icon name="check" size={16} />
+                    </Button>
+                    <Button variant="ghost" iconOnly aria-label="Cancel" onClick={() => setEditing(null)}>
+                      <Icon name="close" size={16} />
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    <span className={styles.rowMain}>{item.text}</span>
+                    <span className={styles.rowEnd}>
+                      <Button
+                        variant={item.pinned ? "secondary" : "ghost"}
+                        size="sm"
+                        aria-pressed={Boolean(item.pinned)}
+                        title={item.pinned ? "Unpin" : "Pin (always included first)"}
+                        disabled={busy}
+                        onClick={() => void run(() => gatewayRequest(itemPath(item.id), { method: "PATCH", body: { pinned: !item.pinned } }))}
+                      >
+                        {item.pinned ? "Pinned" : "Pin"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        aria-label={`Edit “${item.text}”`}
+                        disabled={busy}
+                        onClick={() => setEditing({ id: item.id, text: item.text })}
+                      >
+                        <Icon name="pencil" size={15} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        aria-label={`Delete “${item.text}”`}
+                        disabled={busy}
+                        onClick={() => void run(() => gatewayRequest(itemPath(item.id), { method: "DELETE" }))}
+                      >
+                        <Icon name="close" size={15} />
+                      </Button>
+                    </span>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+          <Row>
+            <Spacer />
+            {confirmClear ? (
+              <>
+                <Button variant="ghost" onClick={() => setConfirmClear(false)}>
+                  Keep
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={busy}
+                  onClick={() => void run(() => gatewayRequest("/api/memory", { method: "DELETE" })).then(() => setConfirmClear(false))}
+                >
+                  Forget everything
+                </Button>
+              </>
+            ) : (
+              <Button variant="danger" size="sm" onClick={() => setConfirmClear(true)}>
+                Forget everything…
+              </Button>
+            )}
+          </Row>
+        </Card>
       )}
-
-      {state.items.length > 0 ? (
-        <div className="memoryFooter">
-          <span className="fieldHint">
-            {state.items.length} fact{state.items.length === 1 ? "" : "s"} · pinned first, then most recent
-          </span>
-          {confirmClear ? (
-            <span className="memoryConfirm">
-              <button type="button" className="ghostBtn" onClick={() => setConfirmClear(false)}>
-                Keep
-              </button>
-              <button
-                type="button"
-                className="darkBtn danger"
-                disabled={busy}
-                onClick={() => void run(() => gatewayJson("/api/memory", { method: "DELETE" })).then(() => setConfirmClear(false))}
-              >
-                Forget everything
-              </button>
-            </span>
-          ) : (
-            <button type="button" className="ghostBtn" onClick={() => setConfirmClear(true)}>
-              Forget everything…
-            </button>
-          )}
-        </div>
-      ) : null}
-    </div>
+    </Stack>
   );
 }
 

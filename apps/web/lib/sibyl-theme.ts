@@ -9,7 +9,7 @@ const chartPalette = [
   "#5F7F9F", // slate blue
   "#78A59B", // sage teal
   "#C89A6A", // amber
-  "#9386B0", // lavender
+  "#A39785", // stone
   "#BA8792", // dusty rose
   "#9DA86F", // olive
   "#869AA8", // blue-gray

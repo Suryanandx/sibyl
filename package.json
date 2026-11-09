@@ -10,10 +10,16 @@
     "dev": "pnpm --parallel --stream --filter @open-gpt-live/gateway --filter @open-gpt-live/web dev",
     "build": "pnpm --filter @open-gpt-live/gateway build && pnpm --filter @open-gpt-live/web build",
     "start": "NODE_ENV=production pnpm --parallel --stream --filter @open-gpt-live/gateway --filter @open-gpt-live/web start",
+    "slides:setup": "cd apps/slides/servers/fastapi && uv sync --frozen --no-dev --python 3.11 && cd ../nextjs && npm ci --no-audit --no-fund && cd ../.. && node scripts/sync-presentation-export.cjs --force",
+    "slides:dev": "node apps/slides/start.mjs --dev",
+    "slides:build": "cd apps/slides/servers/nextjs && npm run build",
+    "slides:start": "node apps/slides/start.mjs",
     "typecheck": "pnpm -r typecheck",
+    "typecheck:ee": "tsc -p ee/tsconfig.json",
+    "check:ee-boundary": "node scripts/check-ee-boundary.mjs",
     "test": "vitest run",
     "local-ai:check": "node --env-file=.env scripts/check-local-ai.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm check:ee-boundary && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

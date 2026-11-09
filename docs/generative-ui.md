@@ -9,7 +9,7 @@ Some answers are easier to see than to hear. Alongside its spoken reply, Sibyl c
 - In single-model mode (no voice brain), the chat model writes both the spoken part and the visual.
 - Greetings, small talk and short factual answers stay spoken only.
 
-Visual answers are on by default. Turn them off for everyone with `GENUI_ENABLED=false`, or per browser with **Visual answers** in the Voice tab of Models & voice. Without visuals the deep brain is asked for plain spoken text.
+Visual answers are on by default. Turn them off for everyone with `GENUI_ENABLED=false`, or per browser with **Visual answers** in Settings → Voice (`/settings/voice`). Without visuals the deep brain is asked for plain spoken text.
 
 ## The response contract
 
@@ -82,3 +82,15 @@ This rewrites `packages/genui/src/openui-library-prompt.generated.ts`. Commit it
 
 - `@openuidev/react-headless` has an optional import of the Vercel AI SDK. Sibyl streams over its own WebSocket, so `apps/web/next.config.mjs` stubs that import out.
 - The postinstall script of `@openuidev/lang-core` only sends telemetry, so it is disabled in `pnpm-workspace.yaml` (`allowBuilds`).
+
+## Debugging visuals
+
+Sibyl has its own **Visual inspector** (`apps/web/components/VisualInspector.tsx`). It listens to `@openuidev/observability`, the in-page event bus the OpenUI renderer reports to. Nothing leaves the browser. For each generated visual it shows:
+
+- parse and render errors and warnings (incomplete programs, unresolved references, unused statements);
+- the raw OpenUI Lang source, with a copy button;
+- timing, and the model when an event carries one.
+
+It is always on in development (`next dev`): open it with the small **Visuals** button in the bottom-right corner. In a production build, turn it on per browser in **Settings → Diagnostics → Visual inspector**.
+
+`@openuidev/react-lang` would otherwise auto-mount the third-party OpenUI devtools overlay in development. Sibyl turns that off twice: the inline head script in `apps/web/app/layout.tsx` sets the `openui.devtools.autoMount` flag before the renderer loads, and `apps/web/next.config.mjs` aliases `@openuidev/devtools` to an empty module.

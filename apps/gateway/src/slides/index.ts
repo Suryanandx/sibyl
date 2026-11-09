@@ -5,12 +5,14 @@
  * SIBYL_SLIDES=false turns slides off entirely.
  */
 import type { Store, ToolRegistry, UsageMeter } from "@open-gpt-live/core";
-import { OPENROUTER_DEFAULTS } from "../config.js";
 import { slidesClientFromEnv, type SlidesClient } from "./client.js";
 import { SlidesService } from "./service.js";
 import { createSlidesTools } from "./tools.js";
 
 export { SlidesService } from "./service.js";
+
+/** The engine's default deck model (apps/slides/servers/fastapi/utils/sibyl.py). */
+export const ENGINE_DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
 export { takeSlidesArtifact, SLIDES_PROMPT_GUIDANCE } from "./tools.js";
 export { routeSlidesRequest } from "./http.js";
 
@@ -41,10 +43,13 @@ export async function installSlides(input: InstallSlidesInput): Promise<SlidesSe
     client,
     store: input.store,
     meter: input.meter,
-    model: env.SIBYL_SLIDES_MODEL?.trim() || OPENROUTER_DEFAULTS.llmModel,
+    // Until the engine reports its model (below): the same default as the engine.
+    model: env.SIBYL_SLIDES_MODEL?.trim() || ENGINE_DEFAULT_MODEL,
     ...(Number.isFinite(usdPerSlide) && usdPerSlide >= 0 && env.SIBYL_SLIDES_USD_PER_SLIDE?.trim() ? { usdPerSlide } : {}),
     ...(env.SIBYL_SLIDES_EDITOR_BASE?.trim() ? { editorBase: env.SIBYL_SLIDES_EDITOR_BASE.trim() } : {})
   });
+  // The engine is the source of truth for the deck model and its price.
+  await service.refreshEngineConfig();
   const tools = createSlidesTools(service);
   for (const tool of tools) {
     try {

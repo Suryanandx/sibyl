@@ -40,6 +40,54 @@ test("meter blocks when an estimate would cross the daily cap and downgrades at 
   assert.deepEqual(meter.check({ ownerId: OWNER, estimateUsd: 0.1, now: tomorrow }), { allowed: true });
 });
 
+test("meter attributes session spend to the person and workspace, read live", async () => {
+  const store = createMemoryStore();
+  const meter = new GatewayUsageMeter({ store, now: () => NOW });
+  let workspaceId = "w-1";
+  const unbind = meter.attributeSession("s1", () => ({ userId: "u-1", workspaceId, role: "member" }));
+  meter.bindRequest("r1", "s1");
+  meter.record({ ownerId: OWNER, feature: "brain", model: "m", costUsd: 0.1, estimated: false, requestId: "r1" });
+  workspaceId = "w-2";
+  meter.record({ ownerId: OWNER, feature: "voice", model: "m", costUsd: 0.2, estimated: false, sessionId: "s1" });
+  // An explicit attribution (a routine's creator) wins over the session's.
+  meter.record({ ownerId: OWNER, feature: "routine", model: "m", costUsd: 0.3, estimated: false, sessionId: "s1", userId: "u-9", workspaceId: "w-9" });
+  unbind();
+  meter.record({ ownerId: OWNER, feature: "voice", model: "m", costUsd: 0.4, estimated: false, sessionId: "s1" });
+  await meter.flush();
+  const events = await store.usage.list(OWNER, 0, NOW + 1);
+  assert.deepEqual(
+    events.map((e) => [e.userId, e.workspaceId]),
+    [["u-1", "w-1"], ["u-1", "w-2"], ["u-9", "w-9"], [undefined, undefined]]
+  );
+});
+
+test("usage policies are asked only after the built-in caps, and never change them", () => {
+  const asked: Array<{ userId?: string; workspaceId?: string; role?: string; feature?: string; model?: string }> = [];
+  const meter = new GatewayUsageMeter({ store: createMemoryStore(), limits: { dailyUsd: 1 }, now: () => NOW });
+  const plain = new GatewayUsageMeter({ store: createMemoryStore(), limits: { dailyUsd: 1 }, now: () => NOW });
+  const remove = meter.addPolicy({
+    check: (input) => {
+      asked.push({ userId: input.userId, workspaceId: input.workspaceId, role: input.role, feature: input.feature, model: input.model });
+      return input.userId === "u-blocked" ? { allowed: false, scope: "policy", message: "no" } : undefined;
+    }
+  });
+  meter.attributeSession("s1", () => ({ userId: "u-1", workspaceId: "w-1", role: "admin" }));
+  for (const m of [meter, plain]) m.record({ ownerId: OWNER, feature: "voice", model: "m", costUsd: 0.9, estimated: false });
+  // Same decisions as without a policy: economy at 85%, blocked over the cap (the policy isn't asked then).
+  assert.deepEqual(meter.check({ ownerId: OWNER, estimateUsd: 0.01, sessionId: "s1", feature: "brain", model: "x" }), plain.check({ ownerId: OWNER, estimateUsd: 0.01 }));
+  assert.deepEqual(asked, [{ userId: "u-1", workspaceId: "w-1", role: "admin", feature: "brain", model: "x" }]);
+  const overCap = meter.check({ ownerId: OWNER, estimateUsd: 0.5, userId: "u-blocked" });
+  assert.equal(overCap.allowed ? "allowed" : overCap.scope, "daily");
+  assert.equal(asked.length, 1);
+  assert.deepEqual(meter.check({ ownerId: OWNER, estimateUsd: 0, userId: "u-blocked" }), { allowed: false, scope: "policy", message: "no" });
+  // A policy that throws is skipped; a removed policy is not asked.
+  const removeBroken = meter.addPolicy({ check: () => { throw new Error("boom"); } });
+  assert.deepEqual(meter.check({ ownerId: OWNER, estimateUsd: 0 }), { allowed: true, downgrade: true });
+  removeBroken();
+  remove();
+  assert.deepEqual(meter.check({ ownerId: OWNER, estimateUsd: 0, userId: "u-blocked" }), { allowed: true, downgrade: true });
+});
+
 test("meter enforces monthly and routine caps", () => {
   const meter = new GatewayUsageMeter({
     store: createMemoryStore(),

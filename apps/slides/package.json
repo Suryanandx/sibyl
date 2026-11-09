@@ -1,0 +1,22 @@
+{
+  "name": "sibyl-slides",
+  "version": "0.9.12-sibyl.1",
+  "private": true,
+  "presentationExportVersion": "v1.0.51",
+  "type": "module",
+  "description": "Sibyl Slides: the deck engine of Sibyl (derived from Presenton)",
+  "scripts": {
+    "dev": "node start.mjs --dev",
+    "start": "node start.mjs",
+    "test": "node --test scripts/*.node-test.mjs",
+    "convert:template": "node scripts/convert-template.mjs",
+    "convert:presentation-template": "node scripts/convert-presentation-template.mjs",
+    "sync:presentation-export": "node scripts/sync-presentation-export.cjs",
+    "sync:presentation-export:force": "node scripts/sync-presentation-export.cjs --force",
+    "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only"
+  },
+  "dependencies": {
+    "@llamaindex/liteparse": "^1.5.2",
+    "sharp": "^0.34.5"
+  }
+}

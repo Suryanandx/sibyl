@@ -14,3 +14,14 @@ mcp.config.json
 data/
 # Secrets master key (see docs/secrets.md) — never commit it
 secret.key
+
+# Sibyl Slides runtime
+apps/slides/data/
+apps/slides/presentation-export/
+apps/slides/.cache/
+apps/slides/servers/fastapi/.venv/
+apps/slides/servers/nextjs/.next-build/
+
+# Licence signing keys (see ee/README.md) — never commit a private key
+*.pem
+sibyl-license-*

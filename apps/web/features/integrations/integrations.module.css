@@ -1,0 +1,402 @@
+/* Integrations: connector grid and the connector side sheet. Buttons, cards,
+   badges, fields and notices come from components/ui. */
+
+.sectionTitle {
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 12px 0 0;
+}
+
+.grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+article.cardLocked {
+  background: var(--canvas);
+}
+
+.cardHead,
+.panelHead {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+}
+
+.cardHead {
+  align-items: center;
+}
+
+.glyph {
+  background: var(--subtle);
+  border-radius: 10px;
+  color: var(--text);
+  display: grid;
+  flex: none;
+  height: 38px;
+  place-items: center;
+  width: 38px;
+}
+
+.cardTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardTitle h2,
+.cardTitle h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cardTitle h2 {
+  font-size: 18px;
+}
+
+.cardTitle p {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 2px 0 0;
+}
+
+.description {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.connList {
+  display: grid;
+  font-size: 13px;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.connList li {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  border-radius: 50%;
+  flex: none;
+  height: 7px;
+  width: 7px;
+}
+
+.dotOk {
+  background: var(--positive);
+}
+
+.dotWarn {
+  background: var(--warning);
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.small {
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.small code,
+.section code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.warnText {
+  color: var(--warning);
+  font-size: 12.5px;
+  margin: 4px 0;
+}
+
+.actions {
+  margin-top: 10px;
+}
+
+.advanced {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 8px;
+}
+
+/* ── connector side sheet ── */
+
+.backdrop {
+  background: rgba(17, 20, 18, 0.28);
+  display: flex;
+  inset: 0;
+  justify-content: flex-end;
+  position: fixed;
+  z-index: 50;
+}
+
+.panel {
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-pop);
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 22px 40px;
+  width: min(560px, 100vw);
+}
+
+.panelNotice {
+  margin-top: 12px;
+}
+
+.section {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.section p {
+  line-height: 1.5;
+}
+
+.subTitle {
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 14px 0 6px;
+  text-transform: uppercase;
+}
+
+.connection {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+.connectionHead {
+  align-items: center;
+  display: flex;
+  font-size: 13.5px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.segmented {
+  margin: 4px 0 8px;
+}
+
+/* action groups with switches */
+
+.groups {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.groupRow {
+  align-items: flex-start;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 6px 4px;
+  position: relative;
+}
+
+.groupRow:hover {
+  background: var(--subtle);
+}
+
+.groupText {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.groupTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  font-weight: 550;
+  gap: 6px;
+}
+
+.switchInput {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.switch {
+  background: var(--border-strong);
+  border-radius: 999px;
+  flex: none;
+  height: 18px;
+  margin-top: 1px;
+  position: relative;
+  transition: background 0.15s ease;
+  width: 30px;
+}
+
+.switch::after {
+  background: var(--bg);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  content: "";
+  height: 14px;
+  left: 2px;
+  position: absolute;
+  top: 2px;
+  transition: transform 0.15s ease;
+  width: 14px;
+}
+
+.switchInput:checked + .switch {
+  background: var(--accent);
+}
+
+.switchInput:checked + .switch::after {
+  transform: translateX(12px);
+}
+
+.switchInput:focus-visible + .switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.switchInput:disabled + .switch {
+  opacity: 0.45;
+}
+
+/* setup */
+
+.form {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.disclosure {
+  background: none;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.setup {
+  margin-top: 10px;
+}
+
+.steps {
+  color: var(--text-2);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+  line-height: 1.45;
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.setup a {
+  color: var(--accent);
+}
+
+.copyField {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.copyLabel {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.copyRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.code {
+  background: var(--subtle);
+  border-radius: 8px;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 7px 9px;
+  white-space: nowrap;
+}
+
+.scopes {
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.scopes th,
+.scopes td {
+  border-bottom: 1px solid var(--border);
+  padding: 5px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.scopes th {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.scopes code {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  margin: 0 4px 2px 0;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 16px;
+  }
+}

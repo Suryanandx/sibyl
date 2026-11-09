@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "vitest";
+import type { ResolveHost } from "../../net/safe-fetch.js";
 import { createReadWebpageTool, htmlToText, MAX_TEXT_CHARS } from "./read-webpage.js";
-import { assertPublicUrl, isBlockedAddress, type ResolveHost } from "./ssrf.js";
 import { fakeFetch, testContext } from "./test-helpers.js";
 
 const dns: Record<string, string[]> = {
@@ -20,33 +20,7 @@ const resolveHost: ResolveHost = async (host) => {
 const html = (body: string, headers: Record<string, string> = {}) =>
   new Response(body, { status: 200, headers: { "content-type": "text/html; charset=utf-8", ...headers } });
 
-describe("SSRF guard", () => {
-  test("blocks private, loopback, link-local and metadata addresses", () => {
-    for (const address of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.0.10", "169.254.169.254", "0.0.0.0", "100.64.0.1", "::1", "fe80::1", "fd00::1", "::ffff:10.0.0.1", "::ffff:7f00:1", "224.0.0.1"]) {
-      assert.equal(isBlockedAddress(address), true, address);
-    }
-    for (const address of ["93.184.215.14", "8.8.8.8", "2606:4700::6810:84e5"]) {
-      assert.equal(isBlockedAddress(address), false, address);
-    }
-  });
-
-  test("checks scheme, literal IPs, hostnames and every resolved address", async () => {
-    await assert.rejects(assertPublicUrl("http://127.0.0.1/", resolveHost), /private or reserved/);
-    await assert.rejects(assertPublicUrl("http://169.254.169.254/latest/meta-data/", resolveHost), /private or reserved/);
-    await assert.rejects(assertPublicUrl("http://[::1]:8080/", resolveHost), /private or reserved/);
-    await assert.rejects(assertPublicUrl("http://localhost:8787/", resolveHost), /not a public hostname/);
-    await assert.rejects(assertPublicUrl("http://metadata.google.internal/", resolveHost), /not a public hostname/);
-    await assert.rejects(assertPublicUrl("file:///etc/passwd", resolveHost), /only http and https/);
-    await assert.rejects(assertPublicUrl("ftp://example.com/", resolveHost), /only http and https/);
-    await assert.rejects(assertPublicUrl("http://user:pw@example.com/", resolveHost), /credentials/);
-    await assert.rejects(assertPublicUrl("http://evil.example.com/", resolveHost), /10\.0\.0\.1/);
-    await assert.rejects(assertPublicUrl("http://mixed.example.com/", resolveHost), /192\.168\.1\.1/);
-    await assert.rejects(assertPublicUrl("http://rebind.example.com/", resolveHost), /private/);
-    await assert.rejects(assertPublicUrl("http://2130706433/", resolveHost), /private or reserved|not a public/);
-    assert.equal((await assertPublicUrl("https://example.com/a", resolveHost)).hostname, "example.com");
-  });
-});
-
+// The SSRF rules themselves are tested in net/safe-fetch.test.ts.
 describe("read_webpage", () => {
   test("blocked targets never reach fetch", async () => {
     const fetch = fakeFetch(() => html("secret"));

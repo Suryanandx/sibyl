@@ -200,11 +200,11 @@ test("resolveSecretRefs fills MCP configs: stdio needs \"local\", HTTP servers n
   const { vault } = await setup();
   await vault.set("owner", { name: "SHOPIFY_TOKEN", value: VALUE, allowedHosts: ["*.myshopify.com", "local"] });
   await vault.set("owner", { name: "REMOTE_ONLY", value: "remote-value-123", allowedHosts: ["mcp.example.com"] });
-  const env = await resolveSecretRefs({ SHOPIFY_TOKEN: "${secret:SHOPIFY_TOKEN}", PLAIN: "x" }, { host: undefined });
+  const env = await resolveSecretRefs({ SHOPIFY_TOKEN: "${secret:SHOPIFY_TOKEN}", PLAIN: "x" }, { host: undefined, ownerId: "owner", vault });
   assert.deepEqual(env, { SHOPIFY_TOKEN: VALUE, PLAIN: "x" });
-  assert.deepEqual(await resolveSecretRefs(["--token", "${secret:SHOPIFY_TOKEN}"], { host: "store.myshopify.com" }), ["--token", VALUE]);
-  await assert.rejects(resolveSecretRefs({ A: "${secret:REMOTE_ONLY}" }, { host: undefined }), /local/);
-  await assert.rejects(resolveSecretRefs("${secret:SHOPIFY_TOKEN}", { host: "evil.com" }), /may not be sent/);
+  assert.deepEqual(await resolveSecretRefs(["--token", "${secret:SHOPIFY_TOKEN}"], { host: "store.myshopify.com", ownerId: "owner", vault }), ["--token", VALUE]);
+  await assert.rejects(resolveSecretRefs({ A: "${secret:REMOTE_ONLY}" }, { host: undefined, ownerId: "owner", vault }), /local/);
+  await assert.rejects(resolveSecretRefs("${secret:SHOPIFY_TOKEN}", { host: "evil.com", ownerId: "owner", vault }), /may not be sent/);
 });
 
 /* ── tools ── */

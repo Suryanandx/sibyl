@@ -1,12 +1,13 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import type { RoutinePatch, RoutineRunStatusView, RoutineView } from "@open-gpt-live/protocol";
 import { Icon } from "./Icon";
-import { NotificationPermissionButton, relativeTime, useEscape } from "./Inbox";
+import { Button, Card, EmptyState, Field, Input, Notice, Textarea, Toolbar, cx } from "./ui";
+import styles from "./RoutinesPanel.module.css";
+import { NotificationPermissionButton, relativeTime } from "./Inbox";
 
 interface RoutinesPanelProps {
-  open: boolean;
   routines: RoutineView[];
   connected: boolean;
   /** Pending approvals per routine id. */
@@ -16,7 +17,6 @@ interface RoutinesPanelProps {
   onDelete(id: string): void;
   onOpenConversation(id: string): void;
   onOpenInbox(): void;
-  onClose(): void;
 }
 
 const STATUS_LABEL: Record<RoutineRunStatusView, string> = {
@@ -36,161 +36,143 @@ export function RoutinesIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-/** Scheduled routines: when they run next, how the last run went, and controls. */
+/**
+ * Scheduled routines: when they run next, how the last run went, and controls.
+ * The body of the Routines screen (/routines).
+ */
 export function RoutinesPanel(props: RoutinesPanelProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  useEscape(props.open, props.onClose);
-  if (!props.open) return null;
   const totalWaiting = Object.values(props.waiting).reduce((sum, n) => sum + n, 0);
 
   return (
-    <div className="dialogBackdrop" onClick={props.onClose}>
-      <section
-        className="dialog routinesDialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="routines-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="iconBtn dialogClose" onClick={props.onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
-        <header className="dialogHeader">
-          <h2 id="routines-title">Routines</h2>
-          <p>
-            Tasks Sibyl runs on a schedule, on its own. Create one by asking in chat, e.g. &ldquo;Every weekday at 8,
-            send me a summary of tech news.&rdquo;
-          </p>
-        </header>
-        <div className="routinesToolbar">
-          <NotificationPermissionButton />
-          <button type="button" className="ghostBtn" onClick={props.onOpenInbox}>
-            Inbox{totalWaiting > 0 ? ` (${totalWaiting})` : ""}
-          </button>
-        </div>
+    <div>
+      <Toolbar
+        start={
+          <>
+            <NotificationPermissionButton />
+            <Button size="sm" onClick={props.onOpenInbox}>
+              Inbox{totalWaiting > 0 ? ` (${totalWaiting})` : ""}
+            </Button>
+          </>
+        }
+      />
 
-        {props.routines.length === 0 ? (
-          <div className="routinesEmpty">
-            <RoutinesIcon size={24} />
-            <p>No routines yet. Ask Sibyl in chat to schedule one.</p>
-          </div>
-        ) : (
-          <ul className="routineList">
-            {props.routines.map((routine) => (
-              <li key={routine.id} className={`routineCard${routine.enabled ? "" : " paused"}`}>
-                {editing === routine.id ? (
-                  <RoutineEditor
-                    routine={routine}
-                    onCancel={() => setEditing(null)}
-                    onSave={(patch) => {
-                      if (Object.keys(patch).length > 0) props.onUpdate(routine.id, patch);
-                      setEditing(null);
-                    }}
-                  />
-                ) : (
-                  <>
-                    <div className="routineHead">
-                      <div className="routineTitle">
-                        <h3>{routine.name}</h3>
-                        <p className="routineSchedule">{routine.schedule}</p>
-                      </div>
-                      <label className="routineToggle" title={routine.enabled ? "Pause" : "Resume"}>
-                        <input
-                          type="checkbox"
-                          checked={routine.enabled}
-                          disabled={!props.connected}
-                          aria-label={`${routine.enabled ? "Pause" : "Resume"} ${routine.name}`}
-                          onChange={(event) => props.onUpdate(routine.id, { enabled: event.target.checked })}
-                        />
-                        <span className="switch" aria-hidden />
-                      </label>
+      {props.routines.length === 0 ? (
+        <EmptyState compact icon={<RoutinesIcon size={24} />} title="No routines yet">
+          <p>Ask Sibyl in chat to schedule one.</p>
+        </EmptyState>
+      ) : (
+        <ul className={styles.list}>
+          {props.routines.map((routine) => (
+            <Card as="li" key={routine.id} className={cx(styles.card, !routine.enabled && styles.paused)}>
+              {editing === routine.id ? (
+                <RoutineEditor
+                  routine={routine}
+                  onCancel={() => setEditing(null)}
+                  onSave={(patch) => {
+                    if (Object.keys(patch).length > 0) props.onUpdate(routine.id, patch);
+                    setEditing(null);
+                  }}
+                />
+              ) : (
+                <>
+                  <div className={styles.head}>
+                    <div className={styles.title}>
+                      <h3 className={styles.name}>{routine.name}</h3>
+                      <p className={styles.schedule}>{routine.schedule}</p>
                     </div>
-                    <p className="routineInstruction">{routine.instruction}</p>
-                    <dl className="routineFacts">
-                      <div>
-                        <dt>Next run</dt>
-                        <dd>{routine.enabled ? formatLocal(routine.nextRunAt) : "Paused"}</dd>
-                      </div>
-                      <div>
-                        <dt>Last run</dt>
-                        <dd>
-                          {routine.lastRun ? (
-                            <>
-                              <span className={`runStatus ${routine.lastRun.status}`}>{STATUS_LABEL[routine.lastRun.status]}</span>
-                              {" · "}
-                              {relativeTime(routine.lastRun.finishedAt ?? routine.lastRun.startedAt)}
-                              {routine.lastRun.costUsd > 0 ? ` · ${formatCost(routine.lastRun.costUsd)}` : ""}
-                            </>
-                          ) : (
-                            "Never"
-                          )}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Cost cap</dt>
-                        <dd>{routine.maxRunUsd !== undefined ? `${formatCost(routine.maxRunUsd)} per run` : "Server default"}</dd>
-                      </div>
-                    </dl>
-                    {routine.lastRun?.error && routine.lastRun.status !== "succeeded" ? (
-                      <p className="routineError">{routine.lastRun.error}</p>
+                    <label className={styles.toggle} title={routine.enabled ? "Pause" : "Resume"}>
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        className={styles.toggleInput}
+                        checked={routine.enabled}
+                        disabled={!props.connected}
+                        aria-label={`${routine.enabled ? "Pause" : "Resume"} ${routine.name}`}
+                        onChange={(event) => props.onUpdate(routine.id, { enabled: event.target.checked })}
+                      />
+                      <span className={styles.switch} aria-hidden />
+                    </label>
+                  </div>
+                  <p className={styles.instruction}>{routine.instruction}</p>
+                  <dl className={styles.facts}>
+                    <div>
+                      <dt>Next run</dt>
+                      <dd>{routine.enabled ? formatLocal(routine.nextRunAt) : "Paused"}</dd>
+                    </div>
+                    <div>
+                      <dt>Last run</dt>
+                      <dd>
+                        {routine.lastRun ? (
+                          <>
+                            <span className={cx(styles.status, styles[`status_${routine.lastRun.status}`])}>{STATUS_LABEL[routine.lastRun.status]}</span>
+                            {" · "}
+                            {relativeTime(routine.lastRun.finishedAt ?? routine.lastRun.startedAt)}
+                            {routine.lastRun.costUsd > 0 ? ` · ${formatCost(routine.lastRun.costUsd)}` : ""}
+                          </>
+                        ) : (
+                          "Never"
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Cost cap</dt>
+                      <dd>{routine.maxRunUsd !== undefined ? `${formatCost(routine.maxRunUsd)} per run` : "Server default"}</dd>
+                    </div>
+                  </dl>
+                  {routine.lastRun?.error && routine.lastRun.status !== "succeeded" ? (
+                    <Notice tone="danger">{routine.lastRun.error}</Notice>
+                  ) : null}
+                  {props.waiting[routine.id] ? (
+                    <button type="button" className={styles.waiting} onClick={props.onOpenInbox}>
+                      {props.waiting[routine.id]} approval{props.waiting[routine.id] === 1 ? "" : "s"} waiting — review
+                    </button>
+                  ) : null}
+                  <div className={styles.actions}>
+                    <Button
+                      size="sm"
+                      disabled={!props.connected || routine.lastRun?.status === "running" || routine.lastRun?.status === "awaiting_approval"}
+                      onClick={() => props.onRunNow(routine.id)}
+                    >
+                      <Icon name="arrowUp" size={15} /> Run now
+                    </Button>
+                    <Button size="sm" disabled={!props.connected} onClick={() => setEditing(routine.id)}>
+                      <Icon name="pencil" size={15} /> Edit
+                    </Button>
+                    {routine.conversationId ? (
+                      <Button size="sm" onClick={() => props.onOpenConversation(routine.conversationId!)}>
+                        <Icon name="chat" size={15} /> Results
+                      </Button>
                     ) : null}
-                    {props.waiting[routine.id] ? (
-                      <button type="button" className="routineWaiting" onClick={props.onOpenInbox}>
-                        {props.waiting[routine.id]} approval{props.waiting[routine.id] === 1 ? "" : "s"} waiting — review
-                      </button>
-                    ) : null}
-                    <div className="routineActions">
-                      <button
-                        type="button"
-                        className="ghostBtn"
-                        disabled={!props.connected || routine.lastRun?.status === "running" || routine.lastRun?.status === "awaiting_approval"}
-                        onClick={() => props.onRunNow(routine.id)}
-                      >
-                        <Icon name="arrowUp" size={15} /> Run now
-                      </button>
-                      <button type="button" className="ghostBtn" disabled={!props.connected} onClick={() => setEditing(routine.id)}>
-                        <Icon name="pencil" size={15} /> Edit
-                      </button>
-                      {routine.conversationId ? (
-                        <button type="button" className="ghostBtn" onClick={() => props.onOpenConversation(routine.conversationId!)}>
-                          <Icon name="chat" size={15} /> Results
-                        </button>
-                      ) : null}
-                      {confirmDelete === routine.id ? (
-                        <span className="routineConfirm">
-                          <button
-                            type="button"
-                            className="ghostBtn danger"
-                            onClick={() => {
-                              props.onDelete(routine.id);
-                              setConfirmDelete(null);
-                            }}
-                          >
-                            Delete for good
-                          </button>
-                          <button type="button" className="ghostBtn" onClick={() => setConfirmDelete(null)}>
-                            Keep
-                          </button>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="ghostBtn danger"
-                          disabled={!props.connected}
-                          onClick={() => setConfirmDelete(routine.id)}
+                    {confirmDelete === routine.id ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => {
+                            props.onDelete(routine.id);
+                            setConfirmDelete(null);
+                          }}
                         >
-                          <Icon name="close" size={15} /> Delete
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                          Delete for good
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(null)}>
+                          Keep
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="danger" disabled={!props.connected} onClick={() => setConfirmDelete(routine.id)}>
+                        <Icon name="close" size={15} /> Delete
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </Card>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -204,7 +186,6 @@ function RoutineEditor({
   onSave(patch: RoutinePatch): void;
   onCancel(): void;
 }) {
-  const id = useId();
   const [name, setName] = useState(routine.name);
   const [instruction, setInstruction] = useState(routine.instruction);
   const [cron, setCron] = useState(routine.cron);
@@ -217,7 +198,7 @@ function RoutineEditor({
 
   return (
     <form
-      className="routineEditor"
+      className={styles.editor}
       onSubmit={(event) => {
         event.preventDefault();
         if (invalid) return;
@@ -230,57 +211,30 @@ function RoutineEditor({
         onSave(patch);
       }}
     >
-      <label className="field" htmlFor={`${id}-name`}>
-        <span className="fieldLabel">Name</span>
-        <input id={`${id}-name`} className="routineInput" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label className="field" htmlFor={`${id}-instruction`}>
-        <span className="fieldLabel">Instruction</span>
-        <textarea
-          id={`${id}-instruction`}
-          className="routineInput"
-          rows={3}
-          value={instruction}
-          maxLength={4000}
-          onChange={(e) => setInstruction(e.target.value)}
-        />
-      </label>
-      <div className="routineEditorRow">
-        <label className="field" htmlFor={`${id}-cron`}>
-          <span className="fieldLabel">Schedule (cron)</span>
-          <input
-            id={`${id}-cron`}
-            className="routineInput mono"
-            value={cron}
-            aria-invalid={cronInvalid}
-            onChange={(e) => setCron(e.target.value)}
-          />
-          <span className="fieldHint">minute hour day month weekday — e.g. 0 8 * * 1-5</span>
-        </label>
-        <label className="field" htmlFor={`${id}-tz`}>
-          <span className="fieldLabel">Time zone</span>
-          <input id={`${id}-tz`} className="routineInput" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
-        </label>
-        <label className="field" htmlFor={`${id}-cap`}>
-          <span className="fieldLabel">Cost cap per run (USD)</span>
-          <input
-            id={`${id}-cap`}
-            className="routineInput"
-            inputMode="decimal"
-            placeholder="Server default"
-            value={cap}
-            aria-invalid={capInvalid}
-            onChange={(e) => setCap(e.target.value)}
-          />
-        </label>
+      <Field label="Name">
+        <Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field label="Instruction">
+        <Textarea rows={3} value={instruction} maxLength={4000} onChange={(e) => setInstruction(e.target.value)} />
+      </Field>
+      <div className={styles.editorRow}>
+        <Field label="Schedule (cron)" hint="minute hour day month weekday — e.g. 0 8 * * 1-5">
+          <Input mono value={cron} aria-invalid={cronInvalid} onChange={(e) => setCron(e.target.value)} />
+        </Field>
+        <Field label="Time zone">
+          <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+        </Field>
+        <Field label="Cost cap per run (USD)">
+          <Input inputMode="decimal" placeholder="Server default" value={cap} aria-invalid={capInvalid} onChange={(e) => setCap(e.target.value)} />
+        </Field>
       </div>
-      <div className="routineActions">
-        <button type="submit" className="darkBtn" disabled={invalid}>
+      <div className={styles.actions}>
+        <Button type="submit" size="sm" variant="primary" disabled={invalid}>
           Save
-        </button>
-        <button type="button" className="ghostBtn" onClick={onCancel}>
+        </Button>
+        <Button size="sm" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

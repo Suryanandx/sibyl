@@ -4,16 +4,26 @@
  *
  * Ids are generated here and validated on every read; file names from the
  * browser are display-only and never touch the filesystem.
+ *
+ * Every upload belongs to the workspace it was sent in (records without one:
+ * the default workspace). Reads that name a workspace only find its files.
  */
-import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import type { ArtifactRecord, Store } from "@open-gpt-live/core";
+import { DEFAULT_WORKSPACE_ID, inWorkspace, type ArtifactRecord, type Store } from "@open-gpt-live/core";
+import type { FileParts } from "@open-gpt-live/protocol";
+import { idPattern, newId } from "../http/ids.js";
 import { extractText } from "./extract.js";
-import { cleanFileName, detectType, type UploadKind } from "./types.js";
+import { cleanFileName, detectType, refusalFor, type UploadKind } from "./types.js";
 
 export const DEFAULT_UPLOAD_MAX_MB = 20;
-const UPLOAD_ID = /^up_[a-f0-9]{24}$/;
+const UPLOAD_ID = idPattern("up");
+
+/** Which uploads a read may see: the owner (default: the service's) and, when set, one workspace. */
+export interface UploadScope {
+  ownerId?: string;
+  workspaceId?: string;
+}
 
 export interface UploadView {
   id: string;
@@ -23,6 +33,7 @@ export interface UploadView {
   kind: UploadKind;
   summary: string;
   pages?: number;
+  parts?: FileParts;
   chars: number;
   createdAt: number;
 }
@@ -34,11 +45,22 @@ export interface UploadMeta {
   kind: UploadKind;
   summary: string;
   pages?: number;
+  parts?: FileParts;
   /** Characters of extracted text. */
   chars: number;
   /** Extracted text file, relative to the upload's folder. */
   textPath: string;
   extractError?: string;
+}
+
+/** Text read from a file by a vision / OCR model, with what it cost. */
+export interface ModelText {
+  text: string;
+  model: string;
+  engine?: string;
+  costUsd: number;
+  estimated: boolean;
+  createdAt: number;
 }
 
 export class UploadError extends Error {
@@ -81,7 +103,7 @@ export class UploadService {
     this.dir = resolve(options.dir);
     this.maxBytes = options.maxBytes;
     this.now = options.now ?? Date.now;
-    this.createId = options.createId ?? (() => `up_${randomUUID().replace(/-/g, "").slice(0, 24)}`);
+    this.createId = options.createId ?? (() => newId("up"));
   }
 
   /** Folder of one upload; throws for anything that isn't a well-formed id inside `dir`. */
@@ -92,20 +114,15 @@ export class UploadService {
     return folder;
   }
 
-  async save(input: { data: Buffer; filename?: string; conversationId?: string }): Promise<UploadView> {
+  async save(input: { data: Buffer; filename?: string; conversationId?: string; workspaceId?: string; maxBytes?: number }): Promise<UploadView> {
+    const maxBytes = input.maxBytes ?? this.maxBytes;
     if (input.data.byteLength === 0) throw new UploadError("The file is empty.", 400, "empty");
-    if (input.data.byteLength > this.maxBytes) {
-      throw new UploadError(`The file is larger than ${Math.round(this.maxBytes / 1024 / 1024)} MB.`, 413, "too_large");
+    if (input.data.byteLength > maxBytes) {
+      throw new UploadError(`The file is larger than ${Math.round(maxBytes / 1024 / 1024)} MB.`, 413, "too_large");
     }
     const name = cleanFileName(input.filename);
     const type = detectType(input.data, name);
-    if (!type) {
-      throw new UploadError(
-        "Unsupported file type. Sibyl accepts images (PNG, JPEG, WebP, GIF), PDF, text, Markdown, CSV, JSON, DOCX and XLSX.",
-        415,
-        "unsupported_type"
-      );
-    }
+    if (!type) throw new UploadError(refusalFor(input.data, name), 415, "unsupported_type");
     const id = this.createId();
     const folder = this.folderFor(id);
     await mkdir(folder, { recursive: true });
@@ -114,15 +131,17 @@ export class UploadService {
       let text = "";
       let summary: string = type.kind;
       let pages: number | undefined;
+      let parts: FileParts | undefined;
       let extractError: string | undefined;
       try {
-        const extraction = await extractText(type.kind, input.data);
+        const extraction = await extractText(type.kind, input.data, name);
         text = extraction.text;
         summary = extraction.summary;
         pages = extraction.pages;
+        parts = extraction.parts;
       } catch (error) {
         extractError = (error as Error).message;
-        summary = `${type.kind}, text could not be read`;
+        summary = `${type.label}, text could not be read`;
         this.options.log?.("upload.extract_failed", { id, kind: type.kind, error: extractError });
       }
       await writeFile(join(folder, "extracted.txt"), text, { encoding: "utf8", mode: 0o600 });
@@ -133,6 +152,7 @@ export class UploadService {
         kind: type.kind,
         summary,
         ...(pages !== undefined ? { pages } : {}),
+        ...(parts ? { parts } : {}),
         chars: text.length,
         textPath: "extracted.txt",
         ...(extractError ? { extractError } : {})
@@ -141,6 +161,7 @@ export class UploadService {
       const record: ArtifactRecord = {
         id,
         ownerId: this.options.ownerId,
+        workspaceId: input.workspaceId || DEFAULT_WORKSPACE_ID,
         kind: "file",
         title: name,
         ...(input.conversationId ? { conversationId: input.conversationId } : {}),
@@ -157,16 +178,34 @@ export class UploadService {
     }
   }
 
-  /** The upload's record, or undefined when unknown / not the owner's / not a file. */
-  async get(id: string, ownerId = this.options.ownerId): Promise<UploadView | undefined> {
+  /** The upload's record, or undefined when unknown / not the owner's / in another workspace / not a file. */
+  async get(id: string, scope: UploadScope = {}): Promise<UploadView | undefined> {
     if (!isUploadId(id)) return undefined;
-    const record = await this.options.store.artifacts.get(ownerId, id);
+    const record = await this.options.store.artifacts.get(scope.ownerId ?? this.options.ownerId, id);
     if (!record || record.kind !== "file" || !isUploadMeta(record.meta)) return undefined;
+    if (scope.workspaceId && !inWorkspace(record, scope.workspaceId)) return undefined;
     return toView(record);
   }
 
   async readBytes(id: string): Promise<Buffer> {
     return readFile(join(this.folderFor(id), "file"));
+  }
+
+  /**
+   * Text a model read from the file (knowledge OCR of images and scanned PDFs),
+   * kept next to the file so re-indexing doesn't pay again.
+   */
+  async readModelText(id: string): Promise<ModelText | undefined> {
+    try {
+      const parsed = JSON.parse(await readFile(join(this.folderFor(id), "model-text.json"), "utf8")) as ModelText;
+      return typeof parsed.text === "string" && typeof parsed.model === "string" ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async writeModelText(id: string, value: ModelText): Promise<void> {
+    await writeFile(join(this.folderFor(id), "model-text.json"), JSON.stringify(value), { encoding: "utf8", mode: 0o600 });
   }
 
   async readText(id: string): Promise<string> {
@@ -175,6 +214,15 @@ export class UploadService {
     } catch {
       return "";
     }
+  }
+
+  /** Delete an upload: its files and its record (data retention). False when it isn't an upload of this owner. */
+  async remove(id: string): Promise<boolean> {
+    if (!(await this.get(id))) return false;
+    await rm(this.folderFor(id), { recursive: true, force: true });
+    await this.options.store.artifacts.remove(this.options.ownerId, id);
+    this.options.log?.("uploads.removed", { id });
+    return true;
   }
 }
 
@@ -192,6 +240,7 @@ function toView(record: ArtifactRecord): UploadView {
     kind: meta.kind,
     summary: meta.summary,
     ...(meta.pages !== undefined ? { pages: meta.pages } : {}),
+    ...(meta.parts ? { parts: meta.parts } : {}),
     chars: meta.chars ?? 0,
     createdAt: record.createdAt
   };

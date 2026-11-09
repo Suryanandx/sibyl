@@ -1,0 +1,565 @@
+/* Agents feature: only what is agent-specific. Buttons, fields, badges,
+   cards and notices come from components/ui. */
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  line-height: 0;
+}
+
+.avatar svg {
+  height: 100%;
+  width: 100%;
+}
+
+/* ── agent grid ── */
+
+.templatesTitle {
+  margin: 32px 0 12px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agentCard {
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.agentCard:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.agentCard.selected {
+  border-color: var(--accent);
+}
+
+.agentCard.template {
+  background: var(--canvas);
+  box-shadow: none;
+}
+
+.agentCard > button:last-child:not(.cardMain) {
+  align-self: flex-start;
+}
+
+.cardActions {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cardMain {
+  align-items: flex-start;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 12px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cardText strong {
+  font-size: 15px;
+}
+
+.cardText small {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.blankPlus {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 50%;
+  color: var(--text-3);
+  display: grid;
+  font-size: 24px;
+  height: 56px;
+  place-items: center;
+  width: 56px;
+}
+
+/* ── editor ── */
+
+.editorGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.editorGrid > :first-child {
+  grid-column: 1 / -1;
+}
+
+.pair {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.avatarStudio {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 240px 1fr;
+}
+
+.avatarStage {
+  align-items: center;
+  background: var(--canvas);
+  background-image: var(--mist);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 12px;
+}
+
+.stageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.moodRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+.moodChip {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.moodChip[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.avatarControls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.group {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.group legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips button {
+  text-transform: capitalize;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  border: 2px solid;
+  border-radius: 50%;
+  cursor: pointer;
+  height: 30px;
+  width: 30px;
+}
+
+.swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink);
+}
+
+/* radio cards */
+
+.radioCards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radioCard {
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.radioCard.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.radioCard.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.radioCard input {
+  accent-color: var(--accent);
+  margin-top: 3px;
+}
+
+.radioCard span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radioCard strong {
+  font-size: 14px;
+}
+
+.radioCard small {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.radioCard:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.accessPickers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.checkItems {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+/* memory */
+
+.memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memoryList ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.memoryItem {
+  align-items: center;
+  background: var(--canvas);
+  border-radius: 10px;
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.memoryItem > span:first-child,
+.memoryItem > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.memoryAdd {
+  flex-wrap: nowrap;
+}
+
+.runLog summary {
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.runLog li {
+  padding: 4px 0;
+}
+
+/* ── proposals ── */
+
+.proposals {
+  max-width: 860px;
+}
+
+.proposalList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pending {
+  border-color: var(--accent);
+}
+
+.proposalHead {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.proposalHead div {
+  display: flex;
+  flex-direction: column;
+}
+
+.proposalMemory {
+  background: var(--canvas);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.proposalBody {
+  display: grid;
+  gap: 10px;
+}
+
+.proposalBody.diff {
+  grid-template-columns: 1fr 1fr;
+}
+
+.proposalBody pre {
+  background: var(--canvas);
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── composer picker ── */
+
+.picker {
+  display: inline-flex;
+  position: relative;
+}
+
+.pickerChip {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  gap: 6px;
+  max-width: 220px;
+  min-height: 30px;
+  padding: 0 10px 0 6px;
+}
+
+.pickerChip:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.pickerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sibylMark {
+  background: var(--text);
+  display: inline-block;
+  flex: none;
+  height: 18px;
+  -webkit-mask: url("/brand/sibyl-mark-mask.png") center / contain no-repeat;
+  mask: url("/brand/sibyl-mark-mask.png") center / contain no-repeat;
+  width: 18px;
+}
+
+.sibylMark.large {
+  height: 26px;
+  margin: 1px;
+  width: 26px;
+}
+
+.pickerMenu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  bottom: calc(100% + 8px);
+  box-shadow: var(--shadow-pop);
+  left: 0;
+  padding: 6px;
+  position: absolute;
+  width: min(320px, calc(100vw - 32px));
+  z-index: 40;
+}
+
+.pickerMenu.down {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
+.pickerMenu ul {
+  list-style: none;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 0;
+}
+
+.pickerOption {
+  align-items: center;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+}
+
+.pickerOption.active {
+  background: var(--hover);
+}
+
+.pickerText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pickerText strong {
+  font-size: 14px;
+}
+
+.pickerText small {
+  color: var(--text-2);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerCheck {
+  color: var(--accent);
+}
+
+.pickerManage {
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  margin-top: 4px;
+  padding: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.pickerManage:hover {
+  color: var(--text);
+}
+
+.cardMain:focus-visible,
+.moodChip:focus-visible,
+.swatch:focus-visible,
+.pickerChip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .editorGrid,
+  .avatarStudio,
+  .pair,
+  .proposalBody.diff,
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agentCard {
+    transition: none;
+  }
+
+  .agentCard:hover {
+    transform: none;
+  }
+}
+
+.notice {
+  margin-bottom: 16px;
+}

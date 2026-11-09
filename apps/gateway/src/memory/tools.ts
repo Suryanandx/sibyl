@@ -11,7 +11,13 @@ import { MemoryError, MemoryService, type MemoryItem } from "./store.js";
 type Env = NodeJS.ProcessEnv;
 
 function service(context: ToolContext, env: Env): MemoryService {
-  return new MemoryService({ store: context.store, ownerId: context.ownerId, env });
+  return new MemoryService({
+    store: context.store,
+    ownerId: context.ownerId,
+    env,
+    ...(context.principal ? { principal: context.principal } : {}),
+    ...(context.workspaceId ? { workspaceId: context.workspaceId } : {})
+  });
 }
 
 async function ensureEnabled(memory: MemoryService): Promise<string | undefined> {

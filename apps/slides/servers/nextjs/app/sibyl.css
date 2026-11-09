@@ -1,0 +1,595 @@
+/* ───────────────────────── Sibyl tokens ─────────────────────────
+   Shared with the Sibyl web app (apps/web/app/globals.css): warm neutrals,
+   sage accent, graphite primary, flat surfaces, 1 px borders, shadows only
+   on floating layers. Light by default; [data-theme="dark"] on <html>.
+   Sibyl Slides maps every UI color to these tokens (see tailwind.config.ts).
+   Slide content keeps its own template colors. */
+
+:root {
+  --bg: #ffffff;
+  --canvas: #f7f7f5;
+  --surface: #ffffff;
+  --subtle: #f1f2ef;
+  --hover: #ecedea;
+  --text: #1d211f;
+  --text-2: #646b67;
+  --text-3: #8b918d;
+  --border: #e4e7e2;
+  --border-strong: #d5d9d3;
+  --ink: #1d211f;
+  --ink-hover: #343a37;
+  --ink-text: #fafaf8;
+  --accent: #596c5d;
+  --accent-soft: #e9eee8;
+  --positive: #327e62;
+  --warning: #a86f38;
+  --danger: #b84f58;
+  --danger-soft: #f8eded;
+  --tint-slate: #e6ecf2;
+  --tint-sage: #e5efec;
+  --tint-amber: #f5ece2;
+  --tint-lavender: #edeaf3;
+  --shadow-card: 0 1px 2px rgba(17, 20, 18, 0.04), 0 10px 30px rgba(17, 20, 18, 0.06);
+  --shadow-pop: 0 2px 6px rgba(17, 20, 18, 0.06), 0 24px 60px rgba(17, 20, 18, 0.14);
+  --plan-active-bg: linear-gradient(180deg, #121514 0%, #2b312e 100%);
+  --plan-active-text: #ecedea;
+  --plan-active-text-2: #a7aea9;
+  --plan-active-line: rgba(255, 255, 255, 0.1);
+  --mist: radial-gradient(closest-side, rgba(29, 33, 31, 0.1), rgba(29, 33, 31, 0) 100%);
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #121413;
+  --canvas: #161817;
+  --surface: #1b1d1c;
+  --subtle: #222624;
+  --hover: #272b29;
+  --text: #ecedea;
+  --text-2: #a3a9a5;
+  --text-3: #7c827e;
+  --border: #2b2f2d;
+  --border-strong: #363b38;
+  --ink: #ecedea;
+  --ink-hover: #ffffff;
+  --ink-text: #121413;
+  --accent: #9db3a2;
+  --accent-soft: #26302a;
+  --positive: #6fbf9a;
+  --warning: #d6a46d;
+  --danger: #e08a92;
+  --danger-soft: #3a2224;
+  --tint-slate: #222b33;
+  --tint-sage: #1f2b28;
+  --tint-amber: #302820;
+  --tint-lavender: #29263a;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.25);
+  --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.5);
+  --plan-active-bg: linear-gradient(180deg, #f4f5f2 0%, #d9ddd7 100%);
+  --plan-active-text: #121413;
+  --plan-active-text-2: #4f5652;
+  --plan-active-line: rgba(0, 0, 0, 0.1);
+  --mist: radial-gradient(closest-side, rgba(236, 237, 234, 0.12), rgba(236, 237, 234, 0) 100%);
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: var(--accent-soft);
+  color: var(--text);
+}
+
+/* ───────────────────────── Brand ───────────────────────── */
+
+.brandMark,
+.brandWordmark {
+  background: currentColor;
+  display: inline-block;
+  flex: none;
+  -webkit-mask: var(--mask) center / contain no-repeat;
+  mask: var(--mask) center / contain no-repeat;
+}
+
+.brandMark {
+  --mask: url("/slides/brand/sibyl-mark-mask.png");
+}
+
+.brandWordmark {
+  --mask: url("/slides/brand/sibyl-wordmark-mask.png");
+}
+
+.silverMark {
+  display: inline-grid;
+  place-items: center;
+  position: relative;
+}
+
+.silverMark img {
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
+.silverMist {
+  background: var(--mist);
+  inset: -70%;
+  position: absolute;
+}
+
+:root:not([data-theme="dark"]) .silverMark img {
+  filter: drop-shadow(0 1px 1.5px rgba(29, 33, 31, 0.35));
+}
+
+/* ───────────────────────── Animated emblem ───────────────────────── */
+
+.sibylLoader {
+  -webkit-mask: url("/slides/brand/sibyl-mark-mask.png") center / contain no-repeat;
+  mask: url("/slides/brand/sibyl-mark-mask.png") center / contain no-repeat;
+  color: inherit;
+  display: inline-block;
+  flex: none;
+  position: relative;
+}
+
+.sibylLoaderBase {
+  background: currentColor;
+  inset: 0;
+  opacity: 0.28;
+  position: absolute;
+  transition: opacity 240ms ease;
+}
+
+.sibylLoaderTrace {
+  height: 100%;
+  inset: 0;
+  overflow: visible;
+  position: absolute;
+  width: 100%;
+}
+
+.sibylTrace {
+  animation: sibylTrace 1.7s cubic-bezier(0.55, 0.1, 0.45, 0.9) infinite;
+  fill: none;
+  stroke: currentColor;
+  stroke-dasharray: 30 70;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 96;
+}
+
+.sibylTrace.second {
+  display: none;
+}
+
+@keyframes sibylTrace {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.sibylLoader[data-state="idle"] .sibylLoaderBase,
+.sibylLoader[data-state="speaking"] .sibylLoaderBase {
+  opacity: 1;
+}
+
+.sibylLoader[data-state="idle"] .sibylLoaderTrace,
+.sibylLoader[data-state="listening"] .sibylLoaderTrace,
+.sibylLoader[data-state="speaking"] .sibylLoaderTrace {
+  display: none;
+}
+
+.sibylLoader[data-state="speaking"] {
+  animation: sibylSpeak 1.1s ease-in-out infinite;
+}
+
+.sibylLoader[data-state="listening"] .sibylLoaderBase {
+  animation: sibylBreathe 1.6s ease-in-out infinite;
+}
+
+.sibylLoader[data-state="working"] .sibylTrace {
+  animation-duration: 1.25s;
+  stroke-dasharray: 22 28;
+}
+
+@keyframes sibylBreathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sibylSpeak {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.sibylWaiting {
+  align-items: center;
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  text-align: center;
+}
+
+.sibylWaiting .sibylLoader {
+  color: var(--text);
+}
+
+.sibylWaitingText {
+  background: linear-gradient(90deg, var(--text-2) 0%, var(--text) 45%, var(--text-2) 90%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sibylShimmer 2.4s linear infinite;
+  font-size: 14.5px;
+}
+
+@keyframes sibylShimmer {
+  from {
+    background-position: 110% 0;
+  }
+  to {
+    background-position: -110% 0;
+  }
+}
+
+.sibylSplash {
+  background: var(--bg);
+  inset: 0;
+  position: fixed;
+  z-index: 60;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sibylTrace,
+  .sibylLoader[data-state="speaking"],
+  .sibylWaitingText {
+    animation: none;
+  }
+
+  .sibylLoader[data-state="thinking"] .sibylLoaderTrace,
+  .sibylLoader[data-state="working"] .sibylLoaderTrace {
+    display: none;
+  }
+
+  .sibylLoader[data-state="thinking"] .sibylLoaderBase,
+  .sibylLoader[data-state="working"] .sibylLoaderBase {
+    animation: sibylBreathe 2.4s ease-in-out infinite;
+  }
+
+  .sibylWaitingText {
+    color: var(--text-2);
+  }
+}
+
+/* ───────────────────────── App shell (rail + top bar) ─────────────────────────
+   Same rail as the Sibyl chat (apps/web/app/globals.css .rail*). */
+
+.sibylApp {
+  background: var(--bg);
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.rail {
+  align-items: center;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 0 16px;
+}
+
+.railLogo {
+  background: #171a18;
+  border: 0;
+  border-radius: 12px;
+  display: grid;
+  height: 40px;
+  margin-bottom: 10px;
+  place-items: center;
+  width: 40px;
+}
+
+:root[data-theme="dark"] .railLogo {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.railLogo img {
+  height: 24px;
+  width: 24px;
+}
+
+.railBtn {
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: grid;
+  height: 40px;
+  place-items: center;
+  width: 40px;
+}
+
+.railBtn:hover {
+  background: var(--subtle);
+  color: var(--text);
+}
+
+.railBtn.active {
+  background: var(--ink);
+  color: var(--ink-text);
+}
+
+.railSpacer {
+  flex: 1;
+}
+
+.sibylMain {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.sibylContent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+
+/* Upstream full-height views (h-screen) fit inside the shell. */
+.sibylContent .h-screen {
+  height: 100%;
+}
+
+.sibylContent .min-h-screen {
+  min-height: 100%;
+}
+
+.sibylTopBar {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex: none;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
+}
+
+.sibylTopSpacer {
+  flex: 1;
+}
+
+.sibylMobileMark,
+.sibylMobileOnly {
+  display: none !important;
+}
+
+.sibylIconBtn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.sibylIconBtn:hover {
+  background: var(--subtle);
+  color: var(--text);
+}
+
+/* Buttons: the same pills as the Sibyl chat (.darkBtn / .ghostBtn). */
+.sibylDarkBtn,
+.sibylGhostBtn {
+  align-items: center;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13.5px;
+  font-weight: 500;
+  gap: 7px;
+  height: 36px;
+  justify-content: center;
+  padding: 0 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sibylDarkBtn {
+  background: var(--ink);
+  border: 1px solid transparent;
+  color: var(--ink-text);
+}
+
+.sibylDarkBtn:hover:not(:disabled) {
+  background: var(--ink-hover);
+}
+
+.sibylGhostBtn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.sibylGhostBtn:hover:not(:disabled) {
+  background: var(--subtle);
+}
+
+.sibylDarkBtn:disabled,
+.sibylGhostBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.sibylBtnSm {
+  font-size: 12.5px;
+  height: 30px;
+  padding: 0 11px;
+}
+
+.sibylPill {
+  align-items: center;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+}
+
+.sibylCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sibylDialogBackdrop {
+  background: rgba(10, 12, 11, 0.45);
+  inset: 0;
+  position: fixed;
+  z-index: 80;
+}
+
+.sibylDialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  left: 50%;
+  max-height: calc(100dvh - 32px);
+  max-width: calc(100vw - 32px);
+  overflow: auto;
+  padding: 22px;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 440px;
+  z-index: 81;
+}
+
+@media (max-width: 760px) {
+  .sibylApp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sibylApp > .rail {
+    display: none;
+  }
+
+  .sibylTopBar {
+    padding: 0 10px;
+  }
+
+  .sibylMobileMark {
+    display: inline-flex !important;
+  }
+
+  .sibylMobileOnly {
+    display: inline-flex !important;
+  }
+}
+
+/* ───────────────────────── Sign-in ───────────────────────── */
+
+.sibylSignIn {
+  align-items: center;
+  background: var(--canvas);
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px 16px;
+}
+
+.sibylSignInCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 380px;
+  padding: 32px 28px 28px;
+  text-align: center;
+  width: 100%;
+}
+
+.sibylSignInCard h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 8px 0 0;
+}
+
+.sibylSignInCard p {
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.sibylInput {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 14px;
+  height: 42px;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.sibylInput:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.sibylError {
+  color: var(--danger);
+  font-size: 13px;
+}

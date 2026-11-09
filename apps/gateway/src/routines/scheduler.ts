@@ -15,12 +15,35 @@
  *   back-off, within the same run.
  * - At most `maxConcurrency` (2) runs at a time; extra due routines wait for
  *   the next tick, manual "run now" requests queue.
+ * - Other job types (monitors) plug into the same tick and lease machinery
+ *   with `addJobType()`: each type says what is due, claims a job with a
+ *   lease, runs it with a heartbeat and releases it. Job types have their own
+ *   concurrency, so they never hold up routines.
  */
-import type { RoutineRecord, RoutineRunRecord, Store } from "@open-gpt-live/core";
-import type { RoutineNotification } from "@open-gpt-live/protocol";
+import type { RoutineRecord, RoutineRunRecord, ScheduledJob, ScheduledJobType, Store } from "@open-gpt-live/core";
 import { nextRun } from "./cron.js";
 import { formatUsd } from "./records.js";
 import type { RoutineRunner, RunHandle, RunOutcome } from "./runner.js";
+
+/**
+ * A routine run's outcome, handed to the routine service, which publishes it
+ * through the notifications module (it is never sent to browsers as is).
+ */
+export interface RoutineOutcome {
+  /** "agent_action": an agent ran a write action on its own ("act, then tell me"). */
+  kind: "finished" | "failed" | "budget_blocked" | "needs_approval" | "interrupted" | "agent_action";
+  routineId: string;
+  routineName: string;
+  runId: string;
+  /** One human sentence. */
+  message: string;
+  conversationId?: string;
+  approvalId?: string;
+  costUsd?: number;
+  /** The agent that acted (kind "agent_action", or a routine run as an agent). */
+  agentId?: string;
+  at: number;
+}
 
 export const TICK_MS = 30_000;
 export const LEASE_MS = 5 * 60_000;
@@ -46,9 +69,21 @@ export interface SchedulerOptions {
   sleep?(ms: number, signal: AbortSignal): Promise<void>;
   /** Runs or routines changed (refresh the browser's list). */
   onChange?(): void;
-  notify?(notification: RoutineNotification): void;
+  /** false: don't run routines, only the other job types (default true). */
+  routines?: boolean;
+  /** false: no timer of its own; someone else calls tick() (hosted: the tenant registry's one loop). */
+  selfTick?: boolean;
+  notify?(notification: RoutineOutcome): void;
   /** An approval of a run that no longer exists should be expired. */
   expireOrphanApproval?(approvalId: string): Promise<void>;
+}
+
+/** Job types (e.g. one monitor check) live in core so enterprise modules can add them too. */
+export type { ScheduledJob, ScheduledJobType } from "@open-gpt-live/core";
+
+interface ActiveJob {
+  controller: AbortController;
+  done: Promise<void>;
 }
 
 interface ActiveRun {
@@ -73,6 +108,9 @@ export class RoutineScheduler {
   private readonly retryDelayMs: number;
   private readonly maxConcurrency: number;
   private readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
+  private readonly jobTypes = new Map<string, ScheduledJobType<any>>();
+  private readonly activeJobs = new Map<string, ActiveJob>();
+  private readonly manualJobs: Array<{ kind: string; id: string }> = [];
 
   constructor(private readonly options: SchedulerOptions) {
     this.now = options.now ?? Date.now;
@@ -91,8 +129,10 @@ export class RoutineScheduler {
     this.stopped = false;
     await this.recover();
     await this.backfillNextRuns();
-    this.timer = setInterval(() => void this.tick(), this.tickMs);
-    this.timer.unref?.();
+    if (this.options.selfTick !== false) {
+      this.timer = setInterval(() => void this.tick(), this.tickMs);
+      this.timer.unref?.();
+    }
     void this.tick();
   }
 
@@ -101,7 +141,7 @@ export class RoutineScheduler {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
-    const runs = [...this.active.values()];
+    const runs = [...this.active.values(), ...this.activeJobs.values()];
     for (const active of runs) active.controller.abort("shutdown");
     await Promise.race([
       Promise.allSettled(runs.map((active) => active.done)),
@@ -109,8 +149,44 @@ export class RoutineScheduler {
     ]);
   }
 
+  /** A run or job is in progress or queued (its organization is not idle). */
+  busy(): boolean {
+    return this.active.size > 0 || this.activeJobs.size > 0 || this.manual.length > 0 || this.manualJobs.length > 0;
+  }
+
   isRunning(routineId: string): boolean {
     return this.active.has(routineId);
+  }
+
+  /* ── other job types ── */
+
+  /** Register another job type (before or after start). */
+  addJobType(type: ScheduledJobType<any>): void {
+    if (this.jobTypes.has(type.kind)) throw new Error(`Job type already registered: ${type.kind}`);
+    this.jobTypes.set(type.kind, type);
+    if (!this.stopped) void this.tick();
+  }
+
+  isJobRunning(kind: string, id: string): boolean {
+    return this.activeJobs.has(jobKey(kind, id));
+  }
+
+  /** Queue a job to run now. Returns an error message when it cannot. */
+  async runJobNow(kind: string, id: string): Promise<string | undefined> {
+    const type = this.jobTypes.get(kind);
+    if (!type?.get) return "That can't be run now.";
+    if (!(await type.get(id))) return "Not found.";
+    if (this.activeJobs.has(jobKey(kind, id)) || this.manualJobs.some((job) => job.kind === kind && job.id === id)) return "It is already running.";
+    this.manualJobs.push({ kind, id });
+    void this.tick();
+    return undefined;
+  }
+
+  /** Abort a job's active run (e.g. it was deleted or paused). */
+  cancelJob(kind: string, id: string): void {
+    this.activeJobs.get(jobKey(kind, id))?.controller.abort("cancelled");
+    const queued = this.manualJobs.findIndex((job) => job.kind === kind && job.id === id);
+    if (queued >= 0) this.manualJobs.splice(queued, 1);
   }
 
   /** Active run id per routine (for orphan detection). */
@@ -147,8 +223,8 @@ export class RoutineScheduler {
 
   /** Resolves when all runs started so far have finished (tests). */
   async idle(): Promise<void> {
-    while (this.active.size > 0 || this.ticking) {
-      await Promise.allSettled([...this.active.values()].map((active) => active.done));
+    while (this.active.size > 0 || this.activeJobs.size > 0 || this.ticking) {
+      await Promise.allSettled([...this.active.values(), ...this.activeJobs.values()].map((active) => active.done));
       if (this.ticking) await this.ticking;
     }
   }
@@ -163,7 +239,8 @@ export class RoutineScheduler {
         if (routine && !this.active.has(routineId)) await this.begin(routine, false);
       }
       const now = this.now();
-      const due = (await this.options.store.routines.due(now))
+      // routines: false runs only the other job types (SIBYL_ROUTINES=false with monitors on).
+      const due = (this.options.routines === false ? [] : await this.options.store.routines.due(now))
         .filter((routine) => routine.ownerId === this.options.ownerId)
         .sort((a, b) => (a.nextRunAt ?? 0) - (b.nextRunAt ?? 0));
       for (const routine of due) {
@@ -180,13 +257,83 @@ export class RoutineScheduler {
     } catch (error) {
       this.log("routine.tick_failed", { error: errorMessage(error) });
     }
+    for (const type of this.jobTypes.values()) {
+      if (this.stopped) return;
+      try {
+        await this.passJobs(type);
+      } catch (error) {
+        this.log("scheduler.job_tick_failed", { kind: type.kind, error: errorMessage(error) });
+      }
+    }
+  }
+
+  private activeJobIds(kind: string): Set<string> {
+    const prefix = jobKey(kind, "");
+    return new Set([...this.activeJobs.keys()].filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length)));
+  }
+
+  private async passJobs(type: ScheduledJobType<any>): Promise<void> {
+    const limit = type.maxConcurrency ?? MAX_CONCURRENCY;
+    await type.recover?.(this.now(), this.activeJobIds(type.kind));
+    // Manual "run now" first: someone is waiting for it.
+    for (let index = 0; index < this.manualJobs.length && this.activeJobIds(type.kind).size < limit; ) {
+      const queued = this.manualJobs[index]!;
+      if (queued.kind !== type.kind) {
+        index += 1;
+        continue;
+      }
+      this.manualJobs.splice(index, 1);
+      const job = await type.get?.(queued.id);
+      if (job && !this.activeJobs.has(jobKey(type.kind, job.id))) await this.beginJob(type, job);
+    }
+    for (const job of await type.due(this.now())) {
+      if (this.stopped) return;
+      if (this.activeJobs.has(jobKey(type.kind, job.id))) continue;
+      if (this.activeJobIds(type.kind).size >= limit) break; // stays due; next tick
+      await this.beginJob(type, job);
+    }
+  }
+
+  private async beginJob(type: ScheduledJobType<any>, job: ScheduledJob): Promise<void> {
+    const now = this.now();
+    const claimed: ScheduledJob | undefined = await type.claim(job, now, now + this.leaseMs);
+    if (!claimed) return;
+    const key = jobKey(type.kind, claimed.id);
+    const controller = new AbortController();
+    const entry: ActiveJob = { controller, done: Promise.resolve() };
+    this.activeJobs.set(key, entry);
+    this.log("scheduler.job_started", { kind: type.kind, id: claimed.id });
+    const heartbeat = setInterval(() => {
+      type.renew(claimed, this.now() + this.leaseMs).catch((error: unknown) => {
+        this.log("scheduler.job_renew_failed", { kind: type.kind, id: claimed.id, error: errorMessage(error) });
+      });
+    }, this.heartbeatMs);
+    heartbeat.unref?.();
+    entry.done = (async () => {
+      try {
+        await type.run(claimed, controller.signal);
+      } catch (error) {
+        this.log("scheduler.job_failed", { kind: type.kind, id: claimed.id, error: errorMessage(error) });
+      } finally {
+        clearInterval(heartbeat);
+        await type.release(claimed).catch((error: unknown) => {
+          this.log("scheduler.job_release_failed", { kind: type.kind, id: claimed.id, error: errorMessage(error) });
+        });
+      }
+    })().finally(() => {
+      this.activeJobs.delete(key);
+      // A slot freed up: queued or waiting jobs can start.
+      if (!this.stopped) void this.tick();
+    });
   }
 
   /** Move nextRunAt past now (and record lastRunAt when a run starts). */
   private async advance(routine: RoutineRecord, now: number, started: boolean): Promise<RoutineRecord> {
     const latest = (await this.options.store.routines.get(routine.ownerId, routine.id)) ?? routine;
-    const next = latest.enabled ? safeNextRun(latest, now) : undefined;
-    const updated: RoutineRecord = { ...latest, ...(started ? { lastRunAt: now } : {}) };
+    // A one-time task pauses itself once its run starts.
+    const finished = started && latest.once === true;
+    const next = latest.enabled && !finished ? safeNextRun(latest, now) : undefined;
+    const updated: RoutineRecord = { ...latest, ...(started ? { lastRunAt: now } : {}), ...(finished ? { enabled: false } : {}) };
     if (next === undefined) delete updated.nextRunAt;
     else updated.nextRunAt = next;
     await this.options.store.routines.upsert(updated);
@@ -317,6 +464,8 @@ export class RoutineScheduler {
     }
     if (this.options.expireOrphanApproval) {
       const liveRunIds = new Set(activeIds);
+      // Approvals of other job types (e.g. monitor tasks) are theirs to keep alive.
+      for (const type of this.jobTypes.values()) for (const id of type.liveRunIds?.() ?? []) liveRunIds.add(id);
       for (const routine of routines) {
         for (const run of await store.routines.listRuns(ownerId, routine.id, 10)) {
           if (LIVE_STATUSES.has(run.status)) liveRunIds.add(run.id);
@@ -350,6 +499,10 @@ export class RoutineScheduler {
   }
 }
 
+function jobKey(kind: string, id: string): string {
+  return `${kind}\u0000${id}`;
+}
+
 function safeNextRun(routine: RoutineRecord, after: number): number | undefined {
   try {
     return nextRun(routine.cron, routine.timezone, after);
@@ -358,8 +511,8 @@ function safeNextRun(routine: RoutineRecord, after: number): number | undefined 
   }
 }
 
-function finishedNotification(routine: RoutineRecord, run: RoutineRunRecord, at: number): RoutineNotification {
-  const kind: RoutineNotification["kind"] =
+function finishedNotification(routine: RoutineRecord, run: RoutineRunRecord, at: number): RoutineOutcome {
+  const kind: RoutineOutcome["kind"] =
     run.status === "succeeded" ? "finished" : run.status === "budget_blocked" ? "budget_blocked" : run.status === "interrupted" ? "interrupted" : "failed";
   const cost = run.costUsd > 0 ? ` (${formatUsd(run.costUsd)})` : "";
   const message =

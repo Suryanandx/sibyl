@@ -13,8 +13,17 @@ import { DEFAULT_SLIDE_COUNT, MAX_SLIDES, SlidesBudgetError, clampSlides, format
 
 export const SLIDES_TOOL_NAMES = ["create_slides", "revise_slides", "list_slides"] as const;
 
-/** A tool that can describe one call for the approval card (see report: brain should prefer this). */
-export type DescribedTool<I> = ToolDefinition<I, unknown> & { describeCall?(input: I): string };
+/**
+ * A slides tool with the optional hooks the brain understands:
+ * `approvalSummary(input)` is the approval card's sentence (approvals.ts),
+ * `promptGuidance` is appended to the brain's system prompt while the tool is
+ * enabled (tool-loop.ts). `describeCall` is kept as an alias of the summary.
+ */
+export type DescribedTool<I> = ToolDefinition<I, unknown> & {
+  approvalSummary?(input: I): string | undefined;
+  describeCall?(input: I): string;
+  promptGuidance?: string;
+};
 
 /**
  * Artifacts finished by a slides tool, waiting to ride on the TOOL_FINISHED
@@ -49,6 +58,30 @@ export const SLIDES_PROMPT_GUIDANCE = [
   "When the user wants slides, a deck or a presentation: first gather the facts with your other tools (web search, the user's MCP data sources), then call create_slides once with a clear outline and the real figures, names and dates in `content`. Never invent numbers.",
   "To change an existing deck, call revise_slides with its id (list_slides finds it); this keeps the version history."
 ].join("\n");
+
+/** "Create an 8-slide deck 'Q3 market overview' (≈$0.03)" */
+export function describeCreate(service: SlidesService, input: CreateInput): string {
+  const n = clampSlides(input.n_slides ?? DEFAULT_SLIDE_COUNT);
+  const title = quoteTitle(input.title, "Untitled deck");
+  const space = input.space?.trim() ? ` in "${input.space.trim().slice(0, 60)}"` : "";
+  return `Create ${n === 8 || n === 11 || n === 18 ? "an" : "a"} ${n}-slide deck ${title}${space} (${formatEstimate(service.estimateUsd(n))})`;
+}
+
+/** "Make version 2 of 'Q3 market overview' (8 slides, ≈$0.03): add a slide on churn" */
+export function describeRevise(service: SlidesService, input: ReviseInput): string {
+  const known = input.deck_id ? service.describeDeck(input.deck_id.trim()) : undefined;
+  const n = clampSlides(input.n_slides ?? known?.slideCount ?? DEFAULT_SLIDE_COUNT);
+  const what = (input.instructions ?? "").replace(/\s+/g, " ").trim();
+  const change = what ? `: ${what.length > 90 ? `${what.slice(0, 89)}…` : what}` : "";
+  const deck = known ? quoteTitle(known.title, "the deck") : "the deck";
+  return `Make a new version of ${deck} (${n} slides, ${formatEstimate(service.estimateUsd(n))})${change}`;
+}
+
+function quoteTitle(title: string | undefined, fallback: string): string {
+  const clean = (title ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return fallback;
+  return `'${clean.length > 80 ? `${clean.slice(0, 79)}…` : clean}'`;
+}
 
 interface CreateInput {
   title?: string;
@@ -104,10 +137,9 @@ export function createSlidesTools(service: SlidesService): ToolDefinition<any, a
     effect: "write",
     source: "slides",
     provider: "sibyl-slides",
-    describeCall: (input) => {
-      const n = clampSlides(input.n_slides ?? DEFAULT_SLIDE_COUNT);
-      return `Create a ${n}-slide deck '${(input.title ?? "Untitled").trim()}' (${formatEstimate(service.estimateUsd(n))})`;
-    },
+    approvalSummary: (input) => describeCreate(service, input),
+    describeCall: (input) => describeCreate(service, input),
+    promptGuidance: SLIDES_PROMPT_GUIDANCE,
     async run(input, context): Promise<ToolResult> {
       const title = input.title?.trim() || "Untitled deck";
       const content = [input.brief?.trim() ? `Brief: ${input.brief.trim()}` : "", input.content ?? input.outline ?? ""]
@@ -116,6 +148,7 @@ export function createSlidesTools(service: SlidesService): ToolDefinition<any, a
       try {
         const artifact = await service.create({
           ownerId: context.ownerId,
+          ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
           title,
           content,
           ...(input.n_slides ? { nSlides: input.n_slides } : {}),
@@ -160,10 +193,9 @@ export function createSlidesTools(service: SlidesService): ToolDefinition<any, a
     effect: "write",
     source: "slides",
     provider: "sibyl-slides",
-    describeCall: (input) => {
-      const n = clampSlides(input.n_slides ?? DEFAULT_SLIDE_COUNT);
-      return `Make a new version of the deck: ${(input.instructions ?? "").trim().slice(0, 80)} (${formatEstimate(service.estimateUsd(n))})`;
-    },
+    approvalSummary: (input) => describeRevise(service, input),
+    describeCall: (input) => describeRevise(service, input),
+    promptGuidance: SLIDES_PROMPT_GUIDANCE,
     async run(input, context): Promise<ToolResult> {
       if (!input.deck_id?.trim() || !input.instructions?.trim()) {
         return { content: "revise_slides needs deck_id and instructions.", isError: true };
@@ -171,6 +203,7 @@ export function createSlidesTools(service: SlidesService): ToolDefinition<any, a
       try {
         const artifact = await service.revise({
           ownerId: context.ownerId,
+          ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
           artifactId: input.deck_id.trim(),
           instructions: input.instructions,
           ...(input.n_slides ? { nSlides: input.n_slides } : {}),
@@ -209,15 +242,15 @@ export function createSlidesTools(service: SlidesService): ToolDefinition<any, a
     source: "slides",
     provider: "sibyl-slides",
     async run(input, context): Promise<ToolResult> {
-      const store = context.store;
-      const spaces = await store.spaces.list(context.ownerId);
+      const scope = { ownerId: context.ownerId, ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}) };
+      const spaces = await service.library.spaces(scope);
       let spaceId: string | undefined;
       if (input.space?.trim()) {
         const wanted = input.space.trim().toLowerCase();
         spaceId = spaces.find((s) => s.id === input.space!.trim() || s.name.toLowerCase() === wanted)?.id;
         if (!spaceId) return { content: `No Slides space called "${input.space}". Spaces: ${spaces.map((s) => s.name).join(", ") || "none yet"}.` };
       }
-      const decks = await service.listDecks(context.ownerId, spaceId);
+      const decks = await service.listDecks(scope, spaceId);
       const limit = Math.min(50, Math.max(1, input.limit ?? 20));
       const names = new Map(spaces.map((s) => [s.id, s.name]));
       const rows = decks.slice(0, limit).map((deck) => {

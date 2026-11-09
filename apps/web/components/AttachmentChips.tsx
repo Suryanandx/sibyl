@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { AttachmentRef } from "@open-gpt-live/protocol";
 import { formatBytes, isImageMime, uploadBlobUrl, type ComposerAttachment } from "./AttachmentClient";
 
@@ -60,7 +60,7 @@ export function AttachmentTray(props: { items: ComposerAttachment[]; onRemove: (
   );
 }
 
-function AttachmentImage({ attachment }: { attachment: AttachmentRef }) {
+function AttachmentImage({ attachment, onOpen }: { attachment: AttachmentRef; onOpen?: (attachment: AttachmentRef) => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -73,7 +73,7 @@ function AttachmentImage({ attachment }: { attachment: AttachmentRef }) {
       active = false;
     };
   }, [attachment.id]);
-  if (failed) return <AttachmentFile attachment={attachment} />;
+  if (failed) return <AttachmentFile attachment={attachment} onOpen={onOpen} />;
   return (
     <a
       className="attachmentImage"
@@ -82,6 +82,11 @@ function AttachmentImage({ attachment }: { attachment: AttachmentRef }) {
       rel="noreferrer"
       title={attachment.name}
       aria-label={`Open ${attachment.name}`}
+      onClick={(event) => {
+        if (!onOpen || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onOpen(attachment);
+      }}
     >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -93,8 +98,9 @@ function AttachmentImage({ attachment }: { attachment: AttachmentRef }) {
   );
 }
 
-function AttachmentFile({ attachment }: { attachment: AttachmentRef }) {
+function AttachmentFile({ attachment, onOpen }: { attachment: AttachmentRef; onOpen?: (attachment: AttachmentRef) => void }) {
   const open = () => {
+    if (onOpen) return onOpen(attachment);
     void uploadBlobUrl(attachment.id).then((url) => window.open(url, "_blank", "noopener"), () => undefined);
   };
   return (
@@ -108,8 +114,21 @@ function AttachmentFile({ attachment }: { attachment: AttachmentRef }) {
   );
 }
 
-/** Attachments on a sent user message: image thumbnails and file chips. */
-export function AttachmentList({ attachments }: { attachments?: AttachmentRef[] }) {
+/**
+ * Attachments on a sent user message: image thumbnails and file chips.
+ * `action` adds a small control per attachment (e.g. "Save to knowledge"),
+ * shown on hover or focus (always on touch screens). `onOpen` shows a file
+ * next to the chat instead of in a new tab.
+ */
+export function AttachmentList({
+  attachments,
+  action,
+  onOpen
+}: {
+  attachments?: AttachmentRef[];
+  action?: (attachment: AttachmentRef) => ReactNode;
+  onOpen?: (attachment: AttachmentRef) => void;
+}) {
   if (!attachments?.length) return null;
   const images = attachments.filter((item) => isImageMime(item.mime));
   const files = attachments.filter((item) => !isImageMime(item.mime));
@@ -118,17 +137,31 @@ export function AttachmentList({ attachments }: { attachments?: AttachmentRef[] 
       {images.length ? (
         <div className="attachmentImages">
           {images.map((item) => (
-            <AttachmentImage key={item.id} attachment={item} />
+            <AttachmentItem key={item.id} action={action?.(item)}>
+              <AttachmentImage attachment={item} onOpen={onOpen} />
+            </AttachmentItem>
           ))}
         </div>
       ) : null}
       {files.length ? (
         <div className="attachmentFiles">
           {files.map((item) => (
-            <AttachmentFile key={item.id} attachment={item} />
+            <AttachmentItem key={item.id} action={action?.(item)}>
+              <AttachmentFile attachment={item} onOpen={onOpen} />
+            </AttachmentItem>
           ))}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AttachmentItem({ action, children }: { action?: ReactNode; children: ReactNode }) {
+  if (!action) return <>{children}</>;
+  return (
+    <span className="attachmentItem">
+      {children}
+      <span className="attachmentAction">{action}</span>
+    </span>
   );
 }

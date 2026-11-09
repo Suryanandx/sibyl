@@ -1,0 +1,143 @@
+# syntax=docker/dockerfile:1.7
+#
+# Sibyl Slides: the deck engine (FastAPI, :8000) and the slide editor
+# (Next.js under /slides, :3100) in one container. Derived from Presenton's
+# Dockerfile (Apache-2.0); see apps/slides/UPSTREAM.md.
+
+FROM python:3.11-slim-trixie AS engine-builder
+
+WORKDIR /app/servers/fastapi
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+RUN python -m venv --without-pip /opt/venv \
+    && pip install --no-cache-dir uv
+
+COPY apps/slides/servers/fastapi/pyproject.toml apps/slides/servers/fastapi/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project -o /tmp/requirements.txt \
+    && uv pip install --python /opt/venv/bin/python -r /tmp/requirements.txt
+
+COPY apps/slides/servers/fastapi /app/servers/fastapi
+RUN rm -rf /app/servers/fastapi/.venv /app/servers/fastapi/tests
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/venv/bin/python --no-deps .
+# spaCy model used by the chat memory layer (pip is not available at runtime).
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python /opt/venv/bin/python \
+    "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+ENV HF_HOME=/root/.cache/huggingface \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    FASTEMBED_CACHE_PATH=/root/.cache/sibyl-slides/fastembed \
+    PRESENTON_FASTEMBED_ICON_CACHE_DIR=/root/.cache/sibyl-slides/fastembed-icons
+# Bake the icon-search embedding model into the image (no download at runtime).
+RUN /opt/venv/bin/python scripts/warm_fastembed_cache.py
+RUN --network=none HF_HUB_OFFLINE=1 /opt/venv/bin/python scripts/warm_fastembed_cache.py
+
+
+FROM node:22-bookworm-slim AS web-builder
+
+WORKDIR /app/servers/nextjs
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY apps/slides/servers/nextjs/package.json apps/slides/servers/nextjs/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
+
+COPY apps/slides/servers/nextjs /app/servers/nextjs
+RUN npm run build \
+    && rm -rf .next-build/cache
+
+
+FROM node:22-bookworm-slim AS assets-builder
+
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY apps/slides/package.json /app/
+# Document parsing (PDF/DOCX uploads) runner.
+RUN mkdir -p /app/document-extraction-liteparse \
+    && cd /app/document-extraction-liteparse \
+    && npm init -y >/dev/null \
+    && npm install @llamaindex/liteparse@1.5.2 --omit=dev --no-audit --no-fund
+COPY apps/slides/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
+# PPTX/PDF export runtime (@presenton/export-core, pinned in package.json).
+COPY apps/slides/scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+COPY apps/slides/scripts/run-presentation-export.mjs /app/scripts/run-presentation-export.mjs
+RUN rm -rf /app/presentation-export \
+    && node /app/scripts/sync-presentation-export.cjs --force
+
+
+FROM python:3.11-slim-trixie AS runtime
+
+WORKDIR /app
+
+ARG CHROMIUM_VERSION=149.0.7827.196-1~deb13u1
+ARG CHROMIUM_SNAPSHOT=20260625T180000Z
+
+ENV APP_DATA_DIRECTORY=/app_data \
+    TEMP_DIRECTORY=/tmp/sibyl-slides \
+    PUPPETEER_CACHE_DIR=/app_data/puppeteer-cache \
+    EXPORT_PACKAGE_ROOT=/app/presentation-export \
+    PRESENTON_APP_ROOT=/app \
+    HF_HOME=/root/.cache/huggingface \
+    FASTEMBED_CACHE_PATH=/root/.cache/sibyl-slides/fastembed \
+    PRESENTON_FASTEMBED_ICON_CACHE_DIR=/root/.cache/sibyl-slides/fastembed-icons \
+    PATH="/opt/venv/bin:${PATH}" \
+    NODE_ENV=production \
+    SIBYL_SLIDES_PYTHON=/opt/venv/bin/python \
+    SIBYL_SLIDES_HOST=0.0.0.0 \
+    SIBYL_SLIDES_API_PORT=8000 \
+    SIBYL_SLIDES_WEB_PORT=3100 \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    MEM0_TELEMETRY=False \
+    DO_NOT_TRACK=1
+
+# Chromium renders slides for PPTX/PDF export; Node runs the web app and the
+# export runtime. Pinned Chromium from a Debian snapshot, as upstream does.
+RUN set -eux; \
+    printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99snapshot; \
+    printf 'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/%s trixie-security main\n' "$CHROMIUM_SNAPSHOT" > /etc/apt/sources.list.d/chromium-snapshot.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends --allow-downgrades \
+      ca-certificates curl fontconfig imagemagick zstd \
+      fonts-noto-core fonts-noto-mono fonts-noto-cjk fonts-noto-color-emoji \
+      libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
+      libcairo2 libcups2t64 libdbus-1-3 libdrm2 libexpat1 libgbm1 \
+      libglib2.0-0t64 libgtk-3-0t64 libnspr4 libnss3 libpango-1.0-0 \
+      libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 \
+      libxkbcommon0 libxrandr2 libxshmfence1 libxss1 libxtst6 \
+      tesseract-ocr tesseract-ocr-eng \
+      chromium="${CHROMIUM_VERSION}" chromium-common="${CHROMIUM_VERSION}"; \
+    apt-mark hold chromium chromium-common; \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
+    apt-get install -y --no-install-recommends nodejs; \
+    rm -rf /var/lib/apt/lists/*; \
+    fc-cache -f
+
+COPY --from=engine-builder /opt/venv /opt/venv
+COPY --from=engine-builder /app/servers/fastapi /app/servers/fastapi
+COPY --from=engine-builder /root/.cache/huggingface /root/.cache/huggingface
+COPY --from=engine-builder /root/.cache/sibyl-slides /root/.cache/sibyl-slides
+COPY apps/slides/templates /app/templates
+COPY --from=assets-builder /app/package.json /app/package.json
+COPY --from=assets-builder /app/document-extraction-liteparse /app/document-extraction-liteparse
+COPY --from=assets-builder /app/presentation-export /app/presentation-export
+COPY --from=assets-builder /app/scripts /app/scripts
+COPY --from=web-builder /app/servers/nextjs/.next-build/standalone/ /app/servers/nextjs/
+COPY --from=web-builder /app/servers/nextjs/public /app/servers/nextjs/public
+COPY --from=web-builder /app/servers/nextjs/.next-build/static /app/servers/nextjs/.next-build/static
+COPY apps/slides/start.mjs apps/slides/LICENSE apps/slides/NOTICE /app/
+
+RUN test -f /app/presentation-export/runner.mjs \
+    && test -f /app/servers/nextjs/server.js \
+    && mkdir -p /app_data
+
+VOLUME ["/app_data"]
+EXPOSE 8000 3100
+HEALTHCHECK --interval=15s --timeout=4s --start-period=60s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:8000/healthz >/dev/null || exit 1
+CMD ["node", "/app/start.mjs"]

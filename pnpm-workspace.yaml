@@ -1,6 +1,10 @@
 packages:
   - "apps/*"
+  # Sibyl Slides uses its own npm + uv toolchain (apps/slides/start.mjs).
+  - "!apps/slides"
   - "packages/*"
+  # Sibyl Enterprise modules: their own dependencies, bundled into the gateway.
+  - "ee"
 onlyBuiltDependencies:
   - esbuild
 allowBuilds:

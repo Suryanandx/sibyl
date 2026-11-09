@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { usd } from "../lib/pricing";
+import { Icon } from "./Icon";
 import type {
   ModelCatalog,
   ModelOption,
@@ -9,191 +10,126 @@ import type {
   SessionSettings,
   UsageView
 } from "@open-gpt-live/protocol";
-import { Icon } from "./Icon";
-import { MemoryTab } from "./MemoryTab";
 
-export type SettingsTab = "presets" | "models" | "voice" | "memory" | "usage" | "diagnostics";
-type Tab = SettingsTab;
-
-const TAB_LABELS: Record<Tab, string> = {
-  presets: "Presets",
-  models: "Models",
-  voice: "Voice",
-  memory: "Memory",
-  usage: "Usage",
-  diagnostics: "Diagnostics"
-};
-
-interface SettingsPanelProps {
-  open: boolean;
+/**
+ * Settings section bodies: Models (presets + models), Voice and Usage. Each
+ * is shown on its own address under /settings (see screens/settings).
+ */
+interface SectionProps {
   catalog: ModelCatalog | null;
   settings: SessionSettings | null;
   capabilities: SessionCapabilities | null;
   disabled?: boolean;
-  activePresetId: string | null;
-  diagnostics?: ReactNode;
-  /** Spend and budgets from the gateway (USAGE_UPDATE). */
-  usage?: UsageView | null;
-  /** Tab to show when the dialog opens (e.g. "usage" from a budget notice). */
-  initialTab?: SettingsTab;
-  /** Ask the gateway for fresh totals (sent when the Usage tab is shown). */
-  onRequestUsage?: () => void;
   onChange: (patch: Partial<SessionSettings>) => void;
-  onClose: () => void;
-  /** Open the Connections screen (tools and MCP servers). */
-  onOpenConnections?: () => void;
 }
 
-/** Models & voice: presets as plan-style cards, then fine-grained choices. */
-export function SettingsPanel(props: SettingsPanelProps) {
-  const [tab, setTab] = useState<Tab>("presets");
-  const { open, initialTab } = props;
-  const requestUsage = useRef(props.onRequestUsage);
-  requestUsage.current = props.onRequestUsage;
-  useEffect(() => {
-    if (open && initialTab) setTab(initialTab);
-  }, [open, initialTab]);
-  useEffect(() => {
-    if (open && tab === "usage") requestUsage.current?.();
-  }, [open, tab]);
-  if (!props.open) return null;
+const WAITING = <p className="muted center">Waiting for Sibyl to connect…</p>;
+
+/** Models: presets as plan-style cards, then each model choice. */
+export function ModelsSettings(props: SectionProps & { activePresetId: string | null }) {
   const { catalog, settings, capabilities } = props;
-
+  if (!catalog || !settings) return WAITING;
   return (
-    <div className="dialogBackdrop" onClick={props.onClose}>
-      <section
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Models and voice"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="iconBtn dialogClose" onClick={props.onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
-        <header className="dialogHeader">
-          <h2>Models &amp; voice</h2>
-          <p>
-            Sibyl picks models from OpenRouter by cost, measured speed and benchmarks.
-            Choose a preset, or tune each part yourself.
-          </p>
-          {props.onOpenConnections ? (
-            <button type="button" className="linkBtn connLink" onClick={props.onOpenConnections}>
-              Tools &amp; data sources → Connections
-            </button>
-          ) : null}
-        </header>
-
-        <div className="segmented" role="tablist" aria-label="Settings sections">
-          {(["presets", "models", "voice", "memory", "usage", "diagnostics"] as Tab[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={tab === id ? "active" : ""}
-              onClick={() => setTab(id)}
-            >
-              {TAB_LABELS[id]}
-            </button>
-          ))}
-        </div>
-
-        {tab === "memory" ? (
-          <MemoryTab />
-        ) : tab === "usage" ? (
-          <UsageTab usage={props.usage ?? null} />
-        ) : !catalog || !settings ? (
-          <p className="muted center">Waiting for Sibyl to connect…</p>
-        ) : tab === "presets" ? (
-          catalog.presets?.length ? (
-            <div className="planGrid">
-              {catalog.presets.map((preset) => (
-                <PlanCard
-                  key={preset.id}
-                  preset={preset}
-                  catalog={catalog}
-                  active={preset.id === props.activePresetId}
-                  disabled={props.disabled}
-                  onUse={() => props.onChange(preset.settings)}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="muted center">
-              Presets appear once the model scout has ranked OpenRouter&apos;s catalog (set MODEL_SELECTION=auto).
-            </p>
-          )
-        ) : tab === "models" ? (
-          <div className="fieldStack">
-            {catalog.voice?.length && settings.voiceModel ? (
-              <ModelSelect
-                label="Voice brain"
-                hint="Hears your voice directly — tone, pauses, emotion — and talks back."
-                value={settings.voiceModel}
-                options={catalog.voice}
+    <div className="settingsStack">
+      <section className="settingsGroup" aria-labelledby="settings-presets">
+        <h3 id="settings-presets" className="settingsGroupTitle">Presets</h3>
+        <p className="settingsGroupHint">
+          Sibyl picks models from OpenRouter by cost, measured speed and benchmarks. Choose a preset, or tune each part below.
+        </p>
+        {catalog.presets?.length ? (
+          <div className="planGrid">
+            {catalog.presets.map((preset) => (
+              <PlanCard
+                key={preset.id}
+                preset={preset}
+                catalog={catalog}
+                active={preset.id === props.activePresetId}
                 disabled={props.disabled}
-                onChange={(voiceModel) => props.onChange({ voiceModel })}
+                onUse={() => props.onChange(preset.settings)}
               />
-            ) : null}
-            <ModelSelect
-              label={settings.voiceModel ? "Deep work" : "Chat model"}
-              hint={
-                settings.voiceModel
-                  ? "Takes over careful reasoning and builds the visuals."
-                  : "Writes the answer and the visuals."
-              }
-              value={settings.llmModel}
-              options={catalog.llm}
-              disabled={props.disabled}
-              onChange={(llmModel) => props.onChange({ llmModel })}
-            />
-            <ModelSelect
-              label="Transcription"
-              hint="Keeps an accurate written record of what you said."
-              value={settings.sttModel}
-              options={catalog.stt}
-              disabled={props.disabled}
-              onChange={(sttModel) => props.onChange({ sttModel })}
-            />
-            {capabilities ? (
-              <p className="muted small">
-                Provider: {capabilities.provider}
-                {capabilities.realtimeStt ? " · realtime transcription" : ""}
-              </p>
-            ) : null}
-          </div>
-        ) : tab === "voice" ? (
-          <div className="fieldStack">
-            <Toggle
-              label="Speak replies aloud"
-              description={capabilities?.tts ? undefined : "Speech is turned off on the server (TTS_ENABLED=false)."}
-              checked={settings.speak}
-              disabled={!capabilities?.tts || props.disabled}
-              onChange={(speak) => props.onChange({ speak })}
-            />
-            {catalog.tts.length && settings.ttsModel ? (
-              <ModelSelect
-                label="Voice model"
-                value={settings.ttsModel}
-                options={catalog.tts}
-                disabled={props.disabled || !settings.speak}
-                onChange={(ttsModel) => props.onChange({ ttsModel })}
-              />
-            ) : null}
-            <VoiceSelect catalog={catalog} settings={settings} disabled={props.disabled} onChange={props.onChange} />
-            <Toggle
-              label="Visual answers"
-              description="Charts, tables, cards and forms appear next to the spoken reply. The visual is never read aloud."
-              checked={settings.genUi}
-              disabled={!capabilities?.genUi || props.disabled}
-              onChange={(genUi) => props.onChange({ genUi })}
-            />
+            ))}
           </div>
         ) : (
-          <div className="fieldStack">{props.diagnostics}</div>
+          <p className="muted">
+            Presets appear once the model scout has ranked OpenRouter&apos;s catalog (set MODEL_SELECTION=auto).
+          </p>
         )}
       </section>
+      <section className="settingsGroup" aria-labelledby="settings-models">
+        <h3 id="settings-models" className="settingsGroupTitle">Models</h3>
+        <div className="fieldStack">
+          {catalog.voice?.length && settings.voiceModel ? (
+            <ModelSelect
+              label="Voice brain"
+              hint="Hears your voice directly — tone, pauses, emotion — and talks back."
+              value={settings.voiceModel}
+              options={catalog.voice}
+              disabled={props.disabled}
+              onChange={(voiceModel) => props.onChange({ voiceModel })}
+            />
+          ) : null}
+          <ModelSelect
+            label={settings.voiceModel ? "Deep work" : "Chat model"}
+            hint={
+              settings.voiceModel
+                ? "Takes over careful reasoning and builds the visuals."
+                : "Writes the answer and the visuals."
+            }
+            value={settings.llmModel}
+            options={catalog.llm}
+            disabled={props.disabled}
+            onChange={(llmModel) => props.onChange({ llmModel })}
+          />
+          <ModelSelect
+            label="Transcription"
+            hint="Keeps an accurate written record of what you said."
+            value={settings.sttModel}
+            options={catalog.stt}
+            disabled={props.disabled}
+            onChange={(sttModel) => props.onChange({ sttModel })}
+          />
+          {capabilities ? (
+            <p className="muted small">
+              Provider: {capabilities.provider}
+              {capabilities.realtimeStt ? " · realtime transcription" : ""}
+            </p>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Voice: speaking replies, the voice model and voice, visual answers. */
+export function VoiceSettings(props: SectionProps) {
+  const { catalog, settings, capabilities } = props;
+  if (!catalog || !settings) return WAITING;
+  return (
+    <div className="fieldStack">
+      <Toggle
+        label="Speak replies aloud"
+        description={capabilities?.tts ? undefined : "Speech is turned off on the server (TTS_ENABLED=false)."}
+        checked={settings.speak}
+        disabled={!capabilities?.tts || props.disabled}
+        onChange={(speak) => props.onChange({ speak })}
+      />
+      {catalog.tts.length && settings.ttsModel ? (
+        <ModelSelect
+          label="Voice model"
+          value={settings.ttsModel}
+          options={catalog.tts}
+          disabled={props.disabled || !settings.speak}
+          onChange={(ttsModel) => props.onChange({ ttsModel })}
+        />
+      ) : null}
+      <VoiceSelect catalog={catalog} settings={settings} disabled={props.disabled} onChange={props.onChange} />
+      <Toggle
+        label="Visual answers"
+        description="Charts, tables, cards and forms appear next to the spoken reply. The visual is never read aloud."
+        checked={settings.genUi}
+        disabled={!capabilities?.genUi || props.disabled}
+        onChange={(genUi) => props.onChange({ genUi })}
+      />
     </div>
   );
 }
@@ -207,8 +143,17 @@ const FEATURE_LABELS: Record<string, string> = {
   scout: "Model scout",
   slides: "Slides",
   routine: "Routines",
+  monitor: "Monitors",
+  knowledge_ocr: "Knowledge (reading images and scans)",
+  media: "Media (images, video, audio)",
+  meetings: "Meeting notes",
   tool: "Tools"
 };
+
+/** Usage: spend this session and against the budgets. */
+export function UsageSettings(props: { usage: UsageView | null }) {
+  return <UsageTab usage={props.usage} />;
+}
 
 /** Today, this month, this session, budget bars and spend by feature. */
 function UsageTab(props: { usage: UsageView | null }) {
@@ -229,14 +174,18 @@ function UsageTab(props: { usage: UsageView | null }) {
         <UsageStat label="Today" value={usage.todayUsd} />
         <UsageStat label="This month" value={usage.monthUsd} />
         <UsageStat label="This session" value={usage.sessionUsd} />
+        {usage.averageReplyUsd !== undefined ? (
+          <UsageStat label={`Average reply (last ${usage.averageReplySamples ?? 0})`} value={usage.averageReplyUsd} />
+        ) : null}
       </div>
-      <BudgetBar label="Daily budget" spent={usage.todayUsd} cap={usage.dailyBudgetUsd} env="SIBYL_BUDGET_DAILY_USD" />
-      <BudgetBar
-        label="Monthly budget"
-        spent={usage.monthUsd}
-        cap={usage.monthlyBudgetUsd}
-        env="SIBYL_BUDGET_MONTHLY_USD"
-      />
+      <BudgetBar label="Organization · today" spent={usage.todayUsd} cap={usage.dailyBudgetUsd} where="Admin → Organization" />
+      <BudgetBar label="Organization · this month" spent={usage.monthUsd} cap={usage.monthlyBudgetUsd} where="Admin → Organization" />
+      {usage.workspace ? (
+        <>
+          <BudgetBar label="This workspace · today" spent={usage.workspace.todayUsd} cap={usage.workspace.dailyBudgetUsd} where="Settings → Workspace" />
+          <BudgetBar label="This workspace · this month" spent={usage.workspace.monthUsd} cap={usage.workspace.monthlyBudgetUsd} where="Settings → Workspace" />
+        </>
+      ) : null}
       <div className="field">
         <span className="fieldLabel">This month by feature</span>
         {features.length ? (
@@ -272,13 +221,14 @@ function UsageStat(props: { label: string; value: number }) {
   );
 }
 
-function BudgetBar(props: { label: string; spent: number; cap?: number; env: string }) {
+/** Spend against one budget; `where` says where an admin sets it. */
+function BudgetBar(props: { label: string; spent: number; cap?: number; where: string }) {
   if (props.cap === undefined) {
     return (
       <div className="field">
         <span className="fieldLabel">{props.label}</span>
         <span className="fieldHint">
-          No cap set · add <code>{props.env}</code> to the gateway&apos;s .env
+          {formatSpend(props.spent)} · no budget set (admins set one in {props.where})
         </span>
       </div>
     );
@@ -312,6 +262,14 @@ export function formatSpend(value: number): string {
   return "$" + value.toFixed(4);
 }
 
+/** One line per preset (Settings → Models, and "Pick a style" in onboarding). */
+export const PRESET_BLURBS: Record<string, string> = {
+  cheapest: "Lowest cost per turn, within live speed limits.",
+  balanced: "The best mix of cost, speed and quality.",
+  fastest: "Quickest replies, for the most natural back-and-forth.",
+  best: "Highest benchmark quality where it matters."
+};
+
 function PlanCard(props: {
   preset: ModelPreset;
   catalog: ModelCatalog;
@@ -327,12 +285,7 @@ function PlanCard(props: {
     { role: "Voice", model: find(catalog.tts, preset.settings.ttsModel) },
     { role: "Transcription", model: find(catalog.stt, preset.settings.sttModel) }
   ];
-  const blurb: Record<string, string> = {
-    cheapest: "Lowest cost per turn, within live speed limits.",
-    balanced: "The best mix of cost, speed and quality.",
-    fastest: "Quickest replies, for the most natural back-and-forth.",
-    best: "Highest benchmark quality where it matters."
-  };
+  const blurb = PRESET_BLURBS;
   return (
     <article className={`plan${props.active ? " active" : ""}`}>
       <div className="planTop">
@@ -340,9 +293,16 @@ function PlanCard(props: {
         {props.active ? <span className="planCurrent">Current</span> : null}
       </div>
       <p className="planPrice">
-        {preset.costPer100Turns !== undefined ? `$${preset.costPer100Turns.toFixed(2)}` : "—"}
-        <span> / 100 turns</span>
+        {preset.costPer100Messages !== undefined
+          ? usd(preset.costPer100Messages)
+          : preset.costPer100Turns !== undefined
+            ? usd(preset.costPer100Turns)
+            : "—"}
+        <span> / 100 messages</span>
       </p>
+      {preset.costPer100Turns !== undefined && preset.costPer100Messages !== undefined ? (
+        <p className="planPriceSub">{usd(preset.costPer100Turns)} / 100 spoken turns · web searches about $0.01 each</p>
+      ) : null}
       <p className="planBlurb">{blurb[preset.id] ?? ""}</p>
       <ul className="planList">
         {rows
@@ -429,7 +389,7 @@ function VoiceSelect(props: {
   );
 }
 
-function Toggle(props: {
+export function Toggle(props: {
   label: string;
   description?: string;
   checked: boolean;

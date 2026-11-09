@@ -24,6 +24,8 @@ Each capability exists exactly once. New features build on these rather than add
 | Tools: built-ins, MCP client | `apps/gateway/src/tools/*` | each tool is a `ToolDefinition` |
 | Metering and budgets | `apps/gateway/src/metering/*` | implements `UsageMeter` |
 | Model selection | `apps/gateway/src/scout.ts`, `models.ts` | presets, catalog |
+| Session transport (WebSocket, LiveKit room, headless) | `apps/gateway/src/session-port.ts` | `SessionTransport`, `VoiceSessionPort` |
+| Realtime layer (optional LiveKit: calls, phone, streams) | `apps/gateway/src/realtime/*` | see [realtime.md](realtime.md) |
 | Web app | `apps/web` | |
 
 The gateway wires the store, tool registry and meter together in one place, `apps/gateway/src/runtime.ts`.

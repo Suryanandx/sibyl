@@ -819,7 +819,9 @@ test("interrupt after realtime commit does not trigger batch STT fallback", asyn
         }
       }
     }),
-    { streamingSttFinalTimeoutMs: 30 },
+    // Long enough that the interrupt always lands first, even on a loaded machine;
+    // the wait below outlasts it, so a wrongly-armed fallback would still be caught.
+    { streamingSttFinalTimeoutMs: 400 },
     async (client) => {
       client.send({
         type: WS_EVENTS.VAD_SPEECH_START,
@@ -849,7 +851,7 @@ test("interrupt after realtime commit does not trigger batch STT fallback", asyn
         requestId: "cancel-after-commit",
         reason: "user cancelled"
       });
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await new Promise((resolve) => setTimeout(resolve, 600));
       assert.equal(batchCalls, 0);
       assert.equal(llmCalls, 0);
     }

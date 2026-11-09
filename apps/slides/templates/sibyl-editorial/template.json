@@ -1,0 +1,8420 @@
+{
+ "id": "sibyl-editorial",
+ "name": "Sibyl Editorial",
+ "description": "Large confident headlines and generous whitespace on a warm canvas. For narratives, essays and pitches.",
+ "thumbnail": "static/thumbnail.png",
+ "layouts": [
+  {
+   "id": "title_slide",
+   "description": "Opening title slide: large deck title, one-line subtitle and a presenter/date line. Use for the first slide.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "title_block",
+     "description": "Deck title, subtitle and presenter line, left aligned on the vertical centre.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 96,
+         "y": 214
+        },
+        {
+         "x": 152,
+         "y": 214
+        },
+        {
+         "x": 152,
+         "y": 218
+        },
+        {
+         "x": 96,
+         "y": 218
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#1D211F"
+       }
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 244
+       },
+       "size": {
+        "width": 848,
+        "height": 164
+       },
+       "font": {
+        "size": 76,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.06,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Clear thinking, beautifully presented",
+         "font": {
+          "size": 76,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.06
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 34,
+       "min_length": 8
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 428
+       },
+       "size": {
+        "width": 761,
+        "height": 64
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.35,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "A short line that frames what this deck is about",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.35
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "subtitle",
+       "max_length": 49,
+       "min_length": 12
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 626
+       },
+       "size": {
+        "width": 652,
+        "height": 24
+       },
+       "font": {
+        "size": 14,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Presenter name \u00b7 Date",
+         "font": {
+          "size": 14,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "presenter",
+       "max_length": 48,
+       "min_length": 4
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "section_divider",
+   "description": "Section divider between parts of the deck: section number, section title and one sentence.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "section_block",
+     "description": "Large section number, section title and a one-sentence description.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 230
+       },
+       "size": {
+        "width": 200,
+        "height": 83
+       },
+       "font": {
+        "size": 76,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.0,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "01",
+         "font": {
+          "size": 76,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.0
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "section_number",
+       "max_length": 3,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 325
+       },
+       "size": {
+        "width": 816,
+        "height": 110
+       },
+       "font": {
+        "size": 54,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.1,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "The section title goes here",
+         "font": {
+          "size": 54,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.1
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "section_title",
+       "max_length": 22,
+       "min_length": 5
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 447
+       },
+       "size": {
+        "width": 652,
+        "height": 53
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.4,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "One sentence on what this part covers.",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.4
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "section_description",
+       "max_length": 53,
+       "min_length": 13
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "agenda",
+   "description": "Agenda or table of contents: 3 to 6 numbered topics in two columns.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Agenda",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "agenda_items",
+     "description": "Numbered agenda topics in a two-column grid.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "grid",
+       "position": {
+        "x": 96,
+        "y": 228
+       },
+       "size": {
+        "width": 1088,
+        "height": 224
+       },
+       "columns": 2,
+       "column_gap": 16,
+       "row_gap": 16,
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 532,
+          "height": 64
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 64
+            },
+            {
+             "x": 0,
+             "y": 64
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            2,
+            2,
+            2,
+            2
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 20,
+            "y": 18
+           },
+           "size": {
+            "width": 40,
+            "height": 28
+           },
+           "font": {
+            "size": 24,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "01",
+             "font": {
+              "size": 24,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_number",
+           "max_length": 2,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 72,
+            "y": 12
+           },
+           "size": {
+            "width": 440,
+            "height": 40
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.2,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "Agenda topic",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.2
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_title",
+           "max_length": 35,
+           "min_length": 8
+          }
+         ],
+         "name": "agenda_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 532,
+          "height": 64
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 64
+            },
+            {
+             "x": 0,
+             "y": 64
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            2,
+            2,
+            2,
+            2
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 20,
+            "y": 18
+           },
+           "size": {
+            "width": 40,
+            "height": 28
+           },
+           "font": {
+            "size": 24,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "02",
+             "font": {
+              "size": 24,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_number",
+           "max_length": 2,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 72,
+            "y": 12
+           },
+           "size": {
+            "width": 440,
+            "height": 40
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.2,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "Agenda topic",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.2
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_title",
+           "max_length": 35,
+           "min_length": 8
+          }
+         ],
+         "name": "agenda_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 532,
+          "height": 64
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 64
+            },
+            {
+             "x": 0,
+             "y": 64
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            2,
+            2,
+            2,
+            2
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 20,
+            "y": 18
+           },
+           "size": {
+            "width": 40,
+            "height": 28
+           },
+           "font": {
+            "size": 24,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "03",
+             "font": {
+              "size": 24,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_number",
+           "max_length": 2,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 72,
+            "y": 12
+           },
+           "size": {
+            "width": 440,
+            "height": 40
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.2,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "Agenda topic",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.2
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_title",
+           "max_length": 35,
+           "min_length": 8
+          }
+         ],
+         "name": "agenda_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 532,
+          "height": 64
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 64
+            },
+            {
+             "x": 0,
+             "y": 64
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            2,
+            2,
+            2,
+            2
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 20,
+            "y": 18
+           },
+           "size": {
+            "width": 40,
+            "height": 28
+           },
+           "font": {
+            "size": 24,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "04",
+             "font": {
+              "size": 24,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_number",
+           "max_length": 2,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 72,
+            "y": 12
+           },
+           "size": {
+            "width": 440,
+            "height": 40
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.2,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "Agenda topic",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.2
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_title",
+           "max_length": 35,
+           "min_length": 8
+          }
+         ],
+         "name": "agenda_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 532,
+          "height": 64
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 64
+            },
+            {
+             "x": 0,
+             "y": 64
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            2,
+            2,
+            2,
+            2
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 20,
+            "y": 18
+           },
+           "size": {
+            "width": 40,
+            "height": 28
+           },
+           "font": {
+            "size": 24,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "05",
+             "font": {
+              "size": 24,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_number",
+           "max_length": 2,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 72,
+            "y": 12
+           },
+           "size": {
+            "width": 440,
+            "height": 40
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.2,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "Agenda topic",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.2
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_title",
+           "max_length": 35,
+           "min_length": 8
+          }
+         ],
+         "name": "agenda_item"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 532,
+          "height": 64
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 0
+            },
+            {
+             "x": 532,
+             "y": 64
+            },
+            {
+             "x": 0,
+             "y": 64
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            2,
+            2,
+            2,
+            2
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 20,
+            "y": 18
+           },
+           "size": {
+            "width": 40,
+            "height": 28
+           },
+           "font": {
+            "size": 24,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "06",
+             "font": {
+              "size": 24,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_number",
+           "max_length": 2,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 72,
+            "y": 12
+           },
+           "size": {
+            "width": 440,
+            "height": 40
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.2,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "middle"
+           },
+           "runs": [
+            {
+             "text": "Agenda topic",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.2
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "item_title",
+           "max_length": 35,
+           "min_length": 8
+          }
+         ],
+         "name": "agenda_item"
+        }
+       ],
+       "name": "agenda_items",
+       "max_children": 6,
+       "min_children": 3
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "text_bullets",
+   "description": "Text with bullets: a lead sentence and 3 to 5 concise bullet points.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Key points, stated plainly",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "body",
+     "description": "Lead sentence and bullet list.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 220
+       },
+       "size": {
+        "width": 870,
+        "height": 64
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.35,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "One sentence that sets up the points below.",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.35
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "lead",
+       "max_length": 56,
+       "min_length": 14
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 96,
+        "y": 308
+       },
+       "size": {
+        "width": 870,
+        "height": 348
+       },
+       "font": {
+        "size": 20,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.3
+       },
+       "marker": "bullet",
+       "gap": 12,
+       "marker_gap": 12,
+       "items": [
+        [
+         {
+          "text": "First point, short and specific",
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Second point with a concrete detail",
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Third point that lands the idea",
+          "font": {
+           "size": 20,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "points",
+       "max_items": 5,
+       "min_items": 3,
+       "max_item_length": 132,
+       "min_item_length": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "two_column",
+   "description": "Two columns, each with a heading and 2 to 4 bullets. Use for two related topics or before/after.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Two sides of the topic",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "columns",
+     "description": "Two equal columns with heading and bullets.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 96,
+         "y": 220
+        },
+        {
+         "x": 136,
+         "y": 220
+        },
+        {
+         "x": 136,
+         "y": 223
+        },
+        {
+         "x": 96,
+         "y": 223
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#1D211F"
+       }
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 238
+       },
+       "size": {
+        "width": 520,
+        "height": 60
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Column heading",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "left_heading",
+       "max_length": 68,
+       "min_length": 17
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 96,
+        "y": 314
+       },
+       "size": {
+        "width": 520,
+        "height": 342
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.3
+       },
+       "marker": "bullet",
+       "gap": 12,
+       "marker_gap": 12,
+       "items": [
+        [
+         {
+          "text": "A supporting point",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#5A605C",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Another supporting point",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#5A605C",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "A third detail",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#5A605C",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "left_points",
+       "max_items": 4,
+       "min_items": 2,
+       "max_item_length": 122,
+       "min_item_length": 12
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 664,
+         "y": 220
+        },
+        {
+         "x": 704,
+         "y": 220
+        },
+        {
+         "x": 704,
+         "y": 223
+        },
+        {
+         "x": 664,
+         "y": 223
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#1D211F"
+       }
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 664,
+        "y": 238
+       },
+       "size": {
+        "width": 520,
+        "height": 60
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Column heading",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "right_heading",
+       "max_length": 68,
+       "min_length": 17
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 664,
+        "y": 314
+       },
+       "size": {
+        "width": 520,
+        "height": 342
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.3
+       },
+       "marker": "bullet",
+       "gap": 12,
+       "marker_gap": 12,
+       "items": [
+        [
+         {
+          "text": "A supporting point",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#5A605C",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Another supporting point",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#5A605C",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "A third detail",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#5A605C",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "right_points",
+       "max_items": 4,
+       "min_items": 2,
+       "max_item_length": 122,
+       "min_item_length": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "image_text",
+   "description": "Image with text: a photo on the right, title, paragraph and up to 3 bullets on the left. Use when a picture helps.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "image_panel",
+     "description": "Full-height image on the right, cropped to fill.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "image",
+       "position": {
+        "x": 743,
+        "y": 0
+       },
+       "size": {
+        "width": 537,
+        "height": 720
+       },
+       "data": "/static/images/replaceable_template_image.png",
+       "fit": "cover",
+       "decorative": false,
+       "name": "image",
+       "is_icon": false,
+       "prompt": "A calm, editorial photograph related to the slide topic"
+      }
+     ]
+    },
+    {
+     "id": "text_panel",
+     "description": "Title, paragraph and bullets on the left.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 72
+       },
+       "size": {
+        "width": 591,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Context",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 28,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 102
+       },
+       "size": {
+        "width": 591,
+        "height": 161
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "A picture and the point it makes",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 37,
+       "min_length": 9
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 283
+       },
+       "size": {
+        "width": 591,
+        "height": 110
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "A short paragraph explaining what the image shows and why it matters.",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "body",
+       "max_length": 145,
+       "min_length": 36
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 96,
+        "y": 413
+       },
+       "size": {
+        "width": 591,
+        "height": 243
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.3
+       },
+       "marker": "bullet",
+       "gap": 12,
+       "marker_gap": 12,
+       "items": [
+        [
+         {
+          "text": "A supporting detail",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Another detail",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "points",
+       "max_items": 3,
+       "min_items": 0,
+       "max_item_length": 93,
+       "min_item_length": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kpi_row",
+   "description": "Key metrics: 2 to 4 KPI cards, each with a big value, a label and a short note. Use for headline numbers.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "The numbers that matter",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "kpis",
+     "description": "Row of equal KPI cards on a shared baseline.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "grid",
+       "position": {
+        "x": 96,
+        "y": 232
+       },
+       "size": {
+        "width": 1088,
+        "height": 210
+       },
+       "columns": 4,
+       "column_gap": 20,
+       "row_gap": 20,
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 257,
+          "height": 210
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 210
+            },
+            {
+             "x": 0,
+             "y": 210
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            4,
+            4,
+            4,
+            4
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 28
+           },
+           "size": {
+            "width": 217,
+            "height": 70
+           },
+           "font": {
+            "size": 64,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.05,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "42%",
+             "font": {
+              "size": 64,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.05
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_value",
+           "max_length": 7,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 110
+           },
+           "size": {
+            "width": 209,
+            "height": 49
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What it measures",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.3
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_label",
+           "max_length": 17,
+           "min_length": 4
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 171
+           },
+           "size": {
+            "width": 209,
+            "height": 54
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.4,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Short context for the number",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.4
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_note",
+           "max_length": 45,
+           "min_length": 11
+          }
+         ],
+         "name": "kpi"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 257,
+          "height": 210
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 210
+            },
+            {
+             "x": 0,
+             "y": 210
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            4,
+            4,
+            4,
+            4
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 28
+           },
+           "size": {
+            "width": 217,
+            "height": 70
+           },
+           "font": {
+            "size": 64,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.05,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "3.1x",
+             "font": {
+              "size": 64,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.05
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_value",
+           "max_length": 7,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 110
+           },
+           "size": {
+            "width": 209,
+            "height": 49
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What it measures",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.3
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_label",
+           "max_length": 17,
+           "min_length": 4
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 171
+           },
+           "size": {
+            "width": 209,
+            "height": 54
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.4,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Short context for the number",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.4
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_note",
+           "max_length": 45,
+           "min_length": 11
+          }
+         ],
+         "name": "kpi"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 257,
+          "height": 210
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 210
+            },
+            {
+             "x": 0,
+             "y": 210
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            4,
+            4,
+            4,
+            4
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 28
+           },
+           "size": {
+            "width": 217,
+            "height": 70
+           },
+           "font": {
+            "size": 64,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.05,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "$1.2M",
+             "font": {
+              "size": 64,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.05
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_value",
+           "max_length": 7,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 110
+           },
+           "size": {
+            "width": 209,
+            "height": 49
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What it measures",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.3
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_label",
+           "max_length": 17,
+           "min_length": 4
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 171
+           },
+           "size": {
+            "width": 209,
+            "height": 54
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.4,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Short context for the number",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.4
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_note",
+           "max_length": 45,
+           "min_length": 11
+          }
+         ],
+         "name": "kpi"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 257,
+          "height": 210
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "polygon",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 0
+            },
+            {
+             "x": 257,
+             "y": 210
+            },
+            {
+             "x": 0,
+             "y": 210
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#F3F3F0"
+           },
+           "corner_radii": [
+            4,
+            4,
+            4,
+            4
+           ],
+           "stroke": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 28
+           },
+           "size": {
+            "width": 217,
+            "height": 70
+           },
+           "font": {
+            "size": 64,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.05,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "18",
+             "font": {
+              "size": 64,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.05
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_value",
+           "max_length": 7,
+           "min_length": 1
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 110
+           },
+           "size": {
+            "width": 209,
+            "height": 49
+           },
+           "font": {
+            "size": 19,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What it measures",
+             "font": {
+              "size": 19,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.3
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_label",
+           "max_length": 17,
+           "min_length": 4
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 24,
+            "y": 171
+           },
+           "size": {
+            "width": 209,
+            "height": 54
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.4,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Short context for the number",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.4
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "kpi_note",
+           "max_length": 45,
+           "min_length": 11
+          }
+         ],
+         "name": "kpi"
+        }
+       ],
+       "name": "kpis",
+       "max_children": 4,
+       "min_children": 2,
+       "rows": 1
+      }
+     ]
+    },
+    {
+     "id": "summary",
+     "description": "One-line takeaway under the KPI cards.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 470
+       },
+       "size": {
+        "width": 870,
+        "height": 53
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.4,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "One sentence on what these numbers mean together.",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.4
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "takeaway",
+       "max_length": 71,
+       "min_length": 17
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chart_bar",
+   "description": "Bar chart with a takeaway: categories compared on one or two series, with a short explanation on the right.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Comparison across categories",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "chart",
+     "description": "Bar chart sized to its panel.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "chart",
+       "position": {
+        "x": 96,
+        "y": 220
+       },
+       "size": {
+        "width": 696,
+        "height": 436
+       },
+       "chart_type": "bar",
+       "text_color": "#5A605C",
+       "legend_color": "#5A605C",
+       "colors": [
+        "#1D211F",
+        "#596C5D",
+        "#A9B1AB",
+        "#6B7F95",
+        "#A86F38",
+        "#D5D9D3"
+       ],
+       "x_axis": true,
+       "y_axis": true,
+       "axis_color": "#DCDFD9",
+       "categories": [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4"
+       ],
+       "series": [
+        {
+         "name": "This year",
+         "values": [
+          12,
+          18,
+          22,
+          27
+         ]
+        },
+        {
+         "name": "Last year",
+         "values": [
+          10,
+          13,
+          17,
+          20
+         ]
+        }
+       ],
+       "legend": true,
+       "legend_position": "bottom",
+       "x_axis_grid": false,
+       "y_axis_grid": true,
+       "grid_color": "#DCDFD9",
+       "decorative": false,
+       "name": "chart"
+      }
+     ]
+    },
+    {
+     "id": "insight",
+     "description": "Takeaway heading and explanation beside the chart.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 832,
+        "y": 228
+       },
+       "size": {
+        "width": 352,
+        "height": 90
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "What the chart shows",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "insight_heading",
+       "max_length": 68,
+       "min_length": 17
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 832,
+        "y": 334
+       },
+       "size": {
+        "width": 352,
+        "height": 322
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Two or three sentences that explain the trend and why it matters.",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "insight_body",
+       "max_length": 317,
+       "min_length": 79
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chart_line",
+   "description": "Line chart across the full width for a trend over time, with a one-line caption.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Trend over time",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "chart",
+     "description": "Wide line chart.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "chart",
+       "position": {
+        "x": 96,
+        "y": 220
+       },
+       "size": {
+        "width": 1088,
+        "height": 396
+       },
+       "chart_type": "line",
+       "text_color": "#5A605C",
+       "legend_color": "#5A605C",
+       "colors": [
+        "#1D211F",
+        "#596C5D",
+        "#A9B1AB",
+        "#6B7F95",
+        "#A86F38",
+        "#D5D9D3"
+       ],
+       "x_axis": true,
+       "y_axis": true,
+       "axis_color": "#DCDFD9",
+       "categories": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun"
+       ],
+       "series": [
+        {
+         "name": "Series A",
+         "values": [
+          10,
+          14,
+          13,
+          18,
+          22,
+          26
+         ]
+        },
+        {
+         "name": "Series B",
+         "values": [
+          8,
+          9,
+          12,
+          12,
+          15,
+          17
+         ]
+        }
+       ],
+       "legend": true,
+       "legend_position": "bottom",
+       "x_axis_grid": false,
+       "y_axis_grid": true,
+       "grid_color": "#DCDFD9",
+       "decorative": false,
+       "name": "chart"
+      }
+     ]
+    },
+    {
+     "id": "caption",
+     "description": "Caption under the chart.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 628
+       },
+       "size": {
+        "width": 1088,
+        "height": 24
+       },
+       "font": {
+        "size": 14,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "Source or one-line caption",
+         "font": {
+          "size": 14,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "caption",
+       "max_length": 121,
+       "min_length": 30
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "chart_pie",
+   "description": "Donut chart for parts of a whole (3 to 6 slices), with a takeaway on the left.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "How the whole breaks down",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "insight",
+     "description": "Takeaway on the left.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 228
+       },
+       "size": {
+        "width": 391,
+        "height": 90
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "The biggest share",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "insight_heading",
+       "max_length": 76,
+       "min_length": 19
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 334
+       },
+       "size": {
+        "width": 391,
+        "height": 322
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.45,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Explain the split and what it implies.",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.45
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "insight_body",
+       "max_length": 355,
+       "min_length": 88
+      }
+     ]
+    },
+    {
+     "id": "chart",
+     "description": "Donut chart.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "chart",
+       "position": {
+        "x": 552,
+        "y": 220
+       },
+       "size": {
+        "width": 632,
+        "height": 436
+       },
+       "chart_type": "donut",
+       "text_color": "#5A605C",
+       "legend_color": "#5A605C",
+       "colors": [
+        "#1D211F",
+        "#596C5D",
+        "#A9B1AB",
+        "#6B7F95",
+        "#A86F38",
+        "#D5D9D3"
+       ],
+       "x_axis": false,
+       "y_axis": false,
+       "axis_color": "#DCDFD9",
+       "categories": [
+        "Segment A",
+        "Segment B",
+        "Segment C",
+        "Other"
+       ],
+       "series": [
+        {
+         "name": "Share",
+         "values": [
+          42,
+          28,
+          18,
+          12
+         ]
+        }
+       ],
+       "legend": true,
+       "legend_position": "right",
+       "x_axis_grid": false,
+       "y_axis_grid": false,
+       "grid_color": "#DCDFD9",
+       "decorative": false,
+       "name": "chart"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "table",
+   "description": "Table of text data: up to 6 rows and 4 columns with a header row. Use only when the content is tabular.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Side-by-side details",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "table",
+     "description": "Data table sized to the content area.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "table",
+       "position": {
+        "x": 96,
+        "y": 220
+       },
+       "size": {
+        "width": 1088,
+        "height": 436
+       },
+       "columns": [
+        {
+         "color": {
+          "color": "#ECEDEA"
+         },
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.3
+         },
+         "alignment": "left",
+         "borders": {
+          "top": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "right": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "left": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#DCDFD9",
+           "width": 1
+          }
+         },
+         "runs": [
+          {
+           "text": "Item",
+           "font": {
+            "size": 15,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3
+           }
+          }
+         ]
+        },
+        {
+         "color": {
+          "color": "#ECEDEA"
+         },
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.3
+         },
+         "alignment": "left",
+         "borders": {
+          "top": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "right": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "left": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#DCDFD9",
+           "width": 1
+          }
+         },
+         "runs": [
+          {
+           "text": "Detail",
+           "font": {
+            "size": 15,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3
+           }
+          }
+         ]
+        },
+        {
+         "color": {
+          "color": "#ECEDEA"
+         },
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.3
+         },
+         "alignment": "left",
+         "borders": {
+          "top": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "right": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "left": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#DCDFD9",
+           "width": 1
+          }
+         },
+         "runs": [
+          {
+           "text": "Owner",
+           "font": {
+            "size": 15,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3
+           }
+          }
+         ]
+        },
+        {
+         "color": {
+          "color": "#ECEDEA"
+         },
+         "font": {
+          "size": 15,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.3
+         },
+         "alignment": "left",
+         "borders": {
+          "top": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "right": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "left": {
+           "color": "#DCDFD9",
+           "width": 0
+          },
+          "bottom": {
+           "color": "#DCDFD9",
+           "width": 1
+          }
+         },
+         "runs": [
+          {
+           "text": "Status",
+           "font": {
+            "size": 15,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.3
+           }
+          }
+         ]
+        }
+       ],
+       "rows": [
+        [
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Row one",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "A short detail",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Team",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Done",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         }
+        ],
+        [
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Row two",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "A short detail",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Team",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "In progress",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         }
+        ],
+        [
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Row three",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "A short detail",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Team",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         },
+         {
+          "color": {
+           "color": "#FBFBF9"
+          },
+          "font": {
+           "size": 17,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          },
+          "alignment": "left",
+          "borders": {
+           "top": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "right": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "left": {
+            "color": "#DCDFD9",
+            "width": 0
+           },
+           "bottom": {
+            "color": "#DCDFD9",
+            "width": 1
+           }
+          },
+          "runs": [
+           {
+            "text": "Planned",
+            "font": {
+             "size": 17,
+             "family": "Inter",
+             "color": "#1D211F",
+             "bold": false,
+             "italic": false,
+             "line_height": 1.3
+            }
+           }
+          ]
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "table",
+       "max_columns": 4,
+       "min_columns": 2,
+       "max_rows": 6,
+       "min_rows": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "timeline",
+   "description": "Timeline or process: 3 to 5 sequential steps left to right, each with a label, title and description.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "How it unfolds",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "rail",
+     "description": "Thin connecting line behind the step markers.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 96,
+         "y": 268
+        },
+        {
+         "x": 1184,
+         "y": 268
+        },
+        {
+         "x": 1184,
+         "y": 270
+        },
+        {
+         "x": 96,
+         "y": 270
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#DCDFD9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "steps",
+     "description": "Evenly spaced steps.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "grid",
+       "position": {
+        "x": 96,
+        "y": 260
+       },
+       "size": {
+        "width": 1088,
+        "height": 260
+       },
+       "columns": 5,
+       "column_gap": 16,
+       "row_gap": 16,
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 204,
+          "height": 260
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "ellipse",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 18,
+             "y": 18
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#1D211F"
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 34
+           },
+           "size": {
+            "width": 188,
+            "height": 20
+           },
+           "font": {
+            "size": 13,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.8,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Step 1",
+             "font": {
+              "size": 13,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_label",
+           "max_length": 18,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 60
+           },
+           "size": {
+            "width": 188,
+            "height": 47
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Milestone",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_title",
+           "max_length": 14,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 117
+           },
+           "size": {
+            "width": 188,
+            "height": 94
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What happens at this stage.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_description",
+           "max_length": 81,
+           "min_length": 20
+          }
+         ],
+         "name": "step"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 204,
+          "height": 260
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "ellipse",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 18,
+             "y": 18
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#1D211F"
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 34
+           },
+           "size": {
+            "width": 188,
+            "height": 20
+           },
+           "font": {
+            "size": 13,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.8,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Step 2",
+             "font": {
+              "size": 13,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_label",
+           "max_length": 18,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 60
+           },
+           "size": {
+            "width": 188,
+            "height": 47
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Milestone",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_title",
+           "max_length": 14,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 117
+           },
+           "size": {
+            "width": 188,
+            "height": 94
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What happens at this stage.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_description",
+           "max_length": 81,
+           "min_length": 20
+          }
+         ],
+         "name": "step"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 204,
+          "height": 260
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "ellipse",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 18,
+             "y": 18
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#1D211F"
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 34
+           },
+           "size": {
+            "width": 188,
+            "height": 20
+           },
+           "font": {
+            "size": 13,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.8,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Step 3",
+             "font": {
+              "size": 13,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_label",
+           "max_length": 18,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 60
+           },
+           "size": {
+            "width": 188,
+            "height": 47
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Milestone",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_title",
+           "max_length": 14,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 117
+           },
+           "size": {
+            "width": 188,
+            "height": 94
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What happens at this stage.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_description",
+           "max_length": 81,
+           "min_length": 20
+          }
+         ],
+         "name": "step"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 204,
+          "height": 260
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "ellipse",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 18,
+             "y": 18
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#1D211F"
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 34
+           },
+           "size": {
+            "width": 188,
+            "height": 20
+           },
+           "font": {
+            "size": 13,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.8,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Step 4",
+             "font": {
+              "size": 13,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_label",
+           "max_length": 18,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 60
+           },
+           "size": {
+            "width": 188,
+            "height": 47
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Milestone",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_title",
+           "max_length": 14,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 117
+           },
+           "size": {
+            "width": 188,
+            "height": 94
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What happens at this stage.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_description",
+           "max_length": 81,
+           "min_length": 20
+          }
+         ],
+         "name": "step"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 204,
+          "height": 260
+         },
+         "children": [
+          {
+           "type": "vector",
+           "shape": "ellipse",
+           "points": [
+            {
+             "x": 0,
+             "y": 0
+            },
+            {
+             "x": 18,
+             "y": 18
+            }
+           ],
+           "closed": true,
+           "fill": {
+            "color": "#1D211F"
+           }
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 34
+           },
+           "size": {
+            "width": 188,
+            "height": 20
+           },
+           "font": {
+            "size": 13,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "letter_spacing": 0.8,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Step 5",
+             "font": {
+              "size": 13,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25,
+              "letter_spacing": 0.8
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_label",
+           "max_length": 18,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 60
+           },
+           "size": {
+            "width": 188,
+            "height": 47
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Milestone",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_title",
+           "max_length": 14,
+           "min_length": 3
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 117
+           },
+           "size": {
+            "width": 188,
+            "height": 94
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "What happens at this stage.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "step_description",
+           "max_length": 81,
+           "min_length": 20
+          }
+         ],
+         "name": "step"
+        }
+       ],
+       "name": "steps",
+       "max_children": 5,
+       "min_children": 3,
+       "rows": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "comparison",
+   "description": "Comparison of two options or before/after: two cards with a label, heading and 2 to 4 bullets each.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Option A versus option B",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "comparison",
+     "description": "Two contrasting cards side by side.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 96,
+         "y": 220
+        },
+        {
+         "x": 624,
+         "y": 220
+        },
+        {
+         "x": 624,
+         "y": 656
+        },
+        {
+         "x": 96,
+         "y": 656
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#F3F3F0"
+       },
+       "corner_radii": [
+        4,
+        4,
+        4,
+        4
+       ],
+       "stroke": {
+        "color": "#DCDFD9",
+        "width": 1
+       }
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 128,
+        "y": 248
+       },
+       "size": {
+        "width": 464,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Option",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "left_label",
+       "max_length": 24,
+       "min_length": 2
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 128,
+        "y": 276
+       },
+       "size": {
+        "width": 464,
+        "height": 60
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Heading for this side",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "left_heading",
+       "max_length": 59,
+       "min_length": 14
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 128,
+        "y": 352
+       },
+       "size": {
+        "width": 464,
+        "height": 272
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.3
+       },
+       "marker": "bullet",
+       "gap": 12,
+       "marker_gap": 12,
+       "items": [
+        [
+         {
+          "text": "A difference",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Another difference",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "A third difference",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#1D211F",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "left_points",
+       "max_items": 4,
+       "min_items": 2,
+       "max_item_length": 71,
+       "min_item_length": 12
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 656,
+         "y": 220
+        },
+        {
+         "x": 1184,
+         "y": 220
+        },
+        {
+         "x": 1184,
+         "y": 656
+        },
+        {
+         "x": 656,
+         "y": 656
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#1D211F"
+       },
+       "corner_radii": [
+        4,
+        4,
+        4,
+        4
+       ]
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 688,
+        "y": 248
+       },
+       "size": {
+        "width": 464,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#FBFBF9",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Option",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#FBFBF9",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "right_label",
+       "max_length": 24,
+       "min_length": 2
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 688,
+        "y": 276
+       },
+       "size": {
+        "width": 464,
+        "height": 60
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#FBFBF9",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Heading for this side",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#FBFBF9",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "right_heading",
+       "max_length": 59,
+       "min_length": 14
+      },
+      {
+       "type": "text-list",
+       "position": {
+        "x": 688,
+        "y": 352
+       },
+       "size": {
+        "width": 464,
+        "height": 272
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#FBFBF9",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.3
+       },
+       "marker": "bullet",
+       "gap": 12,
+       "marker_gap": 12,
+       "items": [
+        [
+         {
+          "text": "A difference",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#FBFBF9",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "Another difference",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#FBFBF9",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ],
+        [
+         {
+          "text": "A third difference",
+          "font": {
+           "size": 19,
+           "family": "Inter",
+           "color": "#FBFBF9",
+           "bold": false,
+           "italic": false,
+           "line_height": 1.3
+          }
+         }
+        ]
+       ],
+       "decorative": false,
+       "name": "right_points",
+       "max_items": 4,
+       "min_items": 2,
+       "max_item_length": 71,
+       "min_item_length": 12
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "quote",
+   "description": "Quote or key statement: one large quotation with the speaker's name and role.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "quote",
+     "description": "Large quotation mark, quote and attribution.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 120
+       },
+       "size": {
+        "width": 80,
+        "height": 90
+       },
+       "font": {
+        "size": 96,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.0,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "\u201c",
+         "font": {
+          "size": 96,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.0
+         }
+        }
+       ],
+       "decorative": true,
+       "name": "quote_mark",
+       "max_length": 1,
+       "min_length": 1
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 220
+       },
+       "size": {
+        "width": 935,
+        "height": 240
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "A memorable line that captures the idea of this deck.",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "quote",
+       "max_length": 122,
+       "min_length": 30
+      },
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 96,
+         "y": 480
+        },
+        {
+         "x": 136,
+         "y": 480
+        },
+        {
+         "x": 136,
+         "y": 482
+        },
+        {
+         "x": 96,
+         "y": 482
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#1D211F"
+       }
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 496
+       },
+       "size": {
+        "width": 652,
+        "height": 26
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Name",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "attribution",
+       "max_length": 40,
+       "min_length": 2
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 526
+       },
+       "size": {
+        "width": 652,
+        "height": 24
+       },
+       "font": {
+        "size": 14,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Role, organisation",
+         "font": {
+          "size": 14,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "attribution_role",
+       "max_length": 56,
+       "min_length": 2
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "team",
+   "description": "Team or people: 2 to 4 people with photo, name, role and one-line bio.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "header",
+     "description": "Slide eyebrow label and title (up to two lines).",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 56
+       },
+       "size": {
+        "width": 1088,
+        "height": 20
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "letter_spacing": 1.2,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Overview",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25,
+          "letter_spacing": 1.2
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "eyebrow",
+       "max_length": 32,
+       "min_length": 3
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 96,
+        "y": 86
+       },
+       "size": {
+        "width": 1088,
+        "height": 110
+       },
+       "font": {
+        "size": 48,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.12,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "left",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "The people behind it",
+         "font": {
+          "size": 48,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.12
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "title",
+       "max_length": 69,
+       "min_length": 17
+      }
+     ]
+    },
+    {
+     "id": "people",
+     "description": "Grid of people cards.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "grid",
+       "position": {
+        "x": 96,
+        "y": 228
+       },
+       "size": {
+        "width": 1088,
+        "height": 280
+       },
+       "columns": 4,
+       "column_gap": 24,
+       "row_gap": 24,
+       "children": [
+        {
+         "type": "group",
+         "size": {
+          "width": 254,
+          "height": 280
+         },
+         "children": [
+          {
+           "type": "image",
+           "position": {
+            "x": 0,
+            "y": 0
+           },
+           "size": {
+            "width": 120,
+            "height": 120
+           },
+           "data": "/static/images/replaceable_template_image.png",
+           "fit": "cover",
+           "decorative": false,
+           "name": "photo",
+           "is_icon": false,
+           "border_radius": {
+            "tl": 60,
+            "tr": 60,
+            "bl": 60,
+            "br": 60
+           },
+           "prompt": "Professional headshot portrait, neutral background"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 140
+           },
+           "size": {
+            "width": 250,
+            "height": 28
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Full name",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_name",
+           "max_length": 28,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 172
+           },
+           "size": {
+            "width": 250,
+            "height": 22
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Role",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_role",
+           "max_length": 32,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 202
+           },
+           "size": {
+            "width": 250,
+            "height": 75
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "One line about their focus.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_bio",
+           "max_length": 84,
+           "min_length": 21
+          }
+         ],
+         "name": "person"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 254,
+          "height": 280
+         },
+         "children": [
+          {
+           "type": "image",
+           "position": {
+            "x": 0,
+            "y": 0
+           },
+           "size": {
+            "width": 120,
+            "height": 120
+           },
+           "data": "/static/images/replaceable_template_image.png",
+           "fit": "cover",
+           "decorative": false,
+           "name": "photo",
+           "is_icon": false,
+           "border_radius": {
+            "tl": 60,
+            "tr": 60,
+            "bl": 60,
+            "br": 60
+           },
+           "prompt": "Professional headshot portrait, neutral background"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 140
+           },
+           "size": {
+            "width": 250,
+            "height": 28
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Full name",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_name",
+           "max_length": 28,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 172
+           },
+           "size": {
+            "width": 250,
+            "height": 22
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Role",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_role",
+           "max_length": 32,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 202
+           },
+           "size": {
+            "width": 250,
+            "height": 75
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "One line about their focus.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_bio",
+           "max_length": 84,
+           "min_length": 21
+          }
+         ],
+         "name": "person"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 254,
+          "height": 280
+         },
+         "children": [
+          {
+           "type": "image",
+           "position": {
+            "x": 0,
+            "y": 0
+           },
+           "size": {
+            "width": 120,
+            "height": 120
+           },
+           "data": "/static/images/replaceable_template_image.png",
+           "fit": "cover",
+           "decorative": false,
+           "name": "photo",
+           "is_icon": false,
+           "border_radius": {
+            "tl": 60,
+            "tr": 60,
+            "bl": 60,
+            "br": 60
+           },
+           "prompt": "Professional headshot portrait, neutral background"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 140
+           },
+           "size": {
+            "width": 250,
+            "height": 28
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Full name",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_name",
+           "max_length": 28,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 172
+           },
+           "size": {
+            "width": 250,
+            "height": 22
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Role",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_role",
+           "max_length": 32,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 202
+           },
+           "size": {
+            "width": 250,
+            "height": 75
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "One line about their focus.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_bio",
+           "max_length": 84,
+           "min_length": 21
+          }
+         ],
+         "name": "person"
+        },
+        {
+         "type": "group",
+         "size": {
+          "width": 254,
+          "height": 280
+         },
+         "children": [
+          {
+           "type": "image",
+           "position": {
+            "x": 0,
+            "y": 0
+           },
+           "size": {
+            "width": 120,
+            "height": 120
+           },
+           "data": "/static/images/replaceable_template_image.png",
+           "fit": "cover",
+           "decorative": false,
+           "name": "photo",
+           "is_icon": false,
+           "border_radius": {
+            "tl": 60,
+            "tr": 60,
+            "bl": 60,
+            "br": 60
+           },
+           "prompt": "Professional headshot portrait, neutral background"
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 140
+           },
+           "size": {
+            "width": 250,
+            "height": 28
+           },
+           "font": {
+            "size": 20,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": true,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Full name",
+             "font": {
+              "size": 20,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": true,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_name",
+           "max_length": 28,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 172
+           },
+           "size": {
+            "width": 250,
+            "height": 22
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#1D211F",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.25,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "Role",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#1D211F",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.25
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_role",
+           "max_length": 32,
+           "min_length": 2
+          },
+          {
+           "type": "text",
+           "position": {
+            "x": 0,
+            "y": 202
+           },
+           "size": {
+            "width": 250,
+            "height": 75
+           },
+           "font": {
+            "size": 14,
+            "family": "Inter",
+            "color": "#5A605C",
+            "bold": false,
+            "italic": false,
+            "line_height": 1.45,
+            "ellipsis": true
+           },
+           "alignment": {
+            "horizontal": "left",
+            "vertical": "top"
+           },
+           "runs": [
+            {
+             "text": "One line about their focus.",
+             "font": {
+              "size": 14,
+              "family": "Inter",
+              "color": "#5A605C",
+              "bold": false,
+              "italic": false,
+              "line_height": 1.45
+             }
+            }
+           ],
+           "decorative": false,
+           "name": "person_bio",
+           "max_length": 84,
+           "min_length": 21
+          }
+         ],
+         "name": "person"
+        }
+       ],
+       "name": "people",
+       "max_children": 4,
+       "min_children": 2,
+       "rows": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "closing",
+   "description": "Closing or call to action: a short headline, one supporting line and a contact or next-step line. Use for the last slide.",
+   "components": [
+    {
+     "id": "background",
+     "description": "Full-slide background surface.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "vector",
+       "shape": "polygon",
+       "points": [
+        {
+         "x": 0,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 0
+        },
+        {
+         "x": 1280,
+         "y": 720
+        },
+        {
+         "x": 0,
+         "y": 720
+        }
+       ],
+       "closed": true,
+       "fill": {
+        "color": "#FBFBF9"
+       }
+      }
+     ]
+    },
+    {
+     "id": "footer",
+     "description": "Footer with the subtle Sibyl mark and the slide number.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 1124,
+        "y": 679
+       },
+       "size": {
+        "width": 60,
+        "height": 18
+       },
+       "font": {
+        "size": 13,
+        "family": "Inter",
+        "color": "#8B918D",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "right",
+        "vertical": "middle"
+       },
+       "runs": [
+        {
+         "text": "1",
+         "font": {
+          "size": 13,
+          "family": "Inter",
+          "color": "#8B918D",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "page_number",
+       "max_length": 3,
+       "min_length": 1
+      }
+     ]
+    },
+    {
+     "id": "closing_block",
+     "description": "Centered closing message with call to action.",
+     "position": {
+      "x": 0,
+      "y": 0
+     },
+     "elements": [
+      {
+       "type": "text",
+       "position": {
+        "x": 176,
+        "y": 230
+       },
+       "size": {
+        "width": 928,
+        "height": 167
+       },
+       "font": {
+        "size": 76,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.08,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "center",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "Thank you",
+         "font": {
+          "size": 76,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.08
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "headline",
+       "max_length": 37,
+       "min_length": 9
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 236,
+        "y": 417
+       },
+       "size": {
+        "width": 808,
+        "height": 64
+       },
+       "font": {
+        "size": 24,
+        "family": "Inter",
+        "color": "#5A605C",
+        "bold": false,
+        "italic": false,
+        "line_height": 1.35,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "center",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "The one thing to remember, or the next step.",
+         "font": {
+          "size": 24,
+          "family": "Inter",
+          "color": "#5A605C",
+          "bold": false,
+          "italic": false,
+          "line_height": 1.35
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "subtitle",
+       "max_length": 52,
+       "min_length": 13
+      },
+      {
+       "type": "text",
+       "position": {
+        "x": 236,
+        "y": 521
+       },
+       "size": {
+        "width": 808,
+        "height": 26
+       },
+       "font": {
+        "size": 19,
+        "family": "Inter",
+        "color": "#1D211F",
+        "bold": true,
+        "italic": false,
+        "line_height": 1.25,
+        "ellipsis": true
+       },
+       "alignment": {
+        "horizontal": "center",
+        "vertical": "top"
+       },
+       "runs": [
+        {
+         "text": "name@example.com",
+         "font": {
+          "size": 19,
+          "family": "Inter",
+          "color": "#1D211F",
+          "bold": true,
+          "italic": false,
+          "line_height": 1.25
+         }
+        }
+       ],
+       "decorative": false,
+       "name": "contact",
+       "max_length": 48,
+       "min_length": 3
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "fonts": {
+  "Inter": "static/Inter[opsz,wght].ttf"
+ },
+ "theme": {
+  "colors": {
+   "primary": "#1D211F",
+   "background": "#FBFBF9",
+   "card": "#F3F3F0",
+   "stroke": "#DCDFD9",
+   "primary_text": "#FBFBF9",
+   "background_text": "#1D211F",
+   "graph_0": "#1D211F",
+   "graph_1": "#596C5D",
+   "graph_2": "#A9B1AB",
+   "graph_3": "#6B7F95",
+   "graph_4": "#A86F38",
+   "graph_5": "#D5D9D3",
+   "graph_6": "#5A605C",
+   "graph_7": "#8B918D",
+   "graph_8": "#DCDFD9",
+   "graph_9": "#ECEDEA"
+  },
+  "fonts": {
+   "textFont": {
+    "name": "Inter",
+    "url": "static/Inter[opsz,wght].ttf"
+   }
+  }
+ }
+}

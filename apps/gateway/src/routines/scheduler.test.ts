@@ -1,7 +1,7 @@
 import { createMemoryStore, type RoutineRecord, type RoutineRunRecord, type Store } from "@open-gpt-live/core";
-import type { RoutineNotification } from "@open-gpt-live/protocol";
 import { describe, expect, test } from "vitest";
 import type { RoutineRunner, RunOutcome } from "./runner.js";
+import type { RoutineOutcome } from "./scheduler.js";
 import { RoutineScheduler } from "./scheduler.js";
 
 const OWNER = "owner";
@@ -27,7 +27,7 @@ function harness(runner: RoutineRunner, options: { store?: Store; now?: () => nu
   const store = options.store ?? createMemoryStore();
   let clock = T0;
   let id = 0;
-  const notifications: RoutineNotification[] = [];
+  const notifications: RoutineOutcome[] = [];
   const sleeps: number[] = [];
   const scheduler = new RoutineScheduler({
     store,
@@ -76,6 +76,26 @@ describe("RoutineScheduler", () => {
     expect(run).toMatchObject({ status: "succeeded", summary: "all good", costUsd: 0.01 });
     expect(run?.leaseUntil).toBeUndefined();
     expect(h.notifications.map((n) => n.kind)).toEqual(["finished"]);
+    await h.scheduler.stop();
+  });
+
+  test("a one-time task (once) runs at its time and then pauses itself", async () => {
+    const calls: string[] = [];
+    const h = harness(async (r) => {
+      calls.push(r.id);
+      return { status: "succeeded", summary: "done" };
+    });
+    await h.store.routines.upsert(routine("task", { once: true, cron: "0 8 9 11 *" }));
+    await h.scheduler.start();
+    await h.scheduler.tick();
+    await h.scheduler.idle();
+    h.setClock(Date.parse("2027-11-09T08:00:30Z"));
+    await h.scheduler.tick();
+    await h.scheduler.idle();
+    expect(calls).toEqual(["task"]);
+    const saved = await h.store.routines.get(OWNER, "task");
+    expect(saved).toMatchObject({ enabled: false, lastRunAt: T0 });
+    expect(saved?.nextRunAt).toBeUndefined();
     await h.scheduler.stop();
   });
 

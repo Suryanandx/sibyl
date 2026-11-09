@@ -1,0 +1,693 @@
+/*
+ * Sibyl's UI primitives (components/ui). One look for every place: buttons,
+ * cards, empty states, form fields, badges, dialogs and tabs. Tokens come
+ * from app/globals.css, so light and dark follow :root[data-theme].
+ */
+
+/* ───────────── Button ───────────── */
+
+.btn {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  gap: 7px;
+  height: 36px;
+  justify-content: center;
+  padding: 0 14px;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--subtle);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ink-text);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
+}
+
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-2);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--subtle);
+  color: var(--text);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: var(--danger-soft);
+}
+
+.link {
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  height: auto;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+
+.sm {
+  font-size: 13px;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+}
+
+.link.sm {
+  height: auto;
+  padding: 2px 0;
+}
+
+.iconOnly {
+  padding: 0;
+  width: 36px;
+}
+
+.sm.iconOnly {
+  width: 30px;
+}
+
+/* ───────────── Card ───────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.cardHead {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cardMeta {
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin: 2px 0 0;
+}
+
+/* ───────────── Empty state ───────────── */
+
+.empty {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.empty.compact {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  padding: 24px 16px;
+}
+
+.emptyIcon {
+  color: var(--text-2);
+  display: inline-grid;
+  place-items: center;
+}
+
+.emptyTitle {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.emptyText {
+  line-height: 1.5;
+  max-width: 460px;
+}
+
+.emptyText p {
+  margin: 0;
+}
+
+.emptyAction {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* ───────────── Field / Input / Textarea / Select ───────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fieldHint {
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fieldError {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.control {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  min-height: 38px;
+  min-width: 0;
+  outline: none;
+  padding: 8px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+
+.control::placeholder {
+  color: var(--text-3);
+}
+
+.control:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.control:disabled {
+  opacity: 0.6;
+}
+
+textarea.control {
+  line-height: 1.5;
+  min-height: 120px;
+  resize: vertical;
+}
+
+select.control {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  padding-right: 32px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.check {
+  align-items: center;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13.5px;
+  gap: 8px;
+}
+
+.check input {
+  accent-color: var(--accent);
+  flex: none;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+/* ───────────── Badge ───────────── */
+
+.badge {
+  align-items: center;
+  background: var(--subtle);
+  border-radius: 999px;
+  color: var(--text-2);
+  display: inline-flex;
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  gap: 4px;
+  line-height: 1.5;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.tone_positive {
+  background: var(--tint-sage);
+  color: var(--positive);
+}
+
+.tone_warning {
+  background: var(--tint-amber);
+  color: var(--warning);
+}
+
+.tone_danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tone_accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tone_info {
+  background: var(--tint-slate);
+  color: var(--text);
+}
+
+.tone_outline {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+/* ───────────── Notice (inline message) ───────────── */
+
+.notice {
+  align-items: flex-start;
+  background: var(--subtle);
+  border-radius: 12px;
+  color: var(--text);
+  display: flex;
+  font-size: 13.5px;
+  gap: 10px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 14px;
+}
+
+.notice.tone_danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.notice.tone_warning {
+  background: var(--tint-amber);
+  color: var(--text);
+}
+
+.notice.tone_positive {
+  background: var(--tint-sage);
+  color: var(--text);
+}
+
+.noticeBody {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ───────────── Dialog ───────────── */
+
+.overlay {
+  align-items: center;
+  animation: fade 120ms ease-out;
+  background: rgba(17, 20, 18, 0.38);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 16px;
+  position: fixed;
+  z-index: 80;
+}
+
+.dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100dvh - 32px);
+  max-width: 520px;
+  outline: none;
+  overflow-y: auto;
+  padding: 22px;
+  width: 100%;
+}
+
+.dialog.wide {
+  max-width: 720px;
+}
+
+.dialogTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ───────────── Tabs / segmented control ───────────── */
+
+.tabs {
+  background: var(--subtle);
+  border-radius: 999px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  width: fit-content;
+}
+
+.tab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected="true"],
+.tab[aria-current="page"] {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(17, 20, 18, 0.08);
+  color: var(--text);
+}
+
+/* ───────────── Layout helpers ───────────── */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin: 0 0 20px;
+}
+
+.toolbarStart,
+.toolbarEnd {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbarEnd {
+  margin-left: auto;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.muted {
+  color: var(--text-2);
+  font-size: 13.5px;
+  margin: 0;
+}
+
+/* A list on the left, the open item on the right (one column on phones). */
+.split {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+}
+
+.listItems {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.listItem {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.listItem:hover {
+  background: var(--subtle);
+}
+
+.listItem[aria-current="true"] {
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+
+.listItemTitle {
+  align-items: center;
+  display: flex;
+  font-size: 14px;
+  font-weight: 600;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listItemMeta {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/* "← List" inside the open item: only phones need it (Split shows one side). */
+.splitBack {
+  align-self: flex-start;
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .splitBack {
+    display: inline-flex;
+  }
+
+  /* With an item open, phones show only the item (it has a back link). */
+  .split[data-open="true"] > :first-child,
+  .split[data-open="false"] > :last-child {
+    display: none;
+  }
+
+  .dialog {
+    border-radius: 18px;
+    padding: 18px;
+  }
+
+  .toolbar {
+    margin-bottom: 16px;
+  }
+}
+
+/* ───────────── Toast ───────────── */
+
+.toast {
+  align-items: center;
+  animation: toastRise 180ms ease-out;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  bottom: 24px;
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  display: flex;
+  font-size: 14px;
+  gap: 12px;
+  max-width: min(460px, calc(100vw - 32px));
+  padding: 8px 8px 8px 16px;
+  position: fixed;
+  right: 24px;
+  z-index: 60;
+}
+
+.toast::before {
+  background: var(--positive);
+  border-radius: 50%;
+  content: "";
+  flex: none;
+  height: 8px;
+  width: 8px;
+}
+
+.toast.tone_warning::before {
+  background: var(--warning);
+}
+
+.toast.tone_danger::before {
+  background: var(--danger);
+}
+
+.toastText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.toastText > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toastDetail {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+@keyframes toastRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .toast {
+    bottom: 16px;
+    left: 16px;
+    max-width: none;
+    right: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .toast {
+    animation: none;
+  }
+}

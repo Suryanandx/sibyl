@@ -6,6 +6,7 @@
  */
 import type { LLMContentPart, LLMMessage } from "@open-gpt-live/adapters";
 import type { AttachmentRef } from "@open-gpt-live/protocol";
+import { DEFAULT_WORKSPACE_ID } from "@open-gpt-live/core";
 import type { UploadService, UploadView } from "./service.js";
 
 /** Characters of each file's text placed directly in the prompt. */
@@ -35,12 +36,14 @@ export interface PreparedAttachments {
 export async function prepareAttachments(
   uploads: UploadService,
   text: string,
-  attachments: AttachmentRef[]
+  attachments: AttachmentRef[],
+  /** Workspace the chat runs in: files from other workspaces are not attached. */
+  workspaceId: string = DEFAULT_WORKSPACE_ID
 ): Promise<PreparedAttachments> {
   const files: UploadView[] = [];
   const missing: string[] = [];
   for (const ref of attachments) {
-    const file = await uploads.get(ref.id);
+    const file = await uploads.get(ref.id, { workspaceId });
     if (file) {
       if (!files.some((existing) => existing.id === file.id)) files.push(file);
     } else missing.push(ref.id);
@@ -57,6 +60,10 @@ export async function prepareAttachments(
       } else {
         lines.push(`- ${file.name} (image, file id ${file.id}) — too large to show to the model.`);
       }
+      continue;
+    }
+    if (file.kind === "video" || file.kind === "audio") {
+      lines.push(`- ${file.name} (${file.kind}, file id ${file.id}) — the model can't watch or hear it; it can be passed as a reference to create_video.`);
       continue;
     }
     const fullText = await uploads.readText(file.id);

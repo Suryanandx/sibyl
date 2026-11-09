@@ -1,0 +1,210 @@
+/**
+ * Telemetry is removed from Sibyl Slides: there is no analytics SDK, token or
+ * network call. Upstream (Presenton) code still names product events at its
+ * call sites; these functions are inert no-ops so those sites stay unchanged.
+ */
+
+export enum MixpanelEvent {
+  PageView = 'Page View',
+  Navigation = 'Navigation',
+
+  Onboarding_Providers_Models_Selected = 'Onboarding Providers Models Selected',
+  Onboarding_Configuration_Saved = 'Onboarding Configuration Saved',
+  Onboarding_Completed = 'Onboarding Completed',
+  Onboarding_Step_Viewed = 'Onboarding Step Viewed',
+  Onboarding_Step_Continued = 'Onboarding Step Continued',
+  Onboarding_Back_Clicked = 'Onboarding Back Clicked',
+  Onboarding_Validation_Failed = 'Onboarding Validation Failed',
+  Onboarding_Text_Provider_Tab_Selected = 'Onboarding Text Provider Tab Selected',
+  Onboarding_Text_Provider_Selected = 'Onboarding Text Provider Selected',
+  Onboarding_Text_Model_Selected = 'Onboarding Text Model Selected',
+  Onboarding_Image_Generation_Toggled = 'Onboarding Image Generation Toggled',
+  Onboarding_Image_Provider_Selected = 'Onboarding Image Provider Selected',
+  Onboarding_Image_Quality_Selected = 'Onboarding Image Quality Selected',
+  Onboarding_Web_Search_Toggled = 'Onboarding Web Search Toggled',
+  Onboarding_Web_Search_Provider_Selected = 'Onboarding Web Search Provider Selected',
+
+  Provider_Login_Clicked = 'Provider Login Clicked',
+  Provider_Connection_Completed = 'Provider Connection Completed',
+  Provider_Logout_Clicked = 'Provider Logout Clicked',
+  Provider_Connection_Deleted = 'Provider Connection Deleted',
+
+  Codex_SignIn_API_Call = 'Codex Sign In API Call',
+  Codex_SignIn_Completed = 'Codex Sign In Completed',
+  Codex_SignIn_Failed = 'Codex Sign In Failed',
+  Codex_SignIn_Cancelled = 'Codex Sign In Cancelled',
+  Codex_Signed_Out = 'Codex Signed Out',
+  Codex_Reauth_Required = 'Codex Reauth Required',
+
+  Auth_Gate_Viewed = 'Auth Gate Viewed',
+  Auth_Status_Checked = 'Auth Status Checked',
+  Auth_Unauthorized_Redirect = 'Auth Unauthorized Redirect',
+  Auth_Validation_Failed = 'Auth Validation Failed',
+  Auth_Setup_Started = 'Auth Setup Started',
+  Auth_Setup_Completed = 'Auth Setup Completed',
+  Auth_Setup_Failed = 'Auth Setup Failed',
+  Auth_SignIn_Started = 'Auth Sign In Started',
+  Auth_SignIn_Completed = 'Auth Sign In Completed',
+  Auth_SignIn_Failed = 'Auth Sign In Failed',
+  Auth_SignOut_Started = 'Auth Sign Out Started',
+  Auth_Signed_Out = 'Auth Signed Out',
+  Auth_SignOut_Failed = 'Auth Sign Out Failed',
+  Auth_Admin_Viewed = 'Auth Admin Viewed',
+  Auth_Admin_User_List_Loaded = 'Auth Admin User List Loaded',
+  Auth_Admin_User_List_Failed = 'Auth Admin User List Failed',
+  Auth_Admin_User_Create_Started = 'Auth Admin User Create Started',
+  Auth_Admin_User_Create_Completed = 'Auth Admin User Create Completed',
+  Auth_Admin_User_Create_Failed = 'Auth Admin User Create Failed',
+  Auth_Admin_User_Password_Reset_Started = 'Auth Admin User Password Reset Started',
+  Auth_Admin_User_Password_Reset_Completed = 'Auth Admin User Password Reset Completed',
+  Auth_Admin_User_Password_Reset_Failed = 'Auth Admin User Password Reset Failed',
+  Auth_Admin_User_Delete_Started = 'Auth Admin User Delete Started',
+  Auth_Admin_User_Delete_Completed = 'Auth Admin User Delete Completed',
+  Auth_Admin_User_Delete_Failed = 'Auth Admin User Delete Failed',
+  Auth_Admin_API_Key_List_Loaded = 'Auth Admin API Key List Loaded',
+  Auth_Admin_API_Key_List_Failed = 'Auth Admin API Key List Failed',
+  Auth_Admin_API_Key_Create_Started = 'Auth Admin API Key Create Started',
+  Auth_Admin_API_Key_Create_Completed = 'Auth Admin API Key Create Completed',
+  Auth_Admin_API_Key_Create_Failed = 'Auth Admin API Key Create Failed',
+  Auth_Admin_API_Key_Revoke_Started = 'Auth Admin API Key Revoke Started',
+  Auth_Admin_API_Key_Revoke_Completed = 'Auth Admin API Key Revoke Completed',
+  Auth_Admin_API_Key_Revoke_Failed = 'Auth Admin API Key Revoke Failed',
+
+  Upload_Configuration_Invalid = 'Upload Configuration Invalid',
+  Upload_Generation_Started = 'Upload Generation Started',
+  Upload_Documents_Processed = 'Upload Documents Processed',
+  Upload_Outline_Generation_Requested = 'Upload Outline Generation Requested',
+  Outline_Presentation_Generation_Started = 'Outline Presentation Generation Started',
+
+  Smart_Mode_Selected = 'Smart Mode Selected',
+  Smart_Mode_Reference_Selected = 'Smart Mode Reference Selected',
+  Smart_Mode_Reference_Removed = 'Smart Mode Reference Removed',
+  Smart_Mode_Generation_Started = 'Smart Mode Generation Started',
+  Smart_Mode_Generation_Completed = 'Smart Mode Generation Completed',
+  Smart_Mode_Generation_Failed = 'Smart Mode Generation Failed',
+  Smart_Mode_Select_Edit_Toggled = 'Smart Mode Select Edit Toggled',
+  Smart_Mode_Element_Selected = 'Smart Mode Element Selected',
+
+  Community_Page_Viewed = 'Community Page Viewed',
+  Community_Presentations_Loaded = 'Community Presentations Loaded',
+  Community_Presentations_Load_Failed = 'Community Presentations Load Failed',
+  Community_Filters_Changed = 'Community Filters Changed',
+  Community_Presentation_Previewed = 'Community Presentation Previewed',
+  Community_Presentation_Preview_Loaded = 'Community Presentation Preview Loaded',
+  Community_Presentation_Preview_Failed = 'Community Presentation Preview Failed',
+  Community_Design_Used = 'Community Design Used',
+  Community_Prompt_Used = 'Community Prompt Used',
+
+  Presentation_Editor_Viewed = 'Presentation Editor Viewed',
+  Presentation_Mode_Entered = 'Presentation Mode Entered',
+  Presentation_Title_Updated = 'Presentation Title Updated',
+  Presentation_Slides_Reordered = 'Presentation Slides Reordered',
+  Presentation_Slide_Added = 'Presentation Slide Added',
+  Presentation_Slide_Deleted = 'Presentation Slide Deleted',
+  Presentation_Export_Started = 'Presentation Export Started',
+  Presentation_Export_Completed = 'Presentation Export Completed',
+  Presentation_Export_Failed = 'Presentation Export Failed',
+  Presentation_Regenerated = 'Presentation Regenerated',
+
+  Presentation_Stream_API_Call = 'Presentation Stream API Call',
+  TemplatePreview_Delete_Templates_Button_Clicked = 'Template Preview Delete Templates Button Clicked',
+  TemplatePreview_Delete_Templates_API_Call = 'Template Preview Delete Templates API Call',
+  PdfMaker_Retry_Button_Clicked = 'PDF Maker Retry Button Clicked',
+  DocumentsPreview_Create_Presentation_API_Call = 'Documents Preview Create Presentation API Call',
+  Settings_SaveConfiguration_Button_Clicked = 'Settings Save Configuration Button Clicked',
+  Settings_SaveConfiguration_API_Call = 'Settings Save Configuration API Call',
+  Settings_Section_Entered = 'Settings Section Entered',
+  Settings_Tab_Switched = 'Settings Tab Switched',
+  Settings_Provider_Selected = 'Settings Provider Selected',
+  Settings_Model_Selected = 'Settings Model Selected',
+  Usage_Analytics_Disabled = 'Usage Analytics Disabled',
+  PresentationPage_Refresh_Page_Button_Clicked = 'Presentation Page Refresh Page Button Clicked',
+  ImageEditor_GetPreviousGeneratedImages_API_Call = 'Image Editor Get Previous Generated Images API Call',
+  ImageEditor_GenerateImage_API_Call = 'Image Editor Generate Image API Call',
+  ImageEditor_UploadImage_API_Call = 'Image Editor Upload Image API Call',
+
+  AI_Assistant_Opened = 'AI Assistant Opened',
+  AI_Assistant_Prompt_Submitted = 'AI Assistant Prompt Submitted',
+  AI_Assistant_Prompt_Completed = 'AI Assistant Prompt Completed',
+  AI_Assistant_Prompt_Failed = 'AI Assistant Prompt Failed',
+  AI_Assistant_Prompt_Stopped = 'AI Assistant Prompt Stopped',
+  AI_Assistant_Chat_Reset = 'AI Assistant Chat Reset',
+  AI_Assistant_Attachment_Added = 'AI Assistant Attachment Added',
+  AI_Assistant_Attachment_Failed = 'AI Assistant Attachment Failed',
+
+  TemplateV2_Template_Selected = 'Template V2 Template Selected',
+  TemplateV2_Outline_Regeneration_Started = 'Template V2 Outline Regeneration Started',
+  TemplateV2_Outline_Regeneration_Completed = 'Template V2 Outline Regeneration Completed',
+  TemplateV2_Outline_Regeneration_Failed = 'Template V2 Outline Regeneration Failed',
+  TemplateV2_Prepare_Completed = 'Template V2 Prepare Completed',
+  TemplateV2_Prepare_Failed = 'Template V2 Prepare Failed',
+  TemplateV2_Stream_Completed = 'Template V2 Stream Completed',
+  TemplateV2_Stream_Failed = 'Template V2 Stream Failed',
+  TemplateV2_Editor_Loaded = 'Template V2 Editor Loaded',
+
+  Editor_Side_Panel_Tab_Selected = 'Editor Side Panel Tab Selected',
+  Editor_Insert_Palette_Item_Selected = 'Editor Insert Palette Item Selected',
+  Editor_Template_Block_Inserted = 'Editor Template Block Inserted',
+  Editor_Template_Blocks_Loaded = 'Editor Template Blocks Loaded',
+  Editor_Template_Blocks_Load_Failed = 'Editor Template Blocks Load Failed',
+  Editor_Element_Text_Edited = 'Editor Element Text Edited',
+  Editor_Element_Style_Changed = 'Editor Element Style Changed',
+  Editor_Element_Deleted = 'Editor Element Deleted',
+  Editor_Element_Duplicated = 'Editor Element Duplicated',
+  Editor_Component_Ungrouped = 'Editor Component Ungrouped',
+  Editor_Component_Layer_Changed = 'Editor Component Layer Changed',
+  Editor_Image_Replaced = 'Editor Image Replaced',
+  Editor_Image_Replace_Failed = 'Editor Image Replace Failed',
+  Editor_Icon_Replaced = 'Editor Icon Replaced',
+
+  Dashboard_Page_Viewed = 'Dashboard Page Viewed',
+  Dashboard_New_Presentation_Clicked = 'Dashboard New Presentation Clicked',
+  Dashboard_Blank_Presentation_Created = 'Dashboard Blank Presentation Created',
+  Dashboard_Blank_Presentation_Create_Failed = 'Dashboard Blank Presentation Create Failed',
+  Dashboard_Presentation_Opened = 'Dashboard Presentation Opened',
+  Dashboard_Presentation_Deleted = 'Dashboard Presentation Deleted',
+  Dashboard_Presentation_Duplicated = 'Dashboard Presentation Duplicated',
+
+  Templates_Page_Viewed = 'Templates Page Viewed',
+  Templates_Tab_Switched = 'Templates Tab Switched',
+  Templates_Inbuilt_Opened = 'Templates Inbuilt Opened',
+  Templates_Custom_Opened = 'Templates Custom Opened',
+  Templates_New_Template_Clicked = 'Templates New Template Clicked',
+  Templates_Build_Template_Clicked = 'Templates Build Template Clicked',
+
+
+  CustomTemplate_Creation_Started = 'Custom Template Creation Started',
+  CustomTemplate_Creation_Completed = 'Custom Template Creation Completed',
+  CustomTemplate_Creation_Failed = 'Custom Template Generation Failed',
+  CustomTemplate_Font_Check_Completed = 'Custom Template Font Check Completed',
+  CustomTemplate_Font_Check_Failed = 'Custom Template Font Check Failed',
+  CustomTemplate_Preview_Started = 'Custom Template Preview Started',
+  CustomTemplate_Preview_Completed = 'Custom Template Preview Completed',
+  CustomTemplate_Preview_Failed = 'Custom Template Preview Failed',
+  CustomTemplate_Slide_Generation_Started = 'Custom Template Slide Generation Started',
+  CustomTemplate_Slide_Generation_Completed = 'Custom Template Slide Generation Completed',
+  CustomTemplate_Slide_Generation_Failed = 'Custom Template Slide Generation Failed',
+  CustomTemplate_Blocks_Generation_Completed = 'Custom Template Blocks Generation Completed',
+  CustomTemplate_Blocks_Generation_Failed = 'Custom Template Blocks Generation Failed',
+  TemplatePreview_Loaded = 'Template Preview Loaded',
+  TemplatePreview_Failed = 'Template Preview Failed',
+  TemplatePreview_Not_Found = 'Template Preview Not Found',
+}
+
+export type MixpanelProps = Record<string, unknown>;
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export function initMixpanel(): void {}
+
+export function track(_eventName: string, _props?: Record<string, unknown>): void {}
+
+export function trackEvent(_event: MixpanelEvent, _props?: MixpanelProps): void {}
+
+export async function trackEventImmediately(
+  _event: MixpanelEvent,
+  _props?: MixpanelProps
+): Promise<void> {}
+
+export function getDistinctId(): string | undefined {
+  return undefined;
+}

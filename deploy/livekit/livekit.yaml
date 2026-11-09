@@ -1,0 +1,37 @@
+# LiveKit server for Sibyl's realtime layer (docker compose --profile realtime).
+# See docs/realtime.md.
+#
+# Keys are NOT in this file: compose passes LIVEKIT_KEYS="<LIVEKIT_API_KEY>: <LIVEKIT_API_SECRET>"
+# from your .env. The webhook below signs with the key *name*; if you change
+# LIVEKIT_API_KEY from "sibyl", change `webhook.api_key` here too.
+
+port: 7880
+log_level: info
+
+rtc:
+  tcp_port: 7881
+  # One UDP port for all media (no 50000–60000 range through Docker).
+  udp_port: 7882
+  # Docker Desktop / local: compose passes --node-ip (LIVEKIT_NODE_IP, default 127.0.0.1).
+  # On a server, set LIVEKIT_NODE_IP to the public IP, or use_external_ip: true.
+  use_external_ip: false
+
+# Egress (recordings), ingress (streams) and SIP (phone) coordinate through Redis.
+redis:
+  address: redis:6379
+
+room:
+  # Close a room 5 minutes after it empties (Sibyl's agent leaves sooner on its own).
+  empty_timeout: 300
+  departure_timeout: 20
+
+# Where ingress tells people to send RTMP / WHIP streams (as seen from their encoder).
+ingress:
+  rtmp_base_url: rtmp://localhost:1935/live
+  whip_base_url: http://localhost:8080/w
+
+# Inbound phone calls and room events go to the gateway (signed with the API key).
+webhook:
+  api_key: sibyl
+  urls:
+    - http://gateway:8787/api/realtime/webhook

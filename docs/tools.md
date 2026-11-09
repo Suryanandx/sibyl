@@ -28,6 +28,14 @@ All built-in tools only read, so they never need approval.
 
 Set `SIBYL_BUILTIN_TOOLS=false` to turn all built-in tools off.
 
+Every fetch of an address Sibyl did not choose itself goes through the same guard: `read_webpage`, monitor feeds, plugin manifests and `api_request` (which also keeps a request carrying secrets on the hosts those secrets allow, redirects included).
+
+## Memory and attached files
+
+**Memory** (`remember`, `recall`, `forget`, and Settings → Memory) holds short facts about you across chats. The facts are **personal**: each signed-in person has their own list, separately in each workspace, and nobody else in the workspace sees or edits it. The owner token and local mode (no accounts) use the owner's list. The on/off switch is per workspace and needs `workspace.settings`. `SIBYL_MEMORY=false` turns memory off for the whole gateway.
+
+**Attached files** (`/api/uploads`, `read_file`) belong to the workspace they were uploaded in: they can only be downloaded, attached to a chat or read from that workspace.
+
 ## Connecting MCP servers
 
 Sibyl is an [MCP](https://modelcontextprotocol.io) client. Tools from the servers you list become available to the deep brain alongside the built-ins.

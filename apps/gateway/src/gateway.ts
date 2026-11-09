@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createServer, type Server as HttpServer } from "node:http";
+import { createServer, type Server as HttpServer, type ServerResponse } from "node:http";
 import type {
   LLMContentPart,
   LLMMessage,
@@ -11,8 +11,15 @@ import type {
   ToolChatProvider
 } from "@open-gpt-live/adapters";
 import {
+  AGENT_EVENTS,
+  LICENSE_EVENTS,
+  IDENTITY_EVENTS,
   WS_EVENTS,
+  isAgentsClientMessage,
   isConnectionsClientMessage,
+  isIntegrationsClientMessage,
+  isRealtimeClientMessage,
+  isMeetingsClientMessage,
   parseClientMessage,
   type AudioChunkMessage,
   type ClientMessage,
@@ -28,19 +35,67 @@ import {
   stripEmotionTags,
   toSpeakableText
 } from "@open-gpt-live/genui";
-import { WebSocket, WebSocketServer } from "ws";
-import { isAuthorized } from "./auth.js";
+import type { IncomingMessage } from "node:http";
+import { WebSocketServer } from "ws";
+import {
+  AUDIT_ACTIONS,
+  DEFAULT_OWNER_ID,
+  DEFAULT_WORKSPACE_ID,
+  PERMISSIONS,
+  auditActor,
+  authorize,
+  canAccessWorkspace,
+  effectiveWorkspaceRole,
+  permissionsFor,
+  usableTools,
+  type AuditEvent,
+  type Permission
+} from "@open-gpt-live/core";
+import {
+  IdentityService,
+  MODEL_SETTING_KEYS,
+  QUIET_DENIALS,
+  authenticateUpgrade,
+  createIdentityBridge,
+  gateProtectedRoute,
+  inviteMailer,
+  handleIdentityHttp,
+  handleOrgAdminHttp,
+  OrgAdmin,
+  permissionForMessage,
+  protectedRoutePermission,
+  type Authenticated,
+  type IdentityHttpOptions,
+  type OrgAdminHttpOptions
+} from "./identity/index.js";
+import { corsHeaders, httpEventLog, logRequest, requestCaller, requestPath, sendError } from "./http/index.js";
+import { userView } from "./identity/service.js";
+import { handleSignupHttp } from "./identity/signup-http.js";
+import type { SignupService } from "./identity/signup.js";
+import { OnboardingService, handleOnboardingHttp } from "./onboarding/index.js";
 import { ConversationRecorder, historyFromMessages } from "./conversations.js";
-import { ApprovalBroker } from "./brain/approvals.js";
-import { isSecretsClientMessage, type SecretsSession } from "./secrets/index.js";
+import { ApprovalBroker, approvalWorkspace, canDecideChatApproval, chatApprovalBroker } from "./brain/approvals.js";
+import { identitySecrets, isSecretsClientMessage, loadOrgKey, type SecretsSession } from "./secrets/index.js";
 import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
 import { handleRoutinesMessage } from "./routines/ws.js";
+import { handleMonitorsHttp, handleMonitorsMessage } from "./monitors/index.js";
+import { handleComputersMessage } from "./computers/index.js";
+import { createMailer, handleNotificationsMessage, inviteAcceptedNotice } from "./notifications/index.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { routeSlidesRequest, takeSlidesArtifact } from "./slides/index.js";
+import { handleMediaHttp, handleMediaRefHttp, runMediaChatTurn, takeMediaArtifact } from "./media/index.js";
+import type { MediaCreateSpec } from "@open-gpt-live/protocol";
 import { handleConnectionsMessage } from "./tools/ws.js";
-import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
+import { handleAgentsMessage, resolveAgentModel, resolveAgentVoice, sendAgentsList, type AgentTurn, type AgentsWsContext } from "./agents/index.js";
+import { GatewayUsageMeter, applyAppBudgets, attributeSessionUsage, browserScope, buildUsageView, checkTurnBudget, economyModel, estimateTurnUsd, meterProviders } from "./metering/index.js";
 import { handleMemoryHttp, withUserMemory } from "./memory/index.js";
+import { handleKnowledgeHttp } from "./knowledge/index.js";
+import { handleSkillsHttp, withWorkspaceContext } from "./skills/index.js";
+import { handlePluginsHttp } from "./plugins/index.js";
+import { handleLicenseHttp, type LicenseStateView } from "./license/index.js";
+import { CALLBACK_PATH, connectIntegrations, handleConnectorsHttp, type IntegrationsSession } from "./connectors/index.js";
+import { handlePresenceHttp, isPresenceCallbackPath } from "./presence/http.js";
 import {
   handleUploadsHttp,
   pickVisionModel,
@@ -50,6 +105,10 @@ import {
   type UploadService
 } from "./uploads/index.js";
 import type { AttachmentRef } from "@open-gpt-live/protocol";
+import { TRANSPORT_OPEN, headlessTransport, type SessionTransport, type VoiceMediaSink, type VoiceSessionPort } from "./session-port.js";
+import { handleRealtimeHttp, handleRealtimeMessage, handleRealtimeWebhook } from "./realtime/index.js";
+import { handleMeetingsHttp, handleMeetingsMessage, isMeetingGuestRoute } from "./meetings/index.js";
+import { handleTenancyHttp } from "./tenancy/http.js";
 
 export const DEFAULT_MAX_AUDIO_TURN_BYTES = 25 * 1024 * 1024;
 
@@ -70,8 +129,14 @@ export interface GatewayServerOptions {
   port?: number;
   host?: string;
   allowedOrigins?: string[];
-  /** Single-owner login: WebSocket upgrades must carry `?token=<ownerToken>`. */
+  /** Owner API token (SIBYL_OWNER_TOKEN): `?token=` / Bearer; an owner-level principal. */
   ownerToken?: string;
+  /** Users, sessions, workspaces and members (default: built from the runtime's store). */
+  identity?: IdentityService;
+  /** Force the session cookie's Secure flag (default: on for https requests). */
+  secureCookies?: boolean;
+  /** Emailed links and codes, Google / Microsoft sign-in (identity/signup.ts). Hosted serves it before any organization. */
+  signup?: SignupService;
   maxAudioTurnBytes?: number;
   livePartialInitialIntervalMs?: number;
   livePartialLongTurnIntervalMs?: number;
@@ -111,6 +176,12 @@ export interface GatewayServerOptions {
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
   /** Store, tool registry and usage meter (defaults to an in-memory runtime). */
   runtime?: GatewayRuntime;
+  /**
+   * The organizations' runtimes (tenancy/registry.ts): one per organization
+   * in hosted mode, the one self-hosted organization otherwise. Replaces
+   * `runtime`, `providers` (per organization), `identity` and `uploads`.
+   */
+  tenants?: GatewayTenants;
   /** Uploaded files (default: $SIBYL_DATA_DIR/uploads via the runtime's store). */
   uploads?: UploadService;
   /** Feature switches (SIBYL_MEMORY, SIBYL_VISION_MODEL, uploads); defaults to process.env. */
@@ -136,9 +207,9 @@ export interface GatewayServerHandle {
   /**
    * Swap in a new model catalog (e.g. from the background model scout).
    * Connected sessions keep choices the user made and adopt new defaults
-   * for everything else.
+   * for everything else. `orgId`: only that organization (its own key's catalog).
    */
-  updateModels(update: ModelUpdate): void;
+  updateModels(update: ModelUpdate, orgId?: string): void;
 }
 
 export interface ModelUpdate {
@@ -175,6 +246,7 @@ interface GatewayConfig {
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
   runtime: GatewayRuntime;
   uploads: UploadService;
+  identity: IdentityService;
   env: NodeJS.ProcessEnv;
   /** Rolling first-token latency per voice model, learned from live turns. */
   voiceLatency: Map<string, number>;
@@ -203,6 +275,8 @@ interface ActiveRun {
   timing: RequestTiming;
   /** False for typed chat replies: text (and visuals) only, never spoken. */
   speak: boolean;
+  /** Voice of the agent answering this run (overrides the session voice). */
+  voice?: { ttsModel?: string; ttsVoice?: string };
 }
 
 interface RequestTiming {
@@ -302,7 +376,7 @@ interface ActiveStreamingTranscription {
 export async function createGatewayServer(
   options: GatewayServerOptions
 ): Promise<GatewayServerHandle> {
-  const config: GatewayConfig = {
+  const base: GatewayConfig = {
     maxAudioTurnBytes:
       options.maxAudioTurnBytes ?? DEFAULT_MAX_AUDIO_TURN_BYTES,
     livePartialInitialIntervalMs: options.livePartialInitialIntervalMs ?? 2_000,
@@ -323,25 +397,41 @@ export async function createGatewayServer(
     live: options.live,
     turnMergeWindowMs: options.turnMergeWindowMs ?? 3_000,
     hedge: options.hedge,
-    runtime: options.runtime ?? createTestRuntime(),
-    // Replaced below once the runtime is known.
-    uploads: options.uploads!,
+    // Replaced per organization (createTenantGateway).
+    runtime: undefined!,
+    uploads: undefined!,
+    identity: undefined!,
     env: options.env ?? process.env,
     voiceLatency: new Map(),
     createId: options.createId ?? randomUUID,
     now: options.now ?? (() => performance.now()),
     logger: options.logger ?? noopLogger
   };
-  config.uploads ??= uploadServiceFor({
-    store: config.runtime.store,
-    ownerId: config.runtime.ownerId,
-    env: config.env,
-    log: (event, fields) => config.logger.info(event, fields)
+  const tenants = options.tenants;
+  const hosted = tenants?.hosted ?? false;
+  // Tests and embedded use: one runtime given directly (no registry).
+  const single = tenants
+    ? undefined
+    : createTenantGateway(options, base, { orgId: options.runtime?.ownerId ?? "owner", runtime: options.runtime ?? createTestRuntime(), providers: options.providers });
+  /** Gateways of loaded organizations (rebuilt when the registry rebuilds a tenant). */
+  const gateways = new Map<string, { tenant: GatewayTenant; gateway: TenantGateway }>();
+  const gatewayFor = async (orgId: string): Promise<TenantGateway> => {
+    if (single) return single;
+    const tenant = await tenants!.acquire(orgId);
+    const known = gateways.get(orgId);
+    if (known?.tenant === tenant) return known.gateway;
+    const gateway = createTenantGateway(options, base, tenant);
+    gateways.set(orgId, { tenant, gateway });
+    return gateway;
+  };
+  // An organization unloaded (idle) or rebuilt (its model key changed): its browsers reconnect.
+  const offUnload = tenants?.onUnload((orgId) => {
+    const known = gateways.get(orgId);
+    gateways.delete(orgId);
+    for (const connection of known?.gateway.connections ?? []) connection.closeTransport(1012, "Reloading");
   });
-  const httpGuard = { ownerToken: options.ownerToken, allowedOrigins: options.allowedOrigins ?? [] };
-  const httpLog = (event: string, fields?: Record<string, unknown>) => config.logger.warn(event, fields);
-
-  validateConfig(config);
+  const allowedOrigins = options.allowedOrigins ?? [];
+  const httpLog = httpEventLog(base.logger);
 
   const startedAt = Date.now();
   const httpServer = createServer((request, response) => {
@@ -353,7 +443,9 @@ export async function createGatewayServer(
         connections: webSocketServer.clients.size,
         ...options.healthDetails,
         // Lets the web app tell "sign in" apart from "gateway down".
-        ownerLogin: Boolean(options.ownerToken)
+        ownerLogin: Boolean(options.ownerToken) && !hosted,
+        accounts: true,
+        ...(hosted ? { hosted: true } : {})
       });
       response.writeHead(200, {
         "content-type": "application/json; charset=utf-8",
@@ -363,55 +455,93 @@ export async function createGatewayServer(
       response.end(body);
       return;
     }
-    if (
-      routeSlidesRequest(request, response, {
-        runtime: config.runtime,
-        ...(options.ownerToken ? { ownerToken: options.ownerToken } : {}),
-        allowedOrigins: options.allowedOrigins ?? [],
-        ...(options.providers.toolLlm ? { toolLlm: options.providers.toolLlm } : {}),
-        model: () => config.defaultSettings.llmModel,
-        llmParams: (model) => config.llmParams[model],
-        log: (event, fields) => config.logger.info(event, fields)
-      })
-    ) {
-      return;
-    }
-    if (handleUploadsHttp({ ...httpGuard, uploads: config.uploads, log: httpLog }, request, response)) return;
-    if (handleMemoryHttp({ ...httpGuard, store: config.runtime.store, ownerId: config.runtime.ownerId, env: config.env, log: httpLog }, request, response)) return;
-    response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({ error: "not_found" }));
+    if (single) return single.serve(request, response);
+    if (requestPath(request).startsWith("/api/") || requestPath(request).startsWith("/o/")) logRequest(base.logger, request, response);
+    void routeTenantRequest(request, response).catch((error: unknown) => {
+      httpLog("tenancy.route_failed", { error: toError(error).message });
+      if (!response.headersSent) sendError(response, 500, "internal_error", "Something went wrong.");
+    });
   });
-  const allowedOrigins = new Set(options.allowedOrigins ?? []);
+
+  const hostedAccess: HostedGatewayAccess = {
+    gatewayFor: async (orgId) => {
+      const gateway = await gatewayFor(orgId);
+      return { orgId: gateway.orgId, identity: gateway.config.identity, runtime: gateway.config.runtime, serve: gateway.serve };
+    },
+    allowedOrigins,
+    ...(options.secureCookies !== undefined ? { secureCookies: options.secureCookies } : {})
+  };
+
+  /** Hosted: find the request's organization, then let its gateway serve it (self-hosted: always "owner"). */
+  const routeTenantRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+    if (!hosted) return (await gatewayFor(DEFAULT_OWNER_ID)).serve(request, response);
+    // Sign-up, the platform API and signed-out identity routes answer before any organization.
+    if (tenants!.handleHosted && (await tenants!.handleHosted(request, response, hostedAccess))) return;
+    const orgId = await tenants!.orgFor(request);
+    if (!orgId) {
+      request.resume();
+      const cors = corsHeaders(request, allowedOrigins);
+      // CORS preflights carry no cookie: answer them for every organization's routes.
+      if (request.method === "OPTIONS") {
+        if (!cors) return sendError(response, 403, "origin_not_allowed");
+        response.writeHead(204, cors);
+        response.end();
+        return;
+      }
+      return sendError(response, 401, "unauthorized", "Sign in to continue.", cors ?? {});
+    }
+    const gateway = await gatewayFor(orgId).catch(() => undefined);
+    if (!gateway) {
+      request.resume();
+      return sendError(response, 404, "not_found");
+    }
+    tenants!.touch(orgId);
+    gateway.serve(request, response);
+  };
+
+  /** Who opened each upgrade (session cookie, owner token, or local mode), and in which organization. */
+  const upgrades = new WeakMap<IncomingMessage, { auth: Authenticated; gateway: TenantGateway }>();
   const webSocketServer = new WebSocketServer({
     server: httpServer,
     verifyClient: ({ origin, req }, done) => {
-      if (!isAuthorized(options.ownerToken, req.url)) {
-        done(false, 401, "Unauthorized");
+      if (allowedOrigins.length > 0 && origin && !allowedOrigins.includes(origin)) {
+        done(false, 403, "Origin is not allowed");
         return;
       }
-      if (allowedOrigins.size === 0 || !origin || allowedOrigins.has(origin)) {
-        done(true);
-        return;
-      }
-      done(false, 403, "Origin is not allowed");
+      (async () => {
+        const orgId = single ? single.orgId : hosted ? await tenants!.orgFor(req) : DEFAULT_OWNER_ID;
+        if (!orgId) return undefined;
+        const gateway = await gatewayFor(orgId);
+        const auth = await authenticateUpgrade(gateway.config.identity, req, allowedOrigins);
+        return auth ? { auth, gateway } : undefined;
+      })()
+        .then((found) => {
+          if (!found) {
+            done(false, 401, "Unauthorized");
+            return;
+          }
+          upgrades.set(req, found);
+          done(true);
+        })
+        .catch(() => done(false, 500, "Sign-in check failed"));
     }
   });
 
-  // Every model call through these providers is recorded on the usage meter.
-  const providers = meterProviders(options.providers, {
-    meter: config.runtime.meter,
-    ownerId: config.runtime.ownerId,
-    catalog: () => config.modelCatalog
-  });
-  const connections = new Set<GatewayConnection>();
-  webSocketServer.on("connection", (socket) => {
-    const connection = new GatewayConnection(
-      socket,
-      providers,
-      config
-    );
-    connections.add(connection);
-    socket.once("close", () => connections.delete(connection));
+  webSocketServer.on("connection", (socket, request) => {
+    const found = upgrades.get(request);
+    if (!found) {
+      socket.close(4401, "Unauthorized");
+      return;
+    }
+    const { gateway, auth } = found;
+    const connection = new GatewayConnection(socket, gateway.providers, gateway.config, auth);
+    gateway.connections.add(connection);
+    // An open connection keeps its organization loaded.
+    const release = tenants?.hold(gateway.orgId);
+    socket.once("close", () => {
+      gateway.connections.delete(connection);
+      release?.();
+    });
     connection.start();
   });
 
@@ -422,22 +552,19 @@ export async function createGatewayServer(
     await closeHttpServer(httpServer);
     throw new Error("Gateway did not bind to a TCP port");
   }
+  // Self-hosted through the registry: build the one organization now, not on the first request.
+  if (tenants && !hosted) await gatewayFor(DEFAULT_OWNER_ID);
 
   return {
     webSocketServer,
     httpServer,
     port: address.port,
-    updateModels: (update) => {
-      config.modelCatalog = update.catalog;
-      config.defaultSettings = { ...config.defaultSettings, ...update.defaults };
-      if (update.llmParams) {
-        config.llmParams = { ...config.llmParams, ...update.llmParams };
-      }
-      for (const connection of connections) {
-        connection.applyCatalogUpdate();
-      }
+    updateModels: (update, orgId) => {
+      const targets = single ? [single] : [...gateways.values()].filter((entry) => !orgId || entry.tenant.orgId === orgId).map((entry) => entry.gateway);
+      for (const gateway of targets) gateway.updateModels(update);
     },
     close: async () => {
+      offUnload?.();
       for (const client of webSocketServer.clients) {
         client.terminate();
       }
@@ -447,21 +574,332 @@ export async function createGatewayServer(
   };
 }
 
-class GatewayConnection {
+/** One organization's runtime and model providers (hosted: one per organization; self-hosted: the only one). */
+export interface GatewayTenant {
+  orgId: string;
+  runtime: GatewayRuntime;
+  providers: GatewayProviders;
+  /** The organization's model catalog (its own key has its own); default: the server's. */
+  models?: ModelUpdate;
+}
+
+/** What the gateway needs from the tenant registry (tenancy/registry.ts, wired in server.ts). */
+export interface GatewayTenants {
+  hosted: boolean;
+  acquire(orgId: string): Promise<GatewayTenant>;
+  /** The organization a hosted request belongs to (session cookie, /o/<org>/ callbacks, x-sibyl-org); undefined: none. */
+  orgFor(request: IncomingMessage): Promise<string | undefined>;
+  /** Keep the organization loaded while a connection is open (returns the release). */
+  hold(orgId: string): () => void;
+  touch(orgId: string): void;
+  onUnload(listener: (orgId: string) => void): () => void;
+  /** Hosted routes outside any organization (sign-up, the platform API, signed-out sign-in). true: handled. */
+  handleHosted?(request: IncomingMessage, response: ServerResponse, gateway: HostedGatewayAccess): Promise<boolean>;
+}
+
+/** What hosted routes may use: an organization's identity, runtime and router. */
+export interface HostedGatewayAccess {
+  gatewayFor(orgId: string): Promise<{ orgId: string; identity: IdentityService; runtime: GatewayRuntime; serve(request: IncomingMessage, response: ServerResponse): void }>;
+  allowedOrigins: string[];
+  secureCookies?: boolean;
+}
+
+interface TenantGateway {
+  orgId: string;
+  config: GatewayConfig;
+  identityHttp: IdentityHttpOptions;
+  /** Metered with the organization's meter. */
+  providers: GatewayProviders;
+  connections: Set<GatewayConnection>;
+  serve(request: IncomingMessage, response: ServerResponse): void;
+  updateModels(update: ModelUpdate): void;
+}
+
+/** The HTTP routes, identity and sessions of one organization: the same code for every organization. */
+function createTenantGateway(options: GatewayServerOptions, base: GatewayConfig, tenant: GatewayTenant): TenantGateway {
+  const runtime = tenant.runtime;
+  const hosted = options.tenants?.hosted ?? false;
+  const env = base.env;
+  const config: GatewayConfig = {
+    ...base,
+    runtime,
+    ...(tenant.models
+      ? {
+          modelCatalog: tenant.models.catalog,
+          defaultSettings: { ...base.defaultSettings, ...tenant.models.defaults },
+          llmParams: { ...base.llmParams, ...tenant.models.llmParams }
+        }
+      : {}),
+    voiceLatency: new Map(),
+    // Injected services (tests) only when there is one organization.
+    uploads: (!options.tenants && options.uploads) || uploadServiceFor({
+      store: runtime.store,
+      ownerId: runtime.ownerId,
+      env,
+      log: (event, fields) => base.logger.info(event, fields)
+    }),
+    identity: undefined!
+  };
+  // Invitations go through the runtime's one mailer (a bare test runtime has none: same mailer code from env).
+  const invites = inviteMailer(runtime.notifications ? runtime.notifications.mailer : createMailer({ env }));
+  const ownerToken = hosted ? undefined : options.ownerToken;
+  config.identity =
+    (!options.tenants && options.identity) ||
+    new IdentityService({
+      store: runtime.store,
+      orgId: runtime.ownerId,
+      ...(ownerToken ? { ownerToken } : {}),
+      ...(invites ? { mailer: invites } : {}),
+      onInviteAccepted: (event) => runtime.notifications?.publish(inviteAcceptedNotice(event)),
+      audit: (event) => runtime.governance.audit(event),
+      // Workspace budgets (Settings → Workspace) go straight into the usage meter.
+      onBudgetsChanged: () => applyAppBudgets(runtime.meter, runtime.store, runtime.ownerId),
+      ...(env.SIBYL_APP_URL?.trim() ? { appUrl: env.SIBYL_APP_URL.trim() } : {}),
+      // SSO and session policies (Sibyl Enterprise; none without a licence).
+      extensions: () => runtime.license?.identityExtensions ?? [],
+      // Two-step verification secrets are encrypted with the organization's vault key.
+      secretKey: () => (runtime.secrets ? loadOrgKey(env, runtime.ownerId) : undefined),
+      hosted,
+      log: (event, fields) => base.logger.info(event, fields)
+    });
+  const identityHttp: IdentityHttpOptions = {
+    identity: config.identity,
+    allowedOrigins: options.allowedOrigins ?? [],
+    ...(options.secureCookies !== undefined ? { secureCookies: options.secureCookies } : {}),
+    features: () => runtime.license?.service.state().features ?? [],
+    log: httpEventLog(base.logger)
+  };
+  // Enterprise identity extensions sign people in through the same session code.
+  if (runtime.license?.identityExtensions.length) {
+    const vault = runtime.secrets?.vault;
+    const bridge = createIdentityBridge({ ...identityHttp, env, ...(vault ? { secrets: identitySecrets(vault, runtime.ownerId) } : {}) });
+    for (const extension of runtime.license.identityExtensions) extension.attach?.(bridge);
+  }
+  // Every API below runs behind gateProtectedRoute(): it checks who is calling
+  // and what they may do, and binds the caller to the request (requestCaller).
+  const httpLog = httpEventLog(base.logger);
+  const api = { allowedOrigins: options.allowedOrigins ?? [], log: httpLog, audit: (event: AuditEvent) => runtime.governance.audit(event) };
+  // Monitors: API behind the gate below; webhook deliveries (HMAC-signed, no sign-in) before it.
+  const monitorsHttp = {
+    ...api,
+    monitors: runtime.monitors,
+    authenticate: async (request: IncomingMessage) => requestCaller(request)
+  };
+  const connectorsHttp = {
+    ...api,
+    ...(runtime.connectors ? { connectors: runtime.connectors } : {}),
+    identity: config.identity,
+    env: config.env
+  };
+  // Admin → Organization and Users (org settings, the people list).
+  const orgAdminHttp: OrgAdminHttpOptions = {
+    ...api,
+    identity: config.identity,
+    org: new OrgAdmin({
+      store: runtime.store,
+      identity: config.identity,
+      extensions: () => runtime.license?.identityExtensions ?? [],
+      license: () => {
+        const state = runtime.license?.service.state();
+        if (!state) return { edition: "oss", status: "none" };
+        return {
+          edition: state.edition,
+          status: state.status,
+          ...(state.licensee ? { licensee: state.licensee } : {}),
+          ...(state.seats !== undefined ? { seats: state.seats } : {}),
+          ...(state.expiresAt ? { expiresAt: state.expiresAt } : {})
+        };
+      },
+      audit: api.audit,
+      // The organization budget (Admin → Organization): bounded by SIBYL_BUDGET_*, enforced by the meter.
+      ...(runtime.meter instanceof GatewayUsageMeter
+        ? {
+            budgets: {
+              limits: () => {
+                const limits = (runtime.meter as GatewayUsageMeter).envLimits();
+                return { ...(limits.dailyUsd !== undefined ? { dailyUsd: limits.dailyUsd } : {}), ...(limits.monthlyUsd !== undefined ? { monthlyUsd: limits.monthlyUsd } : {}) };
+              },
+              spent: () => {
+                const totals = runtime.meter.totals(runtime.ownerId);
+                return { todayUsd: totals.todayUsd, monthUsd: totals.monthUsd };
+              },
+              changed: () => applyAppBudgets(runtime.meter, runtime.store, runtime.ownerId)
+            }
+          }
+        : {})
+    })
+  };
+  // Onboarding state and the Getting started checklist (per person and organization).
+  const onboarding = new OnboardingService({
+    store: runtime.store,
+    orgId: runtime.ownerId,
+    identity: config.identity,
+    ...(runtime.modelAccess ? { modelAccess: () => runtime.modelAccess!.status() } : {}),
+    serverKey: Boolean(env.OPENROUTER_API_KEY?.trim()),
+    ...(runtime.connectors ? { connections: (principal, workspaceId) => runtime.connectors!.state(principal, workspaceId).connections.length } : {})
+  });
+  // Meetings: API behind the gate below; guest knocks (key / ticket, no sign-in) before it.
+  const meetingsHttp = () => ({
+    ...api,
+    meetings: runtime.meetings!,
+    calendar: { tools: runtime.tools, store: runtime.store, meter: runtime.meter, ownerId: runtime.ownerId, log: httpLog }
+  });
+
+  validateConfig(config);
+
+  // Every model call through these providers is recorded on the organization's usage meter.
+  const providers = meterProviders(tenant.providers, {
+    meter: runtime.meter,
+    ownerId: runtime.ownerId,
+    catalog: () => config.modelCatalog
+  });
+  const connections = new Set<GatewayConnection>();
+  // Sessions without a browser (phone calls, streams): same pipeline, headless transport.
+  runtime.realtime?.bindSessions((auth, workspaceId) => {
+    const transport = headlessTransport();
+    const connection = new GatewayConnection(transport, providers, config, auth, { workspaceId, headless: true });
+    connections.add(connection);
+    transport.once("close", () => connections.delete(connection));
+    connection.start();
+    return connection;
+  });
+
+  const serve = (request: IncomingMessage, response: ServerResponse): void => {
+    if (!hosted && requestPath(request).startsWith("/api/")) logRequest(base.logger, request, response);
+    // Sign-in by emailed link or Google / Microsoft (self-hosted; hosted answers it before any organization).
+    if (!hosted && options.signup && handleSignupHttp({ ...identityHttp, signup: options.signup, env }, request, response, async () => config.identity)) return;
+    // Sign-in, invitations, workspaces and members.
+    if (handleIdentityHttp(identityHttp, request, response)) return;
+    const notFound = () => sendError(response, 404, "not_found");
+    const protectedApi = () =>
+      routeSlidesRequest(request, response, {
+        ...api,
+        runtime,
+        ...(tenant.providers.toolLlm ? { toolLlm: tenant.providers.toolLlm } : {}),
+        model: () => config.defaultSettings.llmModel,
+        llmParams: (model) => config.llmParams[model]
+      }) ||
+      handleUploadsHttp({ ...api, uploads: config.uploads }, request, response) ||
+      Boolean(runtime.media && handleMediaHttp({ ...api, media: runtime.media, ownerId: runtime.ownerId }, request, response)) ||
+      handleOrgAdminHttp(orgAdminHttp, request, response) ||
+      handleMemoryHttp({ ...api, store: runtime.store, ownerId: runtime.ownerId, env: config.env }, request, response) ||
+      handleMonitorsHttp(monitorsHttp, request, response) ||
+      Boolean(runtime.knowledge && handleKnowledgeHttp({ ...api, knowledge: runtime.knowledge }, request, response)) ||
+      Boolean(runtime.skills && handleSkillsHttp({ ...api, skills: runtime.skills }, request, response)) ||
+      Boolean(runtime.plugins && handlePluginsHttp({ ...api, plugins: runtime.plugins }, request, response)) ||
+      Boolean(runtime.license && handleLicenseHttp({ ...api, license: runtime.license.service }, request, response)) ||
+      Boolean(runtime.realtime && handleRealtimeHttp({ ...api, realtime: runtime.realtime }, request, response)) ||
+      Boolean(runtime.meetings && handleMeetingsHttp(meetingsHttp(), request, response)) ||
+      handleConnectorsHttp(connectorsHttp, request, response) ||
+      handlePresenceHttp({ ...api, presence: runtime.presence }, request, response) ||
+      // Model access (own OpenRouter key) and AI credits.
+      handleTenancyHttp({ ...api, runtime }, request, response) ||
+      handleOnboardingHttp({ ...api, onboarding }, request, response) ||
+      // Enterprise routes in the route map (/api/admin/*, /api/recordings, …): gated here like the rest; absent without a licence (404).
+      Boolean(runtime.license?.httpRoutes.some((handler) => handler(request, response, api)));
+    // Slides, uploads, memory, monitors, knowledge, skills, plugins, connectors and
+    // the licence: one authorize() gate in front of each request.
+    const route = protectedRoutePermission(request.method ?? "GET", requestPath(request));
+    if (route) {
+      void gateProtectedRoute(identityHttp, request, response, route)
+        .then((allowed) => {
+          if (allowed && !protectedApi()) notFound();
+        })
+        .catch((error: unknown) => {
+          httpLog("identity.gate_failed", { error: toError(error).message });
+          if (!response.headersSent) sendError(response, 500, "internal_error", "Something went wrong.");
+        });
+      return;
+    }
+    // Reference files fetched by a media model provider (not gated: the signed, expiring link is the check).
+    if (runtime.media && handleMediaRefHttp({ media: runtime.media, log: httpLog }, request, response)) return;
+    // Monitor webhooks (not gated: the HMAC signature is the check).
+    if (handleMonitorsHttp(monitorsHttp, request, response)) return;
+    // Meeting guests knocking (not gated: the guest-link key or lobby ticket is the check).
+    if (config.runtime.meetings && isMeetingGuestRoute(request.method ?? "GET", requestPath(request)) && handleMeetingsHttp(meetingsHttp(), request, response)) return;
+    // LiveKit webhooks (not gated: the signed webhook token is the check).
+    if (runtime.realtime && handleRealtimeWebhook({ ...api, realtime: runtime.realtime }, request, response)) return;
+    // The OAuth redirect from Google/Microsoft/…: checked by its single-use state + session binding.
+    if (requestPath(request) === CALLBACK_PATH && handleConnectorsHttp(connectorsHttp, request, response)) return;
+    // Slack events and Teams notifications for agents in channels (signature / clientState checked there).
+    if (isPresenceCallbackPath(requestPath(request)) && handlePresenceHttp({ ...api, presence: runtime.presence }, request, response)) return;
+    // Enterprise modules check permissions themselves (they get the policy hook).
+    if (runtime.license?.httpRoutes.some((route) => route(request, response, api))) return;
+    notFound();
+  };
+
+  return {
+    orgId: tenant.orgId,
+    config,
+    identityHttp,
+    providers,
+    connections,
+    serve,
+    updateModels: (update) => {
+      config.modelCatalog = update.catalog;
+      config.defaultSettings = { ...config.defaultSettings, ...update.defaults };
+      if (update.llmParams) {
+        config.llmParams = { ...config.llmParams, ...update.llmParams };
+      }
+      for (const connection of connections) {
+        connection.applyCatalogUpdate();
+      }
+    }
+  };
+}
+
+interface ConnectionOptions {
+  /** Start in this workspace (default: the principal's first). */
+  workspaceId?: string;
+  /** No browser behind it (phone call, stream): no identity, notification or agent-list pushes. */
+  headless?: boolean;
+}
+
+class GatewayConnection implements VoiceSessionPort {
   private readonly session: SessionState;
   private disposed = false;
   /** Last budget check was close to a cap (cheaper models in use). */
   private economyMode = false;
+  /** Recent request ids of this session (their costs go out with usage updates). */
+  private readonly recentRequestIds = new Set<string>();
   private messageQueue = Promise.resolve();
   private readonly conversations: ConversationRecorder;
   private readonly approvals: ApprovalBroker;
   private readonly secrets: SecretsSession | undefined;
+  /** integrations.state pushes (only after the app asked once). */
+  private readonly integrations: IntegrationsSession;
+  private integrationsRequested = false;
+  private unsubscribeLicense: (() => void) | undefined;
+  /** Who is connected (refreshed when memberships or sessions change). */
+  private auth: Authenticated;
+  /** Workspace this connection acts in (session.workspace switches it). */
+  private workspaceId: string;
+  private unsubscribeIdentity: (() => void) | undefined;
+  /** Default agent for this connection's turns (agent.select / vad.speech_start agentId). */
+  private selectedAgentId: string | undefined;
+  /** The agent answering the current turn (undefined: Sibyl herself). */
+  private agentTurn: (AgentTurn & { requestId: string }) | undefined;
+  /** The browser opened the Agents screen: push list changes. */
+  private agentsWatched = false;
+  /** Agent voices for deep-brain gists spoken later (by brain run id). */
+  private readonly agentGistVoices = new Map<string, { ttsModel?: string; ttsVoice?: string }>();
+  private unsubscribeAgents: (() => void) | undefined;
+  private unsubscribeNotifications: (() => void) | undefined;
+  private unbindUsage: (() => void) | undefined;
+  /** Realtime media layer: spoken replies go here instead of tts.chunk (see session-port.ts). */
+  private mediaSink: VoiceMediaSink | undefined;
+  private readonly observers = new Set<(message: ServerMessage) => void>();
+  private readonly closeListeners = new Set<() => void>();
 
   constructor(
-    private readonly socket: WebSocket,
+    private readonly socket: SessionTransport,
     private readonly providers: GatewayProviders,
-    private readonly config: GatewayConfig
+    private readonly config: GatewayConfig,
+    auth: Authenticated,
+    private readonly options: ConnectionOptions = {}
   ) {
+    this.auth = auth;
+    this.workspaceId = options.workspaceId && canAccessWorkspace(auth.principal, options.workspaceId) ? options.workspaceId : firstWorkspace(auth);
     this.session = {
       sessionId: config.createId(),
       audioTurns: new Map(),
@@ -476,11 +914,18 @@ class GatewayConnection {
       ownerId: config.runtime.ownerId,
       createId: config.createId,
       log: (event, fields) => config.logger.warn(event, { sessionId: this.session.sessionId, ...fields }),
-      onListChanged: (items) => this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items })
+      onListChanged: (items) => this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items }),
+      // Chats belong to a workspace and (unless you may see all) to whoever started them.
+      scope: () => ({
+        workspaceId: this.workspaceId,
+        ...(this.auth.principal.userId ? { userId: this.auth.principal.userId } : {}),
+        viewAll: this.can(PERMISSIONS.CHAT_VIEW_ALL)
+      })
     });
     this.approvals = new ApprovalBroker({
       store: config.runtime.store,
       ownerId: config.runtime.ownerId,
+      requester: () => ({ principal: this.auth.principal, workspaceId: this.workspaceId }),
       send: (message) => this.send(message),
       createId: config.createId,
       now: config.now,
@@ -488,8 +933,17 @@ class GatewayConnection {
     });
     this.secrets = config.runtime.secrets?.connect({
       ownerId: config.runtime.ownerId,
+      principal: () => this.auth.principal,
       send: (message) => this.send(message),
       conversationId: () => this.conversations.conversationId
+    });
+    this.integrations = connectIntegrations({
+      connectors: config.runtime.connectors,
+      principal: () => this.auth.principal,
+      workspaceId: () => this.workspaceId,
+      send: (message) => {
+        if (this.integrationsRequested) this.send(message);
+      }
     });
   }
 
@@ -503,6 +957,18 @@ class GatewayConnection {
       status: "ready"
     });
     this.sendSessionConfig();
+    const license = this.config.runtime.license?.service;
+    if (license) {
+      this.sendLicenseState(license.state());
+      this.unsubscribeLicense = license.subscribe((state) => this.sendLicenseState(state));
+    }
+    this.sendSessionIdentity();
+    // Spend in this session counts toward this person in their current workspace (per-user budgets, reports).
+    this.unbindUsage = attributeSessionUsage(this.config.runtime.meter, this.session.sessionId, () => {
+      const role = effectiveWorkspaceRole(this.auth.principal, this.workspaceId);
+      return { userId: this.auth.principal.userId ?? this.auth.principal.kind, workspaceId: this.workspaceId, ...(role ? { role } : {}) };
+    });
+    if (!this.options.headless) this.subscribeBrowserPushes();
     this.warmUpVoice();
 
     this.socket.on("message", (raw) => {
@@ -525,7 +991,7 @@ class GatewayConnection {
         error: error.message
       });
       this.dispose("websocket error");
-      if (this.socket.readyState !== WebSocket.CLOSED) {
+      if (this.socket.readyState === TRANSPORT_OPEN) {
         this.socket.terminate();
       }
     });
@@ -534,10 +1000,117 @@ class GatewayConnection {
     });
   }
 
+  /** Pushes only a browser needs: notifications, the agents list, sign-in changes. */
+  private subscribeBrowserPushes(): void {
+    // Live notifications for whoever is connected (filtered per push by permission, recipient and workspace).
+    this.unsubscribeNotifications = this.config.runtime.notifications?.subscribe({
+      send: (message) => this.send(message),
+      principal: () => this.auth.principal,
+      workspaceId: () => this.workspaceId
+    });
+    this.unsubscribeAgents = this.config.runtime.agents?.subscribe(() => {
+      if (this.agentsWatched && !this.disposed) void sendAgentsList(this.agentsContext()).catch(() => undefined);
+    });
+    this.unsubscribeIdentity = this.config.identity.onChange((change) => {
+      if (change.userId && this.auth.principal.userId && change.userId !== this.auth.principal.userId && change.kind !== "user") return;
+      this.messageQueue = this.messageQueue.then(() => this.refreshIdentity()).catch(() => undefined);
+    });
+  }
+
+  /* ───────────── VoiceSessionPort (realtime media layer; see session-port.ts) ───────────── */
+
+  get sessionId(): string {
+    return this.session.sessionId;
+  }
+
+  get principal() {
+    return this.auth.principal;
+  }
+
+  get currentWorkspaceId(): string {
+    return this.workspaceId;
+  }
+
+  get conversationId(): string {
+    return this.conversations.conversationId;
+  }
+
+  get open(): boolean {
+    return !this.disposed;
+  }
+
+  /** Close the browser's socket (its organization is reloading); the app reconnects. */
+  closeTransport(code: number, reason: string): void {
+    this.socket.close(code, reason);
+  }
+
+  deliver(message: ClientMessage): void {
+    if (this.disposed) return;
+    this.messageQueue = this.messageQueue
+      .then(() => this.handleMessage(message))
+      .catch((error: unknown) => this.send({ type: "error", message: toError(error).message }));
+  }
+
+  attachMedia(sink: VoiceMediaSink | undefined): void {
+    this.mediaSink = sink;
+  }
+
+  observe(listener: (message: ServerMessage) => void): () => void {
+    this.observers.add(listener);
+    return () => this.observers.delete(listener);
+  }
+
+  notify(message: ServerMessage): void {
+    this.send(message);
+  }
+
+  async transcribe(pcm: Buffer, sampleRate: number, requestId: string): Promise<string> {
+    if (pcm.byteLength === 0) return "";
+    const result = await this.providers.stt.transcribe(
+      { data: pcm16MonoToWav(pcm, sampleRate), mimeType: "audio/wav", filename: "recording.wav" },
+      { model: this.session.settings.sttModel, meta: this.usageMeta("stt", requestId) }
+    );
+    return result.text.trim();
+  }
+
+  addNote(speaker: string, text: string): void {
+    const line = text.trim();
+    if (this.disposed || !line) return;
+    const requestId = this.config.createId();
+    const entry: LLMMessage = { role: "user", content: `[${speaker}] ${line}` };
+    this.session.history.push(entry);
+    this.beginStoredTurn(requestId, entry, { kind: "live", requestStartedAt: this.config.now() });
+    // No reply: only the note itself is saved.
+    this.conversations.completeReply(requestId, { content: "" });
+  }
+
+  say(text: string): void {
+    const line = text.trim();
+    if (this.disposed || !line) return;
+    this.session.history.push({ role: "assistant", content: line });
+    this.speakWhenIdle({ requestId: this.config.createId(), text: line, turn: this.session.turnCounter });
+  }
+
+  onClose(listener: () => void): () => void {
+    if (this.disposed) {
+      listener();
+      return () => undefined;
+    }
+    this.closeListeners.add(listener);
+    return () => this.closeListeners.delete(listener);
+  }
+
+  close(reason: string): void {
+    this.dispose(reason);
+    if (this.socket.readyState === TRANSPORT_OPEN) this.socket.close(1000, reason);
+  }
+
   private handleRawMessage(raw: string): void | Promise<void> {
     if (this.disposed) {
       return;
     }
+    // Activity keeps the session from going idle (session policies).
+    void this.config.identity.noteActivity(this.auth).catch(() => undefined);
 
     let input: unknown;
     try {
@@ -560,6 +1133,19 @@ class GatewayConnection {
   }
 
   private handleMessage(message: ClientMessage): void | Promise<void> {
+    // One permission check in front of every handler (see identity/ws.ts).
+    const permission = permissionForMessage(message.type);
+    if (permission && !this.can(permission)) {
+      if (!QUIET_DENIALS.has(message.type)) {
+        this.send({ type: "error", message: "You don't have permission to do that in this workspace." });
+      }
+      return;
+    }
+
+    if (message.type === IDENTITY_EVENTS.SESSION_WORKSPACE) {
+      return this.switchWorkspace(message.workspaceId);
+    }
+
     if (message.type === WS_EVENTS.SESSION_START) {
       if (message.sessionId) {
         this.session.sessionId = message.sessionId;
@@ -574,7 +1160,7 @@ class GatewayConnection {
     }
 
     if (message.type === WS_EVENTS.SESSION_UPDATE) {
-      this.updateSettings(message.settings);
+      this.updateSettings(this.allowedSettings(message.settings));
       return;
     }
 
@@ -597,6 +1183,7 @@ class GatewayConnection {
     }
 
     if (message.type === WS_EVENTS.VAD_SPEECH_START) {
+      if (message.agentId) this.selectedAgentId = message.agentId;
       this.startLiveAudioTurn(message.requestId);
       return;
     }
@@ -619,11 +1206,17 @@ class GatewayConnection {
         });
         return;
       }
+      // Composer Create mode: the text is a media prompt (media/chat.ts).
+      if (message.media) {
+        void this.handleMediaText(message.requestId ?? this.config.createId(), text, message.media);
+        return;
+      }
       void this.handleUserText(
         message.requestId ?? this.config.createId(),
         text,
         undefined,
-        message.attachments
+        message.attachments,
+        message.agentId
       );
       return;
     }
@@ -643,7 +1236,7 @@ class GatewayConnection {
    * acknowledged with an error so the browser never waits silently.
    */
   private async handleV03Message(
-    message: Exclude<ClientMessage, AudioChunkMessage | { type: "session.start" | "session.update" | "interrupt" | "playback.ack" | "vad.speech_start" | "vad.speech_end" | "user.text" }>
+    message: Exclude<ClientMessage, AudioChunkMessage | { type: "session.start" | "session.update" | "session.workspace" | "interrupt" | "playback.ack" | "vad.speech_start" | "vad.speech_end" | "user.text" }>
   ): Promise<void> {
     // ── connections (MCP servers, tool switches); not awaited: connecting can take a while ──
     if (isConnectionsClientMessage(message)) {
@@ -655,7 +1248,103 @@ class GatewayConnection {
       return;
     }
     // ── routines & inbox (incl. decisions on routine approvals) ──
-    if (await handleRoutinesMessage(message, { routines: this.config.runtime.routines, send: (m) => this.send(m), socket: this.socket })) return;
+    if (
+      await handleRoutinesMessage(message, {
+        routines: this.config.runtime.routines,
+        send: (m) => this.send(m),
+        principal: () => this.auth.principal,
+        workspaceId: () => this.workspaceId,
+        socket: this.socket
+      })
+    )
+      return;
+    // ── notifications (the Inbox's activity feed; live pushes are subscribed in start()) ──
+    if (
+      await handleNotificationsMessage(message, {
+        notifications: this.config.runtime.notifications,
+        send: (m) => this.send(m),
+        principal: () => this.auth.principal,
+        workspaceId: () => this.workspaceId
+      })
+    )
+      return;
+    // ── monitors (live status) ──
+    if (
+      handleMonitorsMessage(message, {
+        monitors: this.config.runtime.monitors,
+        send: (m) => this.send(m),
+        principal: () => this.auth.principal,
+        workspaceId: () => this.workspaceId,
+        socket: this.socket
+      })
+    )
+      return;
+    // ── integrations (connector status; never tokens) ──
+    if (isIntegrationsClientMessage(message)) {
+      this.integrationsRequested = true;
+      await this.integrations.push();
+      return;
+    }
+    // ── agent computers (live view, Stop, timeline) ──
+    if (
+      await handleComputersMessage(message, {
+        computers: this.config.runtime.computers,
+        agents: this.config.runtime.agents,
+        send: (m) => this.send(m),
+        principal: () => this.auth.principal,
+        workspaceId: () => this.workspaceId,
+        socket: this.socket
+      })
+    )
+      return;
+    // ── agents (Agents screen, composer picker) ──
+    if (isAgentsClientMessage(message)) {
+      if (!this.config.runtime.agents) return this.notAvailable(message.type);
+      if (message.type === AGENT_EVENTS.REQUEST) this.agentsWatched = true;
+      if (message.type === AGENT_EVENTS.VOICE_PREVIEW) {
+        if (!this.can(PERMISSIONS.AGENTS_USE)) return this.send({ type: "error", message: "You don't have permission to use agents in this workspace." });
+        void this.previewVoice(message.requestId, message.ttsModel, message.ttsVoice, message.name);
+        return;
+      }
+      await handleAgentsMessage(message, this.agentsContext());
+      return;
+    }
+    // ── meetings (tasks from action items, through this session's approval card) ──
+    if (isMeetingsClientMessage(message)) {
+      const meetings = this.config.runtime.meetings;
+      if (!meetings) return this.notAvailable(message.type);
+      const runtime = this.config.runtime;
+      // Not awaited: it waits for the approval decision, which arrives on this same queue.
+      void handleMeetingsMessage(message, {
+        meetings,
+        caller: { principal: this.auth.principal, workspaceId: this.workspaceId },
+        send: (reply) => this.send(reply),
+        tool: (name) => runtime.tools.get(name),
+        approve: (tool, input, runId) => this.approvals.request({ runId, tool, input, signal: AbortSignal.timeout(15 * 60_000) }),
+        toolContext: (runId) => ({
+          signal: AbortSignal.timeout(60_000),
+          ownerId: runtime.ownerId,
+          runId,
+          principal: this.auth.principal,
+          workspaceId: this.workspaceId,
+          store: runtime.store,
+          meter: runtime.meter,
+          log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields })
+        })
+      });
+      return;
+    }
+    // ── realtime (LiveKit rooms; media only — everything else stays on this socket) ──
+    if (isRealtimeClientMessage(message)) {
+      if (!this.config.runtime.realtime) return this.notAvailable(message.type);
+      await handleRealtimeMessage(message, {
+        realtime: this.config.runtime.realtime,
+        port: this,
+        can: (permission) => this.can(permission),
+        send: (reply) => this.send(reply)
+      });
+      return;
+    }
     // ── secrets (secure prompt + Secrets panel; values never leave secrets/) ──
     if (isSecretsClientMessage(message)) {
       if (this.secrets) await this.secrets.handle(message);
@@ -665,7 +1354,7 @@ class GatewayConnection {
     switch (message.type) {
       // ── approvals (brain tool loop) ──
       case WS_EVENTS.APPROVAL_DECISION:
-        void this.approvals.decide(message.id, message.decision, message.remember).catch((error: unknown) => {
+        void this.decideChatApproval(message.id, message.decision, message.remember).catch((error: unknown) => {
           this.send({ type: "error", message: `Approval failed: ${toError(error).message}` });
         });
         return;
@@ -725,6 +1414,38 @@ class GatewayConnection {
     this.send({ type: "error", message: `${type} is not available on this gateway yet` });
   }
 
+  /**
+   * A decision on a chat approval: only in the approval's workspace, by the
+   * person it was asked of. The session waiting on it (maybe another tab)
+   * applies it.
+   */
+  private async decideChatApproval(id: string, decision: "approve" | "decline", remember?: "conversation"): Promise<void> {
+    const { store, ownerId } = this.config.runtime;
+    const record = await store.approvals.get(ownerId, id);
+    const workspaceId = record ? await approvalWorkspace(store, ownerId, record) : undefined;
+    if (!record || !workspaceId || !canDecideChatApproval(this.auth.principal, record, workspaceId)) {
+      this.config.logger.warn("approval.denied", { sessionId: this.session.sessionId, id });
+      this.send({ type: "error", message: "That approval is no longer available." });
+      return;
+    }
+    const broker = chatApprovalBroker(id) ?? this.approvals;
+    await broker.decide(id, decision, remember);
+    if (broker !== this.approvals) {
+      const after = await store.approvals.get(ownerId, id);
+      if (after && after.status !== "pending") this.send({ type: WS_EVENTS.APPROVAL_RESOLVED, id, status: after.status });
+    }
+  }
+
+  /** Remember a finished request so its cost reaches the browser with the next usage update. */
+  private noteRequestCost(requestId: string): void {
+    this.recentRequestIds.delete(requestId);
+    this.recentRequestIds.add(requestId);
+    if (this.recentRequestIds.size > 40) {
+      const oldest = this.recentRequestIds.values().next().value;
+      if (oldest !== undefined) this.recentRequestIds.delete(oldest);
+    }
+  }
+
   private pushUsage(): void {
     this.send({
       type: WS_EVENTS.USAGE_UPDATE,
@@ -732,7 +1453,9 @@ class GatewayConnection {
         meter: this.config.runtime.meter,
         ownerId: this.config.runtime.ownerId,
         sessionId: this.session.sessionId,
-        economyMode: this.economyMode
+        economyMode: this.economyMode,
+        requestIds: this.recentRequestIds,
+        workspaceId: this.workspaceId
       })
     });
   }
@@ -775,7 +1498,29 @@ class GatewayConnection {
       this.economyMode = budget.economy;
       this.pushUsage();
     }
-    return { model: budget.model ?? model };
+    const chosen = budget.model ?? model;
+    // Organization policy: the model must be on the allowlist (when there is one).
+    const refusal = chosen ? this.modelRefusal(chosen) : undefined;
+    if (refusal) {
+      this.send({ type: "error", requestId, scope: "llm", message: refusal });
+      return undefined;
+    }
+    return { model: chosen };
+  }
+
+  /** Why an organization policy refuses this model (recorded in the audit log), or undefined. */
+  private modelRefusal(model: string): string | undefined {
+    const governance = this.config.runtime.governance;
+    const decision = governance.modelDecision(model, { principal: this.auth.principal, workspaceId: this.workspaceId });
+    if (decision.allowed) return undefined;
+    governance.audit({
+      action: AUDIT_ACTIONS.MODEL_BLOCKED,
+      outcome: "denied",
+      actor: auditActor(this.auth.principal),
+      workspaceId: this.workspaceId,
+      target: { kind: "model", id: model }
+    });
+    return decision.reason ?? `The model ${model} is not allowed in this organization.`;
   }
 
   /** Re-resolve settings against a new catalog and tell the browser. */
@@ -824,7 +1569,8 @@ class GatewayConnection {
       provider: this.config.providerName,
       genUi: Boolean(this.config.genUiSystemPrompt),
       tts: Boolean(this.providers.tts),
-      realtimeStt: this.config.realtimeSttEnabled
+      realtimeStt: this.config.realtimeSttEnabled,
+      ...(this.config.runtime.realtime ? { realtime: this.config.runtime.realtime.capability() } : {})
     };
   }
 
@@ -835,6 +1581,10 @@ class GatewayConnection {
       this.send({ type: "error", message });
     };
 
+    for (const key of ["voiceModel", "llmModel"] as const) {
+      const refusal = patch[key] !== undefined ? this.modelRefusal(patch[key]!) : undefined;
+      if (refusal) return reject(refusal);
+    }
     if (patch.voiceModel !== undefined) {
       if (!catalog?.voice?.some((model) => model.id === patch.voiceModel)) {
         return reject(`Voice model is not allowed: ${patch.voiceModel}`);
@@ -890,6 +1640,37 @@ class GatewayConnection {
     this.sendSessionConfig();
   }
 
+  /** A Create-mode message: make the media directly (no chat model), recorded as a normal turn. */
+  private async handleMediaText(requestId: string, text: string, spec: MediaCreateSpec): Promise<void> {
+    const media = this.config.runtime.media;
+    if (!media || !this.can(PERMISSIONS.CHAT_USE)) {
+      this.send({ type: "error", requestId, message: media ? "You don't have permission to chat in this workspace." : "Media generation is not set up on this gateway (it needs OPENROUTER_API_KEY)." });
+      this.send({ type: WS_EVENTS.LLM_DONE, requestId, reason: "error" });
+      return;
+    }
+    if (this.session.current) this.interruptCurrentRun("new user message");
+    const label = spec.kind === "image" ? "Create an image" : spec.kind === "video" ? "Create a video" : "Create audio";
+    const entry: LLMMessage = { role: "user", content: `[${label}] ${text}` };
+    this.session.history.push(entry);
+    // Stored (and titled) as what the person typed; the model's history also says it was a Create request.
+    this.conversations.beginTurn(requestId, entry, "text", (item) => this.session.history.includes(item), { text });
+    const principal = this.auth.principal;
+    await runMediaChatTurn({
+      media,
+      requestId,
+      prompt: text,
+      spec,
+      workspaceId: this.workspaceId,
+      conversationId: this.conversations.conversationId,
+      ...(principal ? { userId: principal.userId ?? principal.kind } : {}),
+      send: (message) => this.send(message),
+      reply: (content) => {
+        this.session.history.push({ role: "assistant", content });
+        this.conversations.completeReply(requestId, { content });
+      }
+    });
+  }
+
   private async handleUserText(
     requestId: string,
     text: string,
@@ -897,11 +1678,18 @@ class GatewayConnection {
       kind: "text",
       requestStartedAt: this.config.now()
     },
-    attachments?: AttachmentRef[]
+    attachments?: AttachmentRef[],
+    agentId?: string
   ): Promise<void> {
     if (this.session.current) {
       this.interruptCurrentRun("new user message");
     }
+    const picked = await this.pickAgent(requestId, text, agentId);
+    if (picked === false) {
+      this.send({ type: WS_EVENTS.LLM_DONE, requestId, reason: "error" });
+      return;
+    }
+    text = picked;
     if (attachments?.length) {
       await this.handleAttachedText(requestId, text, timing, attachments);
       return;
@@ -939,7 +1727,8 @@ class GatewayConnection {
     const prepared = await prepareAttachments(
       this.config.uploads,
       text || "(The user sent these files without a message. Look at them and help.)",
-      attachments
+      attachments,
+      this.workspaceId
     );
     if (prepared.missing.length) {
       this.send({ type: "error", requestId, message: `Attachment not found: ${prepared.missing.join(", ")}` });
@@ -978,7 +1767,35 @@ class GatewayConnection {
 
   /** System prompt plus "What you know about the user" (memory), for every brain. */
   private withMemory(prompt: string): Promise<string> {
-    return withUserMemory(prompt, { store: this.config.runtime.store, ownerId: this.config.runtime.ownerId, env: this.config.env });
+    return withUserMemory(prompt, {
+      store: this.config.runtime.store,
+      ownerId: this.config.runtime.ownerId,
+      env: this.config.env,
+      principal: this.auth.principal,
+      workspaceId: this.workspaceId
+    });
+  }
+
+  /** Memory, then the enabled skills list and "Relevant knowledge" for the latest user message (deep brain and typed chat). */
+  private async withBrainContext(prompt: string, agent?: AgentTurn): Promise<string> {
+    const runtime = this.config.runtime;
+    const last = [...this.session.history].reverse().find((entry) => entry.role === "user");
+    const content = last?.content as unknown;
+    const query = typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.map((part) => (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string" ? (part as { text: string }).text : "")).join(" ")
+        : "";
+    return withWorkspaceContext(await this.withMemory(prompt), {
+      ...(runtime.skills ? { skills: runtime.skills } : {}),
+      ...(runtime.knowledge ? { knowledge: runtime.knowledge } : {}),
+      tools: runtime.tools,
+      principal: this.auth.principal,
+      workspaceId: this.workspaceId,
+      query,
+      ...(agent ? { agent: agent.scope } : {}),
+      log: (event, fields) => this.config.logger.warn(event, fields)
+    });
   }
 
   private async handleAudioChunk(message: AudioChunkMessage): Promise<void> {
@@ -1577,6 +2394,9 @@ class GatewayConnection {
     const live = this.config.live;
     const model = this.session.settings.voiceModel;
     if (!live?.warmUp || !model || this.disposed) return;
+    // No warm-up spend when the budget (or an organization's AI credits) would block the turn anyway.
+    const { meter, ownerId } = this.config.runtime;
+    if (!meter.check({ ownerId, estimateUsd: 0, sessionId: this.session.sessionId, feature: "warmup", model }).allowed) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort("warm-up timeout"), 15_000);
     void (async () => {
@@ -1749,7 +2569,11 @@ class GatewayConnection {
     this.session.history.push(userEntry);
     this.beginStoredTurn(requestId, userEntry, timing);
     const voiceModel = this.pickVoiceModel();
-    const voicePrompt = await this.withMemory(this.config.live!.voicePrompt);
+    if (this.agentTurn?.requestId !== requestId && (await this.pickAgent(requestId, "", undefined)) === false) {
+      this.send({ type: WS_EVENTS.LLM_DONE, requestId, reason: "error" });
+      return;
+    }
+    const voicePrompt = (await this.withMemory(this.config.live!.voicePrompt)) + (this.agentTurn?.voiceBlock ?? "");
     await this.streamAssistantResponse(requestId, timing, {
       parser: "voice",
       model: voiceModel,
@@ -1810,8 +2634,14 @@ class GatewayConnection {
     const live = this.config.live;
     if (!live || !this.session.settings.llmModel) return;
     const brainId = this.config.createId();
-    const budget = this.budgetFor("brain", this.session.settings.llmModel, brainId);
+    // The agent that answered the voice turn also does the deep work.
+    const agent = this.agentTurn?.requestId === parentRequestId ? this.agentTurn : undefined;
+    const agentModel = agent ? resolveAgentModel(agent.agent, this.config.modelCatalog) : undefined;
+    const budget = this.budgetFor("brain", agentModel ?? this.session.settings.llmModel, brainId);
     if (!budget?.model) return;
+    if (agent && !this.agentBudgetAllows(agent, "brain", budget.model, brainId)) return;
+    // The spoken gist uses the agent's voice too.
+    if (agent) this.agentGistVoices.set(brainId, resolveAgentVoice(agent.agent, this.config.modelCatalog, this.session.settings.ttsModel));
     const model = budget.model;
     const controller = new AbortController();
     this.session.brainRuns.set(brainId, controller);
@@ -1862,9 +2692,9 @@ class GatewayConnection {
       }
     };
 
-    const tools = this.config.runtime.tools.list({ enabledOnly: true });
+    const tools = this.availableTools(agent);
     const toolLlm = this.providers.toolLlm;
-    const brainPrompt = await this.withMemory(live.brainPrompt(genUi));
+    const brainPrompt = (await this.withBrainContext(live.brainPrompt(genUi), agent)) + (agent?.systemBlock ?? "");
     try {
       if (toolLlm && tools.length > 0) {
         const result = await runToolLoop({
@@ -1873,6 +2703,7 @@ class GatewayConnection {
             signal: controller.signal,
             model,
             tools,
+            ...(agent ? { agent } : {}),
             messages: [
               { role: "system", content: brainPrompt + toolSystemPrompt(tools) },
               ...this.conversation(),
@@ -1901,6 +2732,7 @@ class GatewayConnection {
       if (controller.signal.aborted || this.disposed) return;
 
       this.send({ type: WS_EVENTS.BRAIN_DONE, requestId: brainId, reason: "stop" });
+      this.noteRequestCost(brainId);
       this.pushUsage();
       const gist = speech.trim();
       this.session.history.push({
@@ -1908,6 +2740,7 @@ class GatewayConnection {
         content: `[deep brain] ${gist}${ui.trim() ? " (A visual with the details is on the user's screen.)" : ""}`
       });
       this.conversations.brainResult(brainId, parentRequestId, { content: gist, ui, task, model });
+      if (agent) void agent.finish({ runId: brainId, task, reply: gist, conversationId: this.conversations.conversationId, ...this.reflectWith(model) });
       this.config.logger.info("brain.finished", {
         sessionId: this.session.sessionId,
         requestId: brainId,
@@ -1941,24 +2774,40 @@ class GatewayConnection {
     model: string;
     tools: ToolLoopInput["tools"];
     messages: ToolLoopInput["messages"];
+    /** The agent running this loop (autonomy decides its write calls). */
+    agent?: AgentTurn;
   }): Omit<ToolLoopInput, "onText"> {
     const runtime = this.config.runtime;
+    const { agent, ...loop } = run;
     const extraBody = this.llmParamsFor(run.model);
+    agent?.bindRequest(run.runId);
     return {
-      ...run,
+      ...loop,
       provider: this.providers.toolLlm!,
       ...(extraBody ? { extraBody } : {}),
       conversationId: this.conversations.conversationId,
       ownerId: runtime.ownerId,
+      principal: this.auth.principal,
+      workspaceId: this.workspaceId,
+      governance: runtime.governance,
+      // Checked again when each call runs (roles can change mid-run).
+      authorizeTool: (tool) =>
+        tool.effect === "write" && !this.can(PERMISSIONS.TOOLS_WRITE)
+          ? "You don't have permission to run actions that change things in this workspace (viewer access)."
+          : undefined,
       store: runtime.store,
       meter: runtime.meter,
       log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields }),
       onToolStarted: (call) => this.send({ type: WS_EVENTS.TOOL_STARTED, requestId: run.runId, ...call }),
-      onToolFinished: ({ callId, toolName, status, summary }) => {
-        const artifact = takeSlidesArtifact(run.runId, toolName);
-        this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: run.runId, callId, status, ...(summary ? { summary } : {}), ...(artifact ? { artifact } : {}) });
+      onToolFinished: ({ callId, toolName, title, status, summary, link }) => {
+        agent?.noteStep({ toolName, title, status });
+        const artifact = takeSlidesArtifact(run.runId, toolName) ?? takeMediaArtifact(run.runId, toolName);
+        this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: run.runId, callId, status, ...(summary ? { summary } : {}), ...(artifact ? { artifact } : {}), ...(link ? { link } : {}) });
       },
-      approve: ({ tool, input }) => this.approvals.request({ runId: run.runId, conversationId: this.conversations.conversationId, tool, input, signal: run.signal })
+      approve: ({ tool, input }) => {
+        const ask = () => this.approvals.request({ runId: run.runId, conversationId: this.conversations.conversationId, tool, input, signal: run.signal });
+        return agent ? agent.approve({ tool, input }, ask) : ask();
+      }
     };
   }
 
@@ -1988,21 +2837,26 @@ class GatewayConnection {
     chat: { typed?: boolean; model?: string } = {}
   ): Promise<void> {
     const feature = plan?.parser === "voice" ? "voice" : "brain";
-    let model = plan ? plan.model : chat.model ?? this.session.settings.llmModel;
+    // The agent answering this request (typed chat, a voice turn, or a deep-brain gist it spoke).
+    const agent = this.agentTurn?.requestId === requestId ? this.agentTurn : undefined;
+    const agentModel = agent && !plan ? resolveAgentModel(agent.agent, this.config.modelCatalog) : undefined;
+    let model = plan ? plan.model : chat.model ?? agentModel ?? this.session.settings.llmModel;
     // Typed chat: the system prompt carries the user's memory (read before the run starts).
     const chatSystemPrompt = plan
       ? undefined
-      : await this.withMemory(
-          this.session.settings.genUi && this.config.genUiSystemPrompt ? this.config.genUiSystemPrompt : this.config.systemPrompt
-        );
+      : (await this.withBrainContext(
+          this.session.settings.genUi && this.config.genUiSystemPrompt ? this.config.genUiSystemPrompt : this.config.systemPrompt,
+          agent
+        )) + (agent?.systemBlock ?? "");
     if (plan?.speakOnly === undefined) {
       const budget = this.budgetFor(feature, model, requestId);
-      if (!budget) {
+      if (!budget || (agent && !this.agentBudgetAllows(agent, feature, budget.model, requestId))) {
         // Settle the turn in the browser; the budget notice explains why.
         this.send({ type: WS_EVENTS.LLM_DONE, requestId, reason: "error" });
         return;
       }
       model = budget.model;
+      agent?.bindRequest(requestId);
     }
     timing.llmStartedAt = this.config.now();
     const run: ActiveRun = {
@@ -2017,10 +2871,16 @@ class GatewayConnection {
       ttsEnded: false,
       ttsSequence: 0,
       ttsSegmentIndex: 0,
-      timing
+      timing,
+      ...(agent
+        ? { voice: resolveAgentVoice(agent.agent, this.config.modelCatalog, this.session.settings.ttsModel) }
+        : this.agentGistVoices.has(requestId)
+          ? { voice: this.agentGistVoices.get(requestId)! }
+          : {})
     };
 
     this.session.current = run;
+    this.agentGistVoices.delete(requestId);
     let pendingTtsText = "";
     let ttsQueue = Promise.resolve();
     let ttsError: unknown;
@@ -2105,7 +2965,7 @@ class GatewayConnection {
     const messages = plan ? plan.messages : this.session.history;
     const hedgeAfterMs = this.config.hedge?.voiceAfterMs;
     let winningModel = model;
-    const tools = plan ? [] : this.config.runtime.tools.list({ enabledOnly: true });
+    const tools = plan ? [] : this.availableTools(agent);
     const source: AsyncIterable<{ delta: string }> =
       !plan && model && this.providers.toolLlm && tools.length > 0
         ? toolLoopStream(
@@ -2114,6 +2974,7 @@ class GatewayConnection {
               signal: run.controller.signal,
               model,
               tools,
+              ...(agent ? { agent } : {}),
               messages: [
                 { role: "system", content: String(messages[0]?.content ?? "") + toolSystemPrompt(tools) },
                 ...messages.slice(1)
@@ -2221,6 +3082,10 @@ class GatewayConnection {
             ui: uiText,
             ...(winningModel ? { model: winningModel } : {})
           });
+          if (agent) {
+            const task = this.lastUserText();
+            void agent.finish({ runId: requestId, task, reply: speechText, conversationId: this.conversations.conversationId, ...this.reflectWith(winningModel) });
+          }
         }
         const silent = Boolean(voiceParser?.isSilence) && !speechText.trim();
         plan?.onText?.({
@@ -2291,9 +3156,9 @@ class GatewayConnection {
     run: ActiveRun,
     text: string
   ): Promise<{ audio: Uint8Array; mimeType: string; format: string } | undefined> {
-    const ttsModel = this.config.modelCatalog?.tts.find(
-      (model) => model.id === this.session.settings.ttsModel
-    );
+    const ttsModelId = run.voice?.ttsModel ?? this.session.settings.ttsModel;
+    const ttsVoice = run.voice?.ttsVoice ?? this.session.settings.ttsVoice ?? this.config.ttsVoice;
+    const ttsModel = this.config.modelCatalog?.tts.find((model) => model.id === ttsModelId);
     // Voices that can't perform cues like [laughs] would read them aloud.
     const performable = ttsModel?.emotionTags ? text : stripEmotionTags(text);
     const segmentText = toSpeakableText(performable);
@@ -2318,7 +3183,7 @@ class GatewayConnection {
       this.send({
         type: WS_EVENTS.TTS_START,
         requestId: run.requestId,
-        voice: this.session.settings.ttsVoice ?? this.config.ttsVoice,
+        voice: ttsVoice,
         format: deliveredFormat,
         mimeType: mimeTypeForAudioFormat(deliveredFormat)
       });
@@ -2330,10 +3195,9 @@ class GatewayConnection {
     const tts = this.providers.tts;
     const input = {
       text: segmentText,
-      voice: this.session.settings.ttsVoice ?? this.config.ttsVoice,
+      voice: ttsVoice,
       format: requestFormat
     };
-    const ttsModelId = this.session.settings.ttsModel;
     const ttsHedge = this.config.hedge?.ttsAfterMs;
     const chunks =
       ttsHedge !== undefined
@@ -2408,6 +3272,12 @@ class GatewayConnection {
         ...requestLatencyFields(run.timing)
       });
     }
+    // Realtime (LiveKit): the room agent plays it; the browser gets only tts.start/tts.end.
+    if (this.mediaSink) {
+      run.ttsSequence += 1;
+      this.mediaSink.speech({ requestId: run.requestId, audio: chunk.audio, mimeType: chunk.mimeType, segmentIndex, isFinal });
+      return;
+    }
     this.send({
       type: WS_EVENTS.TTS_CHUNK,
       requestId: run.requestId,
@@ -2439,6 +3309,7 @@ class GatewayConnection {
       return;
     }
     run.ttsEnded = true;
+    this.mediaSink?.speechEnd(run.requestId, reason);
     this.send({
       type: WS_EVENTS.TTS_END,
       requestId: run.requestId,
@@ -2454,6 +3325,7 @@ class GatewayConnection {
     if (this.session.current === run) {
       this.session.current = undefined;
     }
+    this.noteRequestCost(run.requestId);
     if (stage !== "interrupted") this.pushUsage();
     const pending = this.session.pendingSpeech;
     if (pending && pending.requestId !== run.requestId && !this.disposed) {
@@ -2548,13 +3420,237 @@ class GatewayConnection {
     this.session.pendingSpeech = undefined;
     this.approvals.dispose();
     this.secrets?.dispose();
+    this.integrations.dispose();
+    this.unsubscribeLicense?.();
+    this.unsubscribeIdentity?.();
+    this.unsubscribeAgents?.();
+    this.unsubscribeNotifications?.();
+    this.unbindUsage?.();
+    this.mediaSink = undefined;
+    for (const listener of [...this.closeListeners]) listener();
+    this.closeListeners.clear();
+    this.observers.clear();
+  }
+
+  /** license.state: edition + enabled features for the web app's hasFeature(). */
+  private sendLicenseState(state: LicenseStateView): void {
+    this.send({
+      type: LICENSE_EVENTS.STATE,
+      edition: state.edition,
+      status: state.status,
+      features: state.features,
+      ...(state.licensee !== undefined ? { licensee: state.licensee } : {}),
+      ...(state.seats !== undefined ? { seats: state.seats } : {}),
+      ...(state.expiresAt !== undefined ? { expiresAt: state.expiresAt } : {})
+    });
+  }
+
+  /* ───────────── identity & workspaces ───────────── */
+
+  /** authorize() in this connection's workspace. */
+  private can(permission: Permission): boolean {
+    return authorize(this.auth.principal, permission, { workspaceId: this.workspaceId });
+  }
+
+  /** Model choices need models.choose; voice, speech and visuals stay personal. */
+  private allowedSettings(patch: Partial<SessionSettings>): Partial<SessionSettings> {
+    if (this.can(PERMISSIONS.MODELS_CHOOSE)) return patch;
+    const allowed: Partial<SessionSettings> = { ...patch };
+    let dropped = false;
+    for (const key of MODEL_SETTING_KEYS) {
+      if (key in allowed && allowed[key] !== this.session.settings[key]) dropped = true;
+      delete allowed[key];
+    }
+    if (dropped) this.send({ type: "error", message: "Only members can change models in this workspace." });
+    return allowed;
+  }
+
+  /** Tools the brain may offer: write tools only with tools.write; an agent's access narrows them further. */
+  private availableTools(agent?: AgentTurn): ToolLoopInput["tools"] {
+    // Connector tools only when the caller has a usable connection; computer tools only for an agent
+    // with a computer; tools an organization policy blocks are left out.
+    const scope = { principal: this.auth.principal, workspaceId: this.workspaceId, ...(agent ? { agent: agent.agent } : {}) };
+    const all = usableTools(this.config.runtime.tools.list({ enabledOnly: true }), { ...scope, governance: this.config.runtime.governance });
+    const tools = this.can(PERMISSIONS.TOOLS_WRITE) ? all : all.filter((tool) => tool.effect !== "write");
+    return agent ? agent.tools(tools) : tools;
+  }
+
+  /* ───────────── agents ───────────── */
+
+  private agentsContext(): AgentsWsContext {
+    return {
+      agents: this.config.runtime.agents!,
+      principal: this.auth.principal,
+      workspaceId: this.workspaceId,
+      send: (message) => this.send(message),
+      selectedAgentId: () => this.selectedAgentId,
+      select: (agentId) => {
+        this.selectedAgentId = agentId;
+      }
+    };
+  }
+
+  /**
+   * Decide which agent answers this request: an explicit agentId, an
+   * "@Name" at the start of the text, or the connection's selected agent.
+   * Returns the text to send on (mention removed), or false when the
+   * requested agent can't be used (an error has been sent).
+   */
+  private async pickAgent(requestId: string, text: string, agentId: string | undefined): Promise<string | false> {
+    this.agentTurn = undefined;
+    const agents = this.config.runtime.agents;
+    if (!agents) return text;
+    const principal = this.auth.principal;
+    let agent = agentId ? await agents.get(principal, this.workspaceId, agentId) : undefined;
+    if (agentId && !agent) {
+      this.send({ type: "error", requestId, message: "That agent isn't available to you in this workspace." });
+      return false;
+    }
+    if (!agent && text) {
+      const mention = await agents.findByMention(principal, this.workspaceId, text);
+      if (mention) {
+        agent = mention.agent;
+        text = mention.text || text;
+      }
+    }
+    if (!agent && !agentId && this.selectedAgentId) {
+      agent = await agents.get(principal, this.workspaceId, this.selectedAgentId);
+      if (!agent) this.selectedAgentId = undefined;
+    }
+    if (!agent) return text;
+    const turn = await agents.prepareTurn({ agent, caller: principal, workspaceId: this.workspaceId });
+    this.agentTurn = { ...turn, requestId };
+    this.send({ type: AGENT_EVENTS.TURN, requestId, agentId: agent.id, name: agent.name, avatar: agent.avatar });
+    return text;
+  }
+
+  /** A short spoken sample of a voice for the agent editor (metered as tts). */
+  private async previewVoice(requestId: string, ttsModelId: string | undefined, voice: string | undefined, name: string | undefined): Promise<void> {
+    const tts = this.providers.tts;
+    const catalog = this.config.modelCatalog;
+    const modelId = ttsModelId ?? this.session.settings.ttsModel;
+    const model = catalog?.tts.find((m) => m.id === modelId);
+    if (!tts || (catalog && ttsModelId && !model) || (voice && model?.voices?.length && !model.voices.includes(voice))) {
+      this.send({ type: "error", requestId, message: "That voice isn't available on this gateway." });
+      return;
+    }
+    const format = model?.format ?? this.config.ttsFormat;
+    try {
+      const parts: Buffer[] = [];
+      let mimeType = mimeTypeForAudioFormat(format);
+      for await (const chunk of tts.synthesize(
+        { text: `Hi, I'm ${name?.slice(0, 40) || "your new agent"}. This is how I sound.`, voice: voice ?? this.session.settings.ttsVoice ?? this.config.ttsVoice, format },
+        { ...(modelId ? { model: modelId } : {}), meta: this.usageMeta("tts", requestId) }
+      )) {
+        mimeType = chunk.mimeType;
+        parts.push(Buffer.from(chunk.audio));
+      }
+      const audio = Buffer.concat(parts);
+      const wav = format === "pcm";
+      this.send({
+        type: AGENT_EVENTS.VOICE_SAMPLE,
+        requestId,
+        mimeType: wav ? "audio/wav" : mimeType,
+        audio: (wav ? pcm16MonoToWav(audio, model?.sampleRate ?? 24_000) : audio).toString("base64")
+      });
+    } catch (error) {
+      this.send({ type: "error", requestId, scope: "tts", message: `Voice preview failed: ${toError(error).message}` });
+    }
+  }
+
+  /** The agent's own budget; sends budget.blocked when it is used up. */
+  private agentBudgetAllows(agent: AgentTurn, feature: "voice" | "brain", model: string | undefined, requestId: string): boolean {
+    const decision = agent.budget(estimateTurnUsd(this.config.runtime.meter, feature, model, this.config.modelCatalog));
+    if (decision.allowed) return true;
+    this.config.logger.warn("budget.agent_blocked", { sessionId: this.session.sessionId, requestId, agentId: agent.agent.id, scope: decision.scope });
+    this.send({ type: WS_EVENTS.BUDGET_BLOCKED, requestId, scope: browserScope(decision.scope), message: decision.message });
+    return false;
+  }
+
+  /** Provider + cheap model for the learning loop's reflection call. */
+  private reflectWith(model: string | undefined): { reflectWith?: { provider: NonNullable<GatewayProviders["toolLlm"]>; model: string } } {
+    const provider = this.providers.toolLlm;
+    const cheap = economyModel("brain", this.config.modelCatalog) ?? model;
+    return provider && cheap ? { reflectWith: { provider, model: cheap } } : {};
+  }
+
+  /** The latest user message as text (for run logs and learning). */
+  private lastUserText(): string {
+    for (let i = this.session.history.length - 1; i >= 0; i -= 1) {
+      const entry = this.session.history[i]!;
+      if (entry.role !== "user") continue;
+      if (typeof entry.content === "string") return entry.content;
+      return entry.content.map((part) => (part.type === "text" ? part.text : "")).join(" ").trim();
+    }
+    return "";
+  }
+
+  private sendSessionIdentity(): void {
+    const { principal, user } = this.auth;
+    const role = effectiveWorkspaceRole(principal, this.workspaceId);
+    this.send({
+      type: IDENTITY_EVENTS.SESSION_IDENTITY,
+      workspaceId: this.workspaceId,
+      ...(role ? { role } : {}),
+      permissions: permissionsFor(principal, this.workspaceId),
+      user: user ? userView(user) : null,
+      principal: principal.kind
+    });
+    // Workspace or role changed: the visible connections may have too.
+    if (this.integrationsRequested) void this.integrations.push().catch(() => undefined);
+  }
+
+  private async switchWorkspace(workspaceId: string): Promise<void> {
+    const exists = workspaceId === DEFAULT_WORKSPACE_ID || Boolean(await this.config.runtime.store.workspaces.get(this.config.runtime.ownerId, workspaceId));
+    if (!exists || !canAccessWorkspace(this.auth.principal, workspaceId)) {
+      this.send({ type: "error", message: "You are not a member of that workspace." });
+      this.sendSessionIdentity();
+      return;
+    }
+    if (workspaceId === this.workspaceId) {
+      this.sendSessionIdentity();
+      return;
+    }
+    this.workspaceId = workspaceId;
+    this.sendSessionIdentity();
+    // A new workspace starts in a fresh chat with its own history list.
+    await this.openConversation();
+    this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items: await this.conversations.list() });
+  }
+
+  /** Memberships or sessions changed: re-check who this is; close when they lost access. */
+  private async refreshIdentity(): Promise<void> {
+    if (this.disposed) return;
+    const next = await this.config.identity.refresh(this.auth);
+    if (!next) {
+      this.send({ type: "error", message: "Your session ended. Sign in again." });
+      this.socket.close(4401, "Session ended");
+      this.dispose("session ended");
+      return;
+    }
+    this.auth = next;
+    if (!canAccessWorkspace(next.principal, this.workspaceId)) {
+      this.workspaceId = firstWorkspace(next);
+      this.sendSessionIdentity();
+      await this.openConversation();
+      this.send({ type: WS_EVENTS.CONVERSATIONS_LIST, items: await this.conversations.list() });
+      return;
+    }
+    this.sendSessionIdentity();
   }
 
   private send(message: ServerMessage): void {
-    if (this.socket.readyState === WebSocket.OPEN) {
+    for (const observer of this.observers) observer(message);
+    if (this.socket.readyState === TRANSPORT_OPEN) {
       this.socket.send(JSON.stringify(message));
     }
   }
+}
+
+/** The default workspace when the principal can open it, else their first workspace. */
+function firstWorkspace(auth: Authenticated): string {
+  if (canAccessWorkspace(auth.principal, DEFAULT_WORKSPACE_ID)) return DEFAULT_WORKSPACE_ID;
+  return Object.keys(auth.principal.workspaceRoles)[0] ?? DEFAULT_WORKSPACE_ID;
 }
 
 function filenameForMimeType(mimeType: string): string {

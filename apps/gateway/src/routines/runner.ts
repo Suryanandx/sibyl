@@ -2,6 +2,10 @@
  * Runs one routine: its instruction goes through the deep brain's tool loop
  * (non-interactive, no voice) with the enabled tools.
  *
+ * - Identity: each run acts as the routine's creator with their *current*
+ *   rights, in the routine's workspace (tools, connectors and knowledge see
+ *   that principal). A creator who lost access, or a deleted workspace,
+ *   fails the run with the reason instead of running with more rights.
  * - Budget: before every model round the run's cap (the routine's maxRunUsd,
  *   else SIBYL_BUDGET_ROUTINE_RUN_USD) and the owner's daily/monthly and
  *   per-routine daily caps are checked; a run that would exceed one stops as
@@ -13,6 +17,7 @@
  * - Every model and tool cost is recorded as feature "routine" with the
  *   routine id, and summed on the run.
  */
+import type { RoutineOutcome } from "./scheduler.js";
 import type { ToolChatProvider } from "@open-gpt-live/adapters";
 import type {
   ApprovalRecord,
@@ -26,11 +31,15 @@ import type {
   ToolRegistry,
   UsageMeter
 } from "@open-gpt-live/core";
-import type { ApprovalView, ModelCatalog, RoutineNotification } from "@open-gpt-live/protocol";
-import { approvalDetails, redactInput, summarizeApproval, type ApprovalOutcome } from "../brain/approvals.js";
+import { effectiveWorkspaceRole, usableTools, type Governance, type UsageAttribution } from "@open-gpt-live/core";
+import type { ApprovalView, ModelCatalog } from "@open-gpt-live/protocol";
+import { approvalDetails, approvalView, newApprovalRecord, type ApprovalOutcome } from "../brain/approvals.js";
 import { runToolLoop, toolSystemPrompt } from "../brain/tool-loop.js";
 import { estimateTurnUsd } from "../metering/budget.js";
 import { formatUsd } from "./records.js";
+import { resolveAgentModel, type AgentRuntime, type AgentTurn } from "../agents/runtime.js";
+import { createdByOwner, creatorId, principalMayUse } from "../agents/access.js";
+import { routinePrincipal, routineWorkspace } from "./access.js";
 
 export const ROUTINE_APPROVAL_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -82,7 +91,7 @@ export class RoutineApprovalGate {
       log: Log;
       ttlMs?: number;
       /** A new approval is waiting (inbox + notification). */
-      onRequested?(view: ApprovalView, routine: RoutineRecord): void;
+      onRequested?(view: ApprovalView, routine: RoutineRecord, record: ApprovalRecord): void;
       /** An approval was decided or expired. */
       onResolved?(id: string, status: "approved" | "declined" | "expired"): void;
     }
@@ -99,20 +108,21 @@ export class RoutineApprovalGate {
     if (request.signal.aborted) return "expired";
     const createdAt = this.options.now();
     const details = approvalDetails(request.input);
-    const record: ApprovalRecord = {
+    const record = newApprovalRecord({
       id: this.options.createId(),
       ownerId: this.options.ownerId,
       runId: request.runId,
       routineId: request.routine.id,
       ...(request.conversationId ? { conversationId: request.conversationId } : {}),
-      toolName: request.tool.name,
-      title: request.tool.title,
-      summary: summarizeApproval(request.tool, request.input, details),
-      input: redactInput(request.input),
-      status: "pending",
+      // Decided in the routine's workspace, on behalf of its creator.
+      workspaceId: routineWorkspace(request.routine),
+      ...(request.routine.createdBy ? { requestedBy: request.routine.createdBy } : {}),
+      tool: request.tool,
+      input: request.input,
+      details,
       createdAt,
-      expiresAt: createdAt + this.ttlMs
-    };
+      ttlMs: this.ttlMs
+    });
     await this.options.store.approvals.create(record);
     const outcome = new Promise<ApprovalOutcome>((resolve) => {
       this.waiters.set(record.id, { runId: request.runId, resolve });
@@ -122,7 +132,7 @@ export class RoutineApprovalGate {
     const onAbort = (): void => void this.expire(record.id, "aborted");
     request.signal.addEventListener("abort", onAbort, { once: true });
     this.options.log("routine.approval_requested", { id: record.id, routineId: request.routine.id, toolName: record.toolName });
-    this.options.onRequested?.(approvalView(record, details), request.routine);
+    this.options.onRequested?.(approvalView(record, details), request.routine, record);
     try {
       return await outcome;
     } finally {
@@ -176,20 +186,7 @@ export class RoutineApprovalGate {
   }
 }
 
-export function approvalView(record: ApprovalRecord, details = approvalDetails(record.input)): ApprovalView {
-  return {
-    id: record.id,
-    runId: record.runId,
-    ...(record.conversationId ? { conversationId: record.conversationId } : {}),
-    ...(record.routineId ? { routineId: record.routineId } : {}),
-    toolName: record.toolName,
-    title: record.title,
-    summary: record.summary,
-    details,
-    createdAt: record.createdAt,
-    ...(record.expiresAt === undefined ? {} : { expiresAt: record.expiresAt })
-  };
-}
+export { approvalView };
 
 /* ───────────── the runner ───────────── */
 
@@ -219,8 +216,12 @@ export interface RoutineRunnerOptions {
   createId(): string;
   now(): number;
   log: Log;
-  notify?(notification: RoutineNotification): void;
+  notify?(notification: RoutineOutcome): void;
   maxRounds?: number;
+  /** Routines with an agentId run as that agent (instructions, access, autonomy, budget). */
+  agents?: AgentRuntime;
+  /** Organization policy (blocked tools, models, second approvals) and audit. */
+  governance?: Governance;
 }
 
 const ROUTINE_PROMPT = [
@@ -234,23 +235,41 @@ const ROUTINE_PROMPT = [
 
 export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunner {
   return async (routine, handle, signal) => {
-    const model = options.model();
+    let model = options.model();
     if (!options.provider || !model) {
       return { status: "failed", error: "No deep-brain model is configured for routines." };
     }
+    // Act as the creator, with their current rights, in the routine's workspace — or not at all.
+    const workspaceId = routineWorkspace(routine);
+    const principal = await routinePrincipal(options.store, routine);
+    if (typeof principal === "string") return { status: "failed", error: `The routine can't run. ${principal}` };
+    // Run as an agent: its prompt, tools (never beyond its creator or the routine's), autonomy and budget.
+    let agentTurn: AgentTurn | undefined;
+    if (routine.agentId) {
+      const agent = options.agents ? await options.agents.get(principal, workspaceId, routine.agentId) : undefined;
+      if (!agent || !options.agents) return { status: "failed", error: "The agent this routine runs as no longer exists, or its creator can't use it." };
+      agentTurn = await options.agents.prepareTurn({ agent, caller: principal, workspaceId });
+      model = resolveAgentModel(agent, options.catalog?.()) ?? model;
+      agentTurn.bindRequest(handle.run.id);
+    }
     const conversationId = await ensureConversation(options, routine);
-    const tools = options.tools
-      .list({ enabledOnly: true })
-      .filter((tool) => !options.excludeTools?.has(tool.name));
+    // Only tools that can run here for the creator (connectors: their personal or a shared connection).
+    const baseTools = usableTools(options.tools.list({ enabledOnly: true }), { principal, workspaceId, ...(options.governance ? { governance: options.governance } : {}), ...(agentTurn ? { agent: agentTurn.agent } : {}) }).filter(
+      (tool) => !options.excludeTools?.has(tool.name) && principalMayUse(principal, tool, workspaceId)
+    );
+    const tools = agentTurn ? agentTurn.tools(baseTools) : baseTools;
     const now = new Date(options.now());
     const localNow = safeFormat(now, routine.timezone);
     const system =
-      `${options.systemPrompt}${ROUTINE_PROMPT}\nRoutine: ${routine.name}\nNow: ${localNow} (${routine.timezone})` +
+      `${options.systemPrompt}${agentTurn?.systemBlock ?? ""}${ROUTINE_PROMPT}\nRoutine: ${routine.name}\nNow: ${localNow} (${routine.timezone})` +
       (tools.length ? toolSystemPrompt(tools) : "");
 
     const envCap = options.meter.limits().perRoutineRunUsd;
     const runCap = routine.maxRunUsd ?? envCap;
-    const meter = routineMeter(options.meter, routine.id, handle);
+    // Spend counts toward the creator in the routine's workspace (per-user budgets and reports).
+    const role = effectiveWorkspaceRole(principal, workspaceId);
+    const who: UsageAttribution = { userId: creatorId(principal), workspaceId, ...(role ? { role } : {}) };
+    const meter = routineMeter(options.meter, routine.id, handle, who);
     const provider = budgetedProvider(options.provider, () => {
       const estimateUsd = estimateTurnUsd(options.meter, "routine", model, options.catalog?.());
       const spent = handle.run.costUsd;
@@ -264,10 +283,15 @@ export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunne
         ownerId: routine.ownerId,
         estimateUsd,
         routineId: routine.id,
+        ...who,
+        feature: "routine",
+        model,
         // The routine's own cap (checked above) replaces the env per-run cap.
         routineRunUsdSoFar: routine.maxRunUsd === undefined ? spent : 0
       });
       if (!decision.allowed) throw new BudgetBlockedError(decision.message, decision.scope);
+      const agentDecision = agentTurn?.budget(estimateUsd);
+      if (agentDecision && !agentDecision.allowed) throw new BudgetBlockedError(agentDecision.message, agentDecision.scope);
     });
 
     let text = "";
@@ -287,6 +311,9 @@ export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunne
         runId: handle.run.id,
         ownerId: routine.ownerId,
         conversationId,
+        principal,
+        workspaceId,
+        ...(options.governance ? { governance: options.governance } : {}),
         store: options.store,
         meter,
         log: (event, fields) => options.log(event, { routineId: routine.id, runId: handle.run.id, ...fields }),
@@ -294,14 +321,17 @@ export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunne
           text += delta;
         },
         onToolStarted: () => undefined,
-        onToolFinished: () => undefined,
+        onToolFinished: (call) => agentTurn?.noteStep(call),
         approve: async ({ tool, input }) => {
-          await handle.setStatus("awaiting_approval");
-          try {
-            return await options.approvals.request({ routine, runId: handle.run.id, conversationId, tool, input, signal });
-          } finally {
-            if (!signal.aborted) await handle.setStatus("running");
-          }
+          const ask = async (): Promise<ApprovalOutcome> => {
+            await handle.setStatus("awaiting_approval");
+            try {
+              return await options.approvals.request({ routine, runId: handle.run.id, conversationId, tool, input, signal });
+            } finally {
+              if (!signal.aborted) await handle.setStatus("running");
+            }
+          };
+          return agentTurn ? agentTurn.approve({ tool, input }, ask) : ask();
         },
         ...(options.maxRounds ? { maxRounds: options.maxRounds } : {})
       });
@@ -310,6 +340,7 @@ export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunne
       const reply = text.trim() || "The routine finished without a reply.";
       outcome = { status: "succeeded", summary: summarize(reply) };
       text = reply;
+      await agentTurn?.finish({ runId: handle.run.id, task: routine.instruction, reply, conversationId, reflectWith: { provider: options.provider, model } });
     } catch (error) {
       if (signal.aborted) return { status: "interrupted", error: "The run was stopped." };
       if (error instanceof BudgetBlockedError) {
@@ -369,6 +400,9 @@ export async function ensureConversation(
   const conversation: ConversationRecord = {
     id: options.createId(),
     ownerId: routine.ownerId,
+    // In the routine's workspace, visible to its creator.
+    workspaceId: routineWorkspace(routine),
+    ...(createdByOwner(routine.createdBy) ? {} : { createdBy: routine.createdBy }),
     title: `Routine: ${routine.name}`.slice(0, 60),
     createdAt: now,
     updatedAt: now,
@@ -383,15 +417,15 @@ export async function ensureConversation(
 }
 
 /** Records every cost of the run as feature "routine" with the routine id, and sums it. */
-function routineMeter(meter: UsageMeter, routineId: string, handle: RunHandle): UsageMeter {
+function routineMeter(meter: UsageMeter, routineId: string, handle: RunHandle, who: UsageAttribution): UsageMeter {
   return {
     record(event) {
       const cost = Number.isFinite(event.costUsd) && event.costUsd > 0 ? event.costUsd : 0;
       handle.addCost(cost);
-      meter.record({ ...event, feature: event.feature === "brain" ? "routine" : event.feature, routineId });
+      meter.record({ userId: who.userId, workspaceId: who.workspaceId, ...event, feature: event.feature === "brain" ? "routine" : event.feature, routineId });
     },
     totals: (ownerId, now) => meter.totals(ownerId, now),
-    check: (input) => meter.check({ ...input, routineId }),
+    check: (input) => meter.check({ ...who, ...input, routineId }),
     limits: () => meter.limits()
   };
 }

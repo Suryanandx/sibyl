@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { LLMMessage, LLMProvider, STTProvider, ToolChatProvider } from "@open-gpt-live/adapters";
-import { createMemoryStore, createToolRegistry, type ToolContext } from "@open-gpt-live/core";
+import { createMemoryStore, createToolRegistry, type Principal, type ToolContext } from "@open-gpt-live/core";
 import { WS_EVENTS, type ModelCatalog, type ServerMessage } from "@open-gpt-live/protocol";
 import { describe, expect, test } from "vitest";
 import { WebSocket } from "ws";
@@ -14,6 +14,7 @@ import {
   createMemoryTools,
   formatMemoryBlock,
   looksSecret,
+  memoryKeys,
   withUserMemory
 } from "./index.js";
 
@@ -114,6 +115,28 @@ describe("MemoryService", () => {
     expect(await withUserMemory("BASE", { store, ownerId: owner, env: { SIBYL_MEMORY: "off" } })).toBe("BASE");
     expect(await withUserMemory("BASE", { store, ownerId: owner, env: {} })).toMatch(/^BASE\n\n## What you know about the user/);
     expect(formatMemoryBlock([])).toBe("");
+  });
+
+  test("facts are personal and per workspace; the switch is per workspace", async () => {
+    const store = createMemoryStore();
+    const person = (userId: string): Principal => ({ kind: "user", orgId: owner, userId, workspaceRoles: { default: "member", team: "member" } });
+    const ada = new MemoryService({ store, ownerId: owner, env: {}, principal: person("ada") });
+    const bob = new MemoryService({ store, ownerId: owner, env: {}, principal: person("bob") });
+    const adaTeam = new MemoryService({ store, ownerId: owner, env: {}, principal: person("ada"), workspaceId: "team" });
+    const ownerDefault = new MemoryService({ store, ownerId: owner, env: {} });
+    await ada.add("Ada likes tea");
+    await ownerDefault.add("Owner likes coffee");
+    expect((await ada.list()).map((item) => item.text)).toEqual(["Ada likes tea"]);
+    expect(await bob.list()).toEqual([]);
+    expect(await adaTeam.list()).toEqual([]);
+    // The owner token / local mode keep the original key (memory from before workspaces).
+    expect(memoryKeys()).toEqual({ items: "memory.items", enabled: "memory.enabled" });
+    expect(memoryKeys({ principal: person("ada"), workspaceId: "team" })).toEqual({ items: "memory.items:team:user:ada", enabled: "memory.enabled:team" });
+    expect((await store.kv.get<Array<{ text: string }>>(owner, "memory.items"))?.map((item) => item.text)).toEqual(["Owner likes coffee"]);
+    await adaTeam.setEnabled(false);
+    expect(await adaTeam.enabled()).toBe(false);
+    expect(await ada.enabled()).toBe(true);
+    expect(await withUserMemory("BASE", { store, ownerId: owner, env: {}, principal: person("bob") })).toBe("BASE");
   });
 });
 

@@ -1,0 +1,28 @@
+/* A titled run of items in a screen's section nav (Settings → Admin). */
+
+.navGroup {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.navGroupTitle {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0 0 6px;
+  padding: 0 10px;
+}
+
+@media (max-width: 760px) {
+  .navGroup {
+    border-top: 0;
+    margin-top: 20px;
+    padding-top: 0;
+  }
+
+  .navGroupTitle {
+    padding: 0 4px;
+  }
+}

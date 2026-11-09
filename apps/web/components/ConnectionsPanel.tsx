@@ -19,18 +19,19 @@ import { Icon } from "./Icon";
 export type ConnectionsListener = (message: ConnectionsServerMessage) => void;
 
 interface ConnectionsPanelProps {
-  open: boolean;
   /** The socket is open. */
   connected: boolean;
   send: (message: ConnectionsClientMessage) => boolean;
   /** Receive connections.* messages; returns an unsubscribe. */
   subscribe: (listener: ConnectionsListener) => () => void;
-  onClose: () => void;
 }
 
-/** Connections: built-in tools, MCP servers, and adding new data sources and tools. */
+/**
+ * Custom connectors: built-in tools, MCP servers, and adding new data sources
+ * and tools. The body of Integrations → Custom connectors (MCP).
+ */
 export function ConnectionsPanel(props: ConnectionsPanelProps) {
-  const { open, connected, send, subscribe } = props;
+  const { connected, send, subscribe } = props;
   const [state, setState] = useState<ConnectionsState | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -42,7 +43,6 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   sendRef.current = send;
 
   useEffect(() => {
-    if (!open) return;
     return subscribe((message) => {
       if (message.type === CONNECTIONS_EVENTS.STATE) {
         setState(message);
@@ -66,22 +66,11 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
       testTargets.current.delete(message.requestId);
       setTests((current) => ({ ...current, [target]: message }));
     });
-  }, [open, subscribe]);
+  }, [subscribe]);
 
   useEffect(() => {
-    if (open && connected) sendRef.current({ type: CONNECTIONS_EVENTS.REQUEST });
-  }, [open, connected]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") props.onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, props.onClose]);
-
-  if (!open) return null;
+    if (connected) sendRef.current({ type: CONNECTIONS_EVENTS.REQUEST });
+  }, [connected]);
 
   const act = (key: string, label: string, build: (requestId: string) => ConnectionsClientMessage, onOk?: () => void) => {
     const requestId = createRequestId();
@@ -106,25 +95,7 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
   const disabled = !connected;
 
   return (
-    <div className="dialogBackdrop" onClick={props.onClose}>
-      <section
-        className="dialog connDialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="connections-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="iconBtn dialogClose" onClick={props.onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
-        <header className="dialogHeader">
-          <h2 id="connections-title">Connections</h2>
-          <p>
-            Tools Sibyl can use while it works, and the data sources you connect: databases, drives, GitHub, chat and
-            notes, through the Model Context Protocol (MCP).
-          </p>
-        </header>
-
+    <div className="connBody">
         {notice ? (
           <p className={`connNotice ${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>
             {notice.text}
@@ -258,7 +229,6 @@ export function ConnectionsPanel(props: ConnectionsPanelProps) {
             </section>
           </div>
         )}
-      </section>
     </div>
   );
 }

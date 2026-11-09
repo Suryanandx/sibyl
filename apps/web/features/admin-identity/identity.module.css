@@ -1,0 +1,217 @@
+/* Sign-in options, two-step verification, SSO, SCIM and session policies:
+   only what the shared primitives (components/ui) and the ident* sign-in
+   styles don't cover. Design tokens only. */
+
+/* "Continue with …" buttons above the password form */
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.providerButton {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  text-decoration: none;
+  width: 100%;
+}
+
+.divider {
+  align-items: center;
+  color: var(--text-3);
+  display: flex;
+  font-size: 12.5px;
+  gap: 10px;
+  margin: 18px 0;
+  width: 100%;
+}
+
+.divider::before,
+.divider::after {
+  border-top: 1px solid var(--border);
+  content: "";
+  flex: 1;
+}
+
+.enroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.linkButton {
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.linkButton:hover {
+  color: var(--text);
+}
+
+/* Keys and codes shown once */
+.secretBox {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  width: 100%;
+}
+
+.secretLabel {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.secretValue {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.secretActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.codes {
+  display: grid;
+  gap: 6px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.codes code {
+  font-family: var(--mono);
+  font-size: 13.5px;
+}
+
+/* Values to copy into the identity provider */
+.copyRow {
+  align-items: baseline;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto;
+  padding: 6px 0;
+}
+
+.copyLabel {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.copyValue {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+/* Provider / token / rule lists inside a card */
+.rows {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 0;
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.rowMain {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-weight: 500;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.rowEnd {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.formGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.rule {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) auto;
+}
+
+@media (max-width: 640px) {
+  .formGrid,
+  .rule {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .copyRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .copyLabel {
+    grid-column: 1 / -1;
+  }
+
+  .codes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

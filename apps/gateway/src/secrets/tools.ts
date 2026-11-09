@@ -3,12 +3,12 @@
  * - request_secret: ask the user for a key in a secure box (the box is the consent)
  * - list_secrets:   what is connected (names, services, hosts — never values)
  * - api_request:    call an HTTP API with `${secret:NAME}` resolved server-side,
- *                   only for hosts the secret allows (needs approval)
+ *                   only for hosts the secret allows (needs approval); sent
+ *                   with fetchPublic, every hop bound to those hosts
  */
 import type { ToolDefinition, ToolResult } from "@open-gpt-live/core";
-import { withTimeout, USER_AGENT, describeError, type FetchLike } from "../tools/builtin/http.js";
-import { guardedFetch } from "../tools/builtin/read-webpage.js";
-import { assertPublicUrl, BlockedUrlError, defaultResolveHost, type ResolveHost } from "../tools/builtin/ssrf.js";
+import { FetchPublicError, fetchPublic, isTextualType, type FetchLike, type ResolveHost } from "../net/safe-fetch.js";
+import { describeError } from "../tools/builtin/http.js";
 import { hostAllowed, normalizeHostList } from "./hosts.js";
 import { referencedSecrets, SECRET_NAME, SECRET_REF, SecretError, type SecretVault } from "./vault.js";
 import type { SecretsHub } from "./ws.js";
@@ -19,7 +19,6 @@ export const API_MAX_CHARS = 8_000;
 const API_TIMEOUT_MS = 20_000;
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
 const FORBIDDEN_HEADERS = /^(host|content-length|connection|transfer-encoding|upgrade|keep-alive|te|trailer|proxy-.*)$/i;
-const TEXTUAL = /^(text\/|application\/([\w.+-]*\+)?(json|xml|javascript|x-www-form-urlencoded|graphql|yaml|x-ndjson))/i;
 
 export interface SecretToolsOptions {
   vault: SecretVault;
@@ -166,8 +165,6 @@ interface ApiRequestInput {
 }
 
 function apiRequestTool(options: SecretToolsOptions): ToolDefinition<ApiRequestInput> {
-  const fetchImpl = options.fetch ?? guardedFetch;
-  const resolveHost = options.resolveHost ?? defaultResolveHost;
   return {
     name: "api_request",
     title: "Call an API",
@@ -259,64 +256,59 @@ function apiRequestTool(options: SecretToolsOptions): ToolDefinition<ApiRequestI
         if (error instanceof SecretError) return fail(error.message);
         return fail("could not prepare the request");
       }
-      headers["user-agent"] ??= USER_AGENT;
       headers.accept ??= "application/json, text/*;q=0.9, */*;q=0.5";
 
-      const signal = withTimeout(context.signal, API_TIMEOUT_MS);
       const redact = (text: string): Promise<string> => vault.redact(owner, text);
+      const shown = (target: URL): Promise<string> => redact(`${target.origin}${target.pathname}`);
+      // The host-binding rule: a request that carries secrets only goes (and is
+      // only redirected) over https to hosts every one of those secrets allows.
+      const secretsMayGo = async (target: URL): Promise<boolean> => {
+        if (used.size === 0) return true;
+        if (target.protocol !== "https:") return false;
+        const refusals = await Promise.all([...used].map((name) => secretRefuses(vault, owner, name, target.hostname.toLowerCase())));
+        return !refusals.some(Boolean);
+      };
       try {
-        let current = url;
-        for (let hop = 0; ; hop += 1) {
-          await assertPublicUrl(current, resolveHost);
-          const response = await fetchImpl(current, {
-            method,
-            headers,
-            ...(body === undefined ? {} : { body }),
-            redirect: "manual",
-            signal
-          });
-          if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
-            const location = response.headers.get("location")!;
-            await response.body?.cancel().catch(() => undefined);
-            let next: URL;
-            try {
-              next = new URL(location, current);
-            } catch {
-              return fail(`the API redirected to an invalid location`);
-            }
-            const shown = await redact(`${next.origin}${next.pathname}`);
-            if (method !== "GET" && method !== "HEAD") {
-              return { content: `HTTP ${response.status} redirect to ${shown} (not followed for ${method}).`, isError: response.status >= 400 };
-            }
-            if (hop >= API_MAX_REDIRECTS) return fail(`too many redirects (last: ${shown})`);
-            if (used.size > 0) {
-              const nextHost = next.hostname.toLowerCase();
-              const refusals = await Promise.all([...used].map((name) => secretRefuses(vault, owner, name, nextHost)));
-              if (next.protocol !== "https:" || refusals.some(Boolean)) {
-                return fail(`the API redirected to ${shown}; not followed because the request carries secrets (${[...used].join(", ")}) that are not allowed there`);
-              }
-            }
-            current = next;
-            continue;
-          }
-
-          const contentType = (response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
-          const { bytes, truncated } = await readCapped(response, API_MAX_BYTES);
-          let text: string;
-          if (method === "HEAD" || bytes.byteLength === 0) text = "(empty body)";
-          else if (!contentType || TEXTUAL.test(contentType)) text = new TextDecoder("utf-8").decode(bytes);
-          else text = `(binary body: ${bytes.byteLength} bytes of ${contentType})`;
-          const cut = text.length > API_MAX_CHARS;
-          const shownBody = await redact(cut ? `${text.slice(0, API_MAX_CHARS)}\n…[truncated ${text.length - API_MAX_CHARS} characters]` : text);
-          const statusLine = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}${contentType ? ` (${contentType})` : ""} from ${current.hostname}${truncated ? " — body capped at 1 MB" : ""}`;
-          return {
-            content: `${statusLine}\n\n${shownBody}`,
-            isError: response.status >= 400,
-            data: { status: response.status, contentType, host: current.hostname, secrets: [...used] }
-          };
+        const response = await fetchPublic(url, {
+          method,
+          headers,
+          ...(body === undefined ? {} : { body }),
+          signal: context.signal,
+          timeoutMs: API_TIMEOUT_MS,
+          maxRedirects: API_MAX_REDIRECTS,
+          maxBytes: API_MAX_BYTES,
+          allowHosts: secretsMayGo,
+          ...(options.fetch ? { fetch: options.fetch } : {}),
+          ...(options.resolveHost ? { resolveHost: options.resolveHost } : {})
+        });
+        if (response.location) {
+          await response.discard();
+          return { content: `HTTP ${response.status} redirect to ${await shown(response.location)} (not followed for ${method}).`, isError: response.status >= 400 };
         }
+        const contentType = response.mime;
+        const { bytes, truncated } = await response.bytes();
+        let text: string;
+        if (method === "HEAD" || bytes.byteLength === 0) text = "(empty body)";
+        else if (!contentType || isTextualType(contentType)) text = new TextDecoder("utf-8").decode(bytes);
+        else text = `(binary body: ${bytes.byteLength} bytes of ${contentType})`;
+        const cut = text.length > API_MAX_CHARS;
+        const shownBody = await redact(cut ? `${text.slice(0, API_MAX_CHARS)}\n…[truncated ${text.length - API_MAX_CHARS} characters]` : text);
+        const host = response.url.hostname;
+        const statusLine = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}${contentType ? ` (${contentType})` : ""} from ${host}${truncated ? " — body capped at 1 MB" : ""}`;
+        return {
+          content: `${statusLine}\n\n${shownBody}`,
+          isError: response.status >= 400,
+          data: { status: response.status, contentType, host, secrets: [...used] }
+        };
       } catch (error) {
-        if (error instanceof BlockedUrlError) return fail(`blocked: ${error.message}`);
+        if (error instanceof FetchPublicError) {
+          if (error.code === "host_not_allowed" && error.url) {
+            return fail(`the API redirected to ${await shown(error.url)}; not followed because the request carries secrets (${[...used].join(", ")}) that are not allowed there`);
+          }
+          if (error.code === "too_many_redirects") return fail(`too many redirects (last: ${error.url ? await shown(error.url) : "unknown"})`);
+          if (error.code === "bad_redirect") return fail("the API redirected to an invalid location");
+          return fail(`blocked: ${error.message}`);
+        }
         if (error instanceof SecretError) return fail(error.message);
         return fail(await redact(`request failed: ${describeError(error, context.signal)}`));
       }
@@ -345,33 +337,6 @@ function stringRecord(value: unknown, what: string, scalars = false): { value: R
   return { value: out };
 }
 
-async function readCapped(response: Response, maxBytes: number): Promise<{ bytes: Uint8Array; truncated: boolean }> {
-  if (!response.body) return { bytes: new Uint8Array(await response.arrayBuffer()).slice(0, maxBytes), truncated: false };
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  let truncated = false;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (total + value.byteLength > maxBytes) {
-      chunks.push(value.subarray(0, maxBytes - total));
-      total = maxBytes;
-      truncated = true;
-      await reader.cancel().catch(() => undefined);
-      break;
-    }
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return { bytes, truncated };
-}
 
 function text(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined;

@@ -38,7 +38,14 @@ export function ApprovalCard({ approval, status, submitting = false, onDecide }:
       aria-describedby={summaryId}
     >
       <div className="approvalHead">
-        <span className="approvalEyebrow">{pending ? "Needs your approval" : "Approval"}</span>
+        <span className="approvalEyebrow">
+          {pending ? "Needs your approval" : "Approval"}
+          {approval.risk === "high" ? (
+            <span className="approvalRisk" title="Sending, deleting, sharing or moving money can't easily be taken back.">
+              Hard to undo
+            </span>
+          ) : null}
+        </span>
         <h3 className="approvalTitle" id={titleId}>
           {approval.title}
         </h3>

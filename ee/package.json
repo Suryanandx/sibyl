@@ -1,0 +1,12 @@
+{
+  "name": "@open-gpt-live/ee",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Sibyl Enterprise modules (Sibyl Enterprise License, see LICENSE). Bundled into the gateway by apps/gateway/build.mjs.",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "dependencies": {
+    "@node-saml/node-saml": "5.1.0",
+    "openid-client": "6.8.8"
+  }
+}

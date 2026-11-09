@@ -1,4 +1,4 @@
-import { createMemoryStore, createToolRegistry, type ToolContext, type ToolDefinition } from "@open-gpt-live/core";
+import { createMemoryStore, createToolRegistry, ownerPrincipal, type Principal, type Role, type ToolContext, type ToolDefinition } from "@open-gpt-live/core";
 import { describe, expect, test } from "vitest";
 import { summarizeApproval } from "../brain/approvals.js";
 import { createNoopMeter } from "../runtime.js";
@@ -6,6 +6,11 @@ import { RoutineService } from "./service.js";
 
 const OWNER = "owner";
 const NOW = Date.parse("2026-11-09T12:00:00Z");
+const OWNER_CALLER = { principal: ownerPrincipal(OWNER, "local"), workspaceId: "default" };
+
+function member(userId: string, workspaceRoles: Record<string, Role>): Principal {
+  return { kind: "user", orgId: OWNER, userId, workspaceRoles };
+}
 
 async function setup(limits: { perRoutineRunUsd?: number } = {}) {
   const store = createMemoryStore();
@@ -15,7 +20,7 @@ async function setup(limits: { perRoutineRunUsd?: number } = {}) {
   const service = new RoutineService({ store, tools, meter, ownerId: OWNER, env: { TZ: "UTC" }, log: () => undefined, createId: () => `id-${++id}`, now: () => NOW });
   await service.init();
   await service.setTimezone("Europe/Berlin");
-  const context: ToolContext = { signal: new AbortController().signal, ownerId: OWNER, runId: "run", store, meter, log: () => undefined };
+  const context: ToolContext = { signal: new AbortController().signal, ownerId: OWNER, runId: "run", principal: OWNER_CALLER.principal, workspaceId: "default", store, meter, log: () => undefined };
   const tool = (name: string) => tools.get(name) as ToolDefinition<any, any> & { approvalSummary?(input: Record<string, unknown>): string };
   return { store, tools, service, context, tool };
 }
@@ -55,7 +60,7 @@ describe("routine chat tools", () => {
     expect(result.isError).toBeFalsy();
     expect(result.content).toMatch(/every weekday at 08:00/);
     const [routine] = await store.routines.list(OWNER);
-    expect(routine).toMatchObject({ name: "Morning news", timezone: "Europe/Berlin", cron: "0 8 * * 1-5", enabled: true, maxRunUsd: 0.25 });
+    expect(routine).toMatchObject({ name: "Morning news", timezone: "Europe/Berlin", cron: "0 8 * * 1-5", enabled: true, maxRunUsd: 0.25, workspaceId: "default", createdBy: "local" });
     // Tue 10 Nov 2026 08:00 Berlin = 07:00Z.
     expect(routine?.nextRunAt).toBe(Date.parse("2026-11-10T07:00:00Z"));
   });
@@ -78,7 +83,7 @@ describe("routine chat tools", () => {
     expect((await tool("list_routines").run({}, context)).content).toMatch(/Digest \(id .*every day at 18:00/);
 
     // Names in approval sentences come from the cache.
-    await service.list();
+    await service.list(OWNER_CALLER);
     expect(summarizeApproval(tool("pause_routine"), { routine: id })).toBe("Sibyl will pause the routine “Digest”; it won't run until resumed.");
     expect(summarizeApproval(tool("update_routine"), { routine: id, cron: "0 7 * * *" })).toContain("every day at 07:00 (Europe/Berlin)");
 
@@ -96,6 +101,41 @@ describe("routine chat tools", () => {
     expect((await tool("delete_routine").run({ routine: "nope" }, context)).isError).toBe(true);
     await tool("delete_routine").run({ routine: "Digest" }, context);
     expect(await store.routines.list(OWNER)).toHaveLength(0);
+  });
+
+  test("routines belong to their creator's workspace: others can't see them, and changing someone else's needs routines.manage", async () => {
+    const { tool, store, context, service } = await setup();
+    const alice = member("alice", { default: "member" });
+    const viewer = member("vic", { default: "viewer" });
+    const outsider = member("olga", { sales: "member" });
+    const as = (principal: Principal, workspaceId = "default"): ToolContext => ({ ...context, principal, workspaceId });
+
+    await tool("create_routine").run({ name: "Inbox digest", instruction: "Summarise my Gmail", cron: "0 8 * * *" }, as(alice));
+    const [routine] = await store.routines.list(OWNER);
+    expect(routine).toMatchObject({ workspaceId: "default", createdBy: "alice" });
+
+    // Another workspace sees nothing and can't touch it, by name or id.
+    expect((await tool("list_routines").run({}, as(outsider, "sales"))).content).toBe("The user has no routines yet.");
+    expect((await tool("pause_routine").run({ routine: routine!.id }, as(outsider, "sales"))).isError).toBe(true);
+    expect(await service.list({ principal: outsider, workspaceId: "sales" })).toEqual([]);
+    expect(await service.update({ principal: outsider, workspaceId: "sales" }, routine!.id, { enabled: false })).toBe("Routine not found.");
+    expect(await service.remove({ principal: outsider, workspaceId: "sales" }, routine!.id)).toBe("Routine not found.");
+    // A viewer in the workspace sees it but may not change someone else's routine (no routines.manage).
+    expect((await service.list({ principal: viewer, workspaceId: "default" })).map((r) => r.name)).toEqual(["Inbox digest"]);
+    expect(await service.update({ principal: viewer, workspaceId: "default" }, routine!.id, { enabled: false })).toMatch(/Only its creator/);
+    expect((await tool("delete_routine").run({ routine: "Inbox digest" }, as(viewer))).content).toMatch(/Only its creator/);
+    // A viewer can't create routines either.
+    expect((await tool("create_routine").run({ name: "x", instruction: "y", cron: "0 8 * * *" }, as(viewer))).content).toMatch(/permission/);
+    // The creator can.
+    expect(await service.update({ principal: alice, workspaceId: "default" }, routine!.id, { enabled: false })).toMatchObject({ enabled: false });
+    expect(await store.routines.list(OWNER)).toHaveLength(1);
+  });
+
+  test("routine tools refuse to run without a principal", async () => {
+    const { tool, context } = await setup();
+    const { principal: _none, ...anonymous } = context;
+    expect((await tool("create_routine").run({ name: "x", instruction: "y", cron: "0 8 * * *" }, anonymous)).isError).toBe(true);
+    expect((await tool("list_routines").run({}, anonymous)).isError).toBe(true);
   });
 
   test("the browser time zone persists across restarts", async () => {

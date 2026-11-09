@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { SilverMark } from "./Brand";
+import { gatewayUrlFor } from "../lib/gateway-http";
 
 /**
  * Single-owner sign-in, shown when the Gateway requires SIBYL_OWNER_TOKEN and
@@ -27,6 +28,26 @@ export function writeOwnerToken(token: string | null): void {
   }
 }
 
+const WORKSPACE_KEY = "sibyl.workspace";
+
+/** The workspace the browser last opened (sent as `x-sibyl-workspace` on API calls). */
+export function readWorkspaceId(): string | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(WORKSPACE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeWorkspaceId(id: string | null): void {
+  try {
+    if (id) window.localStorage.setItem(WORKSPACE_KEY, id);
+    else window.localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    // Storage blocked: the default workspace is used after a reload.
+  }
+}
+
 /** WebSocket URL with the owner token (if any) as `?token=`. */
 export function withOwnerToken(url: string, token: string | null): string {
   if (!token) return url;
@@ -36,11 +57,10 @@ export function withOwnerToken(url: string, token: string | null): string {
 }
 
 /** Ask /healthz whether the Gateway is up and requires the owner token. */
-export async function gatewayRequiresLogin(webSocketUrl: string): Promise<boolean> {
+export async function gatewayRequiresLogin(): Promise<boolean> {
   try {
-    const url = new URL(webSocketUrl);
-    url.protocol = url.protocol === "wss:" ? "https:" : "http:";
-    const response = await fetch(`${url.origin}/healthz`, { cache: "no-store" });
+    // No credentials: /healthz is public (and answers with a wildcard origin).
+    const response = await fetch(gatewayUrlFor("/healthz"), { cache: "no-store" });
     if (!response.ok) return false;
     const health = (await response.json()) as { ownerLogin?: unknown };
     return health.ownerLogin === true;

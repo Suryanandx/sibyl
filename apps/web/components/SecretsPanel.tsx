@@ -16,73 +16,32 @@ export interface SecretUpdate {
 }
 
 interface SecretsPanelProps {
-  open: boolean;
   /** null while loading. */
   secrets: SecretMetaView[] | null;
   error?: string | null;
   disabled?: boolean;
-  onClose(): void;
   onSave(update: SecretUpdate): void;
   onDelete(name: string): void;
 }
 
 type Mode = { kind: "list" } | { kind: "add" } | { kind: "edit"; name: string } | { kind: "replace"; name: string } | { kind: "delete"; name: string };
 
-/** Stored API keys: names, services, hosts and last use. Values are never shown. */
-export function SecretsPanel({ open, secrets, error, disabled = false, onClose, onSave, onDelete }: SecretsPanelProps) {
+/**
+ * Stored API keys: names, services, hosts and last use. Values are never shown.
+ * The body of Settings → Secrets.
+ */
+export function SecretsPanel({ secrets, error, disabled = false, onSave, onDelete }: SecretsPanelProps) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
-  const dialogRef = useRef<HTMLElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-
-  useEffect(() => {
-    if (!open) {
-      setMode({ kind: "list" });
-      return;
-    }
-    const previous = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-    const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === "Escape") closeRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      previous?.focus?.();
-    };
-  }, [open]);
 
   // Back to the list once a change lands (the gateway pushes secrets.state).
   useEffect(() => {
     if (!error) setMode({ kind: "list" });
   }, [secrets, error]);
 
-  if (!open) return null;
-
   const done = (): void => setMode({ kind: "list" });
 
   return (
-    <div className="dialogBackdrop" onClick={onClose}>
-      <section
-        ref={dialogRef}
-        className="dialog secretsDialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="secrets-title"
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="iconBtn dialogClose" onClick={onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
-        <header className="dialogHeader">
-          <h2 id="secrets-title">Secrets</h2>
-          <p>
-            API keys for the services Sibyl connects to. They are encrypted on your server, sent only to the hosts you allow,
-            and never shown to the assistant — or here.
-          </p>
-        </header>
-
+    <div className="secretsBody">
         {error ? (
           <p className="secretError secretsPanelError" role="alert">
             {error}
@@ -180,7 +139,6 @@ export function SecretsPanel({ open, secrets, error, disabled = false, onClose, 
             ))}
           </ul>
         )}
-      </section>
     </div>
   );
 }

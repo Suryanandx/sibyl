@@ -1,0 +1,50 @@
+[
+    {
+        "font_name": "Caveat",
+        "font_url": "/vendor/fonts/handwritten/caveat/Caveat[wght].ttf"
+    },
+    {
+        "font_name": "JetBrains Mono",
+        "font_url": "/vendor/fonts/monospace/jetbrainsmono/JetBrainsMono[wght].ttf"
+    },
+    {
+        "font_name": "DM Sans",
+        "font_url": "/vendor/fonts/sans_serif/dmsans/DMSans[opsz,wght].ttf"
+    },
+    {
+        "font_name": "Inter",
+        "font_url": "/vendor/fonts/sans_serif/inter/Inter[opsz,wght].ttf"
+    },
+    {
+        "font_name": "Lato",
+        "font_url": "/vendor/fonts/sans_serif/lato/Lato-Regular.ttf"
+    },
+    {
+        "font_name": "Montserrat",
+        "font_url": "/vendor/fonts/sans_serif/montserrat/Montserrat[wght].ttf"
+    },
+    {
+        "font_name": "Open Sans",
+        "font_url": "/vendor/fonts/sans_serif/opensans/OpenSans[wdth,wght].ttf"
+    },
+    {
+        "font_name": "Poppins",
+        "font_url": "/vendor/fonts/sans_serif/poppins/Poppins-Regular.ttf"
+    },
+    {
+        "font_name": "Roboto",
+        "font_url": "/vendor/fonts/sans_serif/roboto/Roboto[wdth,wght].ttf"
+    },
+    {
+        "font_name": "Lora",
+        "font_url": "/vendor/fonts/serif/lora/Lora[wght].ttf"
+    },
+    {
+        "font_name": "Playfair Display",
+        "font_url": "/vendor/fonts/serif/playfairdisplay/PlayfairDisplay[wght].ttf"
+    },
+    {
+        "font_name": "Source Serif 4",
+        "font_url": "/vendor/fonts/serif/sourceserif4/SourceSerif4[opsz,wght].ttf"
+    }
+]

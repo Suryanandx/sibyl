@@ -20,9 +20,23 @@ export interface NewRoutineInput {
   timezone: string;
   maxRunUsd?: number;
   enabled?: boolean;
+  /** Run as this agent. */
+  agentId?: string;
+  /** A one-time task (pauses after its first run). */
+  once?: boolean;
 }
 
-export function createRoutineRecord(input: NewRoutineInput, meta: { id: string; ownerId: string; now: number }): RoutineRecord {
+export interface NewRoutineMeta {
+  id: string;
+  ownerId: string;
+  now: number;
+  /** Workspace it runs in (default: `default`). */
+  workspaceId?: string;
+  /** Creator id (see creatorId()); runs act with their current rights (default: the org owner). */
+  createdBy?: string;
+}
+
+export function createRoutineRecord(input: NewRoutineInput, meta: NewRoutineMeta): RoutineRecord {
   const name = cleanText(input.name, "name", 120);
   const instruction = cleanText(input.instruction, "instruction", 4_000);
   const cron = cleanText(input.cron, "cron", 120);
@@ -37,11 +51,15 @@ export function createRoutineRecord(input: NewRoutineInput, meta: { id: string; 
     cron,
     timezone,
     enabled,
+    ...(meta.workspaceId ? { workspaceId: meta.workspaceId } : {}),
+    ...(meta.createdBy ? { createdBy: meta.createdBy } : {}),
     createdAt: meta.now,
     updatedAt: meta.now
   };
   const cap = checkCap(input.maxRunUsd);
   if (cap !== undefined) record.maxRunUsd = cap;
+  if (input.agentId) record.agentId = input.agentId;
+  if (input.once) record.once = true;
   if (enabled) {
     const next = nextRun(schedule, timezone, meta.now);
     if (next !== undefined) record.nextRunAt = next;
@@ -57,6 +75,8 @@ export function applyRoutinePatch(routine: RoutineRecord, patch: RoutinePatch, n
   if (patch.cron !== undefined) next.cron = cleanText(patch.cron, "cron", 120);
   if (patch.timezone !== undefined) next.timezone = cleanText(patch.timezone, "timezone", 64);
   if (patch.enabled !== undefined) next.enabled = patch.enabled;
+  if (patch.agentId === null) delete next.agentId;
+  else if (patch.agentId !== undefined) next.agentId = patch.agentId;
   if (patch.maxRunUsd === null) delete next.maxRunUsd;
   else if (patch.maxRunUsd !== undefined) next.maxRunUsd = checkCap(patch.maxRunUsd);
   const schedule = checkSchedule(next.cron, next.timezone, now);
@@ -151,6 +171,9 @@ export function toRoutineView(routine: RoutineRecord, lastRun: RoutineRunRecord 
     ...(routine.maxRunUsd === undefined ? {} : { maxRunUsd: routine.maxRunUsd }),
     ...(routine.nextRunAt === undefined ? {} : { nextRunAt: routine.nextRunAt }),
     ...(routine.lastRunAt === undefined ? {} : { lastRunAt: routine.lastRunAt }),
-    ...(lastRun ? { lastRun: toRunView(lastRun) } : {})
+    ...(lastRun ? { lastRun: toRunView(lastRun) } : {}),
+    ...(routine.agentId ? { agentId: routine.agentId } : {}),
+    ...(routine.workspaceId ? { workspaceId: routine.workspaceId } : {}),
+    ...(routine.createdBy ? { createdBy: routine.createdBy } : {})
   };
 }

@@ -3,10 +3,11 @@
  * the brain's AbortSignal, JSON fetching, and friendly error results.
  */
 import type { ToolResult } from "@open-gpt-live/core";
+import { FetchPublicError } from "../../net/safe-fetch.js";
 
-export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export { USER_AGENT, type FetchLike } from "../../net/safe-fetch.js";
+import { USER_AGENT, type FetchLike } from "../../net/safe-fetch.js";
 
-export const USER_AGENT = "Sibyl/0.3 (open-source assistant)";
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** An AbortSignal that fires on the caller's signal or after `timeoutMs`. */
@@ -68,6 +69,7 @@ export function errorResult(what: string, error: unknown, signal?: AbortSignal):
 
 export function describeError(error: unknown, signal?: AbortSignal): string {
   if (signal?.aborted) return "the request was cancelled.";
+  if (error instanceof FetchPublicError) return `${error.message}.`;
   if (error instanceof HttpError) {
     const detail = errorDetail(error.body);
     return `the service answered HTTP ${error.status}${detail ? ` (${detail})` : ""}.`;

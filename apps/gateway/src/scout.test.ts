@@ -3,7 +3,7 @@ import { mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "vitest";
-import { rankCandidates, scoreAll, scoutModels, type OpenRouterModel } from "./scout.js";
+import { applyTypicalPricing, rankCandidates, scoreAll, scoutModels, typicalPriceRatio, type OpenRouterModel, type ScoutCandidate } from "./scout.js";
 
 const now = Date.parse("2026-11-09T00:00:00Z");
 const created = Math.floor(now / 1000) - 30 * 86_400;
@@ -81,4 +81,32 @@ test("scout builds presets, defaults and a cache without probing", async () => {
   const again = await scoutModels({ ...options, strategy: "cheapest" });
   assert.equal(fetches, 3); // text + speech + transcription listings, then cached
   assert.equal(again.defaults.llmModel, "weak/brain");
+});
+
+test("typicalPriceRatio is median over cheapest provider, capped and ignoring single providers", () => {
+  const ep = (prompt: number, completion = prompt * 4) => ({ pricing: { prompt: String(prompt), completion: String(completion) } });
+  assert.equal(typicalPriceRatio([ep(1e-7)]), undefined);
+  assert.equal(typicalPriceRatio([ep(1e-7), ep(2e-7), ep(4e-7)])!.toFixed(2), "2.00");
+  assert.equal(typicalPriceRatio([ep(1e-8), ep(1e-6), ep(1e-6)]), 10);
+  assert.equal(typicalPriceRatio([ep(0), ep(1e-7)]), undefined);
+});
+
+test("applyTypicalPricing reprices every chat and voice candidate, not only the first few", async () => {
+  const scores = { cheapest: 0, balanced: 0, fastest: 0, best: 0 };
+  const candidates: ScoutCandidate[] = [
+    ...Array.from({ length: 20 }, (_, i) => ({ role: "llm" as const, id: `v/llm-${i}`, label: `llm ${i}`, costPerTurn: 0.001, scores })),
+    { role: "voice", id: "v/voice", label: "voice", costPerTurn: 0.002, scores },
+    { role: "tts", id: "v/tts", label: "tts", costPerTurn: 0.003, scores }
+  ];
+  const requested: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    requested.push(url);
+    const endpoints = [1e-7, 3e-7, 3e-7].map((p) => ({ pricing: { prompt: String(p), completion: String(p) } }));
+    return new Response(JSON.stringify({ data: { endpoints } }), { status: 200 });
+  }) as unknown as typeof fetch;
+  const out = await applyTypicalPricing(candidates, { apiKey: "k", baseUrl: "https://or.test/api/v1", fetchImpl }, () => undefined);
+  assert.equal(requested.length, 21);
+  assert.equal(out.find((c) => c.id === "v/llm-19")!.costPerTurn.toFixed(4), "0.0030");
+  assert.equal(out.find((c) => c.id === "v/voice")!.costPerTurn.toFixed(4), "0.0060");
+  assert.equal(out.find((c) => c.id === "v/tts")!.costPerTurn, 0.003);
 });

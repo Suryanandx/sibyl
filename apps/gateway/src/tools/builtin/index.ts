@@ -7,7 +7,7 @@ import { calculateTool } from "./calculate.js";
 import { createCurrencyTool } from "./currency.js";
 import type { FetchLike } from "./http.js";
 import { createReadWebpageTool } from "./read-webpage.js";
-import type { ResolveHost } from "./ssrf.js";
+import type { ResolveHost } from "../../net/safe-fetch.js";
 import { createWeatherTool } from "./weather.js";
 import { createWebSearchTool } from "./web-search.js";
 import { createWikipediaTool } from "./wikipedia.js";
@@ -42,7 +42,7 @@ export function createBuiltinTools(options: BuiltinToolsOptions = {}): ToolDefin
 export { calculateTool, evaluateExpression, formatNumber } from "./calculate.js";
 export { createCurrencyTool } from "./currency.js";
 export { createReadWebpageTool, htmlToText } from "./read-webpage.js";
-export { assertPublicUrl, isBlockedAddress } from "./ssrf.js";
+export { assertPublicUrl, isBlockedAddress } from "../../net/safe-fetch.js";
 export { createWeatherTool } from "./weather.js";
 export { createWebSearchTool } from "./web-search.js";
 export { createWikipediaTool } from "./wikipedia.js";

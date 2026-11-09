@@ -2,7 +2,7 @@
  * `read_file`: lets the brain page through the extracted text of an upload
  * (the prompt only carries the beginning of long files).
  */
-import type { ToolDefinition } from "@open-gpt-live/core";
+import { DEFAULT_WORKSPACE_ID, type ToolDefinition } from "@open-gpt-live/core";
 import type { UploadService } from "./service.js";
 
 export const READ_FILE_DEFAULT_CHARS = 8_000;
@@ -31,7 +31,7 @@ export function createUploadTools(uploads: UploadService): ToolDefinition<any, a
     provider: "uploads",
     async run(input, context) {
       const id = typeof input?.id === "string" ? input.id.trim() : "";
-      const file = await uploads.get(id, context.ownerId);
+      const file = await uploads.get(id, { ownerId: context.ownerId, workspaceId: context.workspaceId ?? DEFAULT_WORKSPACE_ID });
       if (!file) return { content: `No attached file with id "${id}".`, isError: true };
       if (file.kind === "image") return { content: `${file.name} is an image; it has no text to read.`, isError: true };
       const text = await uploads.readText(file.id);

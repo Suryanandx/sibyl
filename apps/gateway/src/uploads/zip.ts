@@ -1,5 +1,6 @@
 /**
- * Minimal ZIP reader for DOCX/XLSX text extraction (pure JS on node:zlib).
+ * Minimal ZIP reader for Office/OpenDocument/EPUB text extraction and ZIP
+ * archives (pure JS on node:zlib).
  * Reads the central directory, inflates only the entries asked for, and caps
  * every inflated entry so a zip bomb can't exhaust memory. No ZIP64.
  */
@@ -7,6 +8,8 @@ import { inflateRawSync } from "node:zlib";
 
 export interface ZipEntry {
   name: string;
+  /** General-purpose flags (bit 0: encrypted). */
+  flags: number;
   method: number;
   compressedSize: number;
   size: number;
@@ -22,6 +25,7 @@ export function listZipEntries(data: Buffer): ZipEntry[] {
   const entries: ZipEntry[] = [];
   for (let index = 0; index < count; index += 1) {
     if (offset + 46 > data.length || data.readUInt32LE(offset) !== 0x02014b50) throw new ZipError("bad central directory");
+    const flags = data.readUInt16LE(offset + 8);
     const method = data.readUInt16LE(offset + 10);
     const compressedSize = data.readUInt32LE(offset + 20);
     const size = data.readUInt32LE(offset + 24);
@@ -30,13 +34,14 @@ export function listZipEntries(data: Buffer): ZipEntry[] {
     const commentLength = data.readUInt16LE(offset + 32);
     const localOffset = data.readUInt32LE(offset + 42);
     const name = data.subarray(offset + 46, offset + 46 + nameLength).toString("utf8");
-    entries.push({ name, method, compressedSize, size, localOffset });
+    entries.push({ name, flags, method, compressedSize, size, localOffset });
     offset += 46 + nameLength + extraLength + commentLength;
   }
   return entries;
 }
 
 export function readZipEntry(data: Buffer, entry: ZipEntry, maxBytes: number): Buffer {
+  if (entry.flags & 1) throw new ZipError(`${entry.name} is encrypted`);
   const at = entry.localOffset;
   if (at + 30 > data.length || data.readUInt32LE(at) !== 0x04034b50) throw new ZipError("bad local header");
   const start = at + 30 + data.readUInt16LE(at + 26) + data.readUInt16LE(at + 28);

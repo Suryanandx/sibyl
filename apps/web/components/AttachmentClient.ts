@@ -1,34 +1,15 @@
 /**
- * HTTP helpers for the gateway's /api/uploads and /api/memory endpoints.
- * The gateway's HTTP origin is derived from NEXT_PUBLIC_GATEWAY_WS_URL and the
- * owner token (if any) is sent as a Bearer header — never in the URL.
+ * Composer attachments: uploads to the gateway's /api/uploads (with
+ * progress) and cached object URLs for uploaded files. Requests go through
+ * the shared gateway client (lib/gateway-http.ts).
  */
-import type { AttachmentRef } from "@open-gpt-live/protocol";
-import { readOwnerToken } from "./SignIn";
+import { ACCEPTED_FILE_EXTENSIONS, type AttachmentRef } from "@open-gpt-live/protocol";
+import { GatewayError, gatewayObjectUrl, gatewayUpload } from "../lib/gateway-http";
 
-const gatewayWsUrl = process.env.NEXT_PUBLIC_GATEWAY_WS_URL ?? "ws://localhost:8787";
-
-export const ATTACHMENT_ACCEPT =
-  "image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,application/json," +
-  ".txt,.md,.markdown,.csv,.json,.pdf,.docx,.xlsx";
+/** File picker filter: the protocol's one list of supported formats (the gateway checks the bytes). */
+export const ATTACHMENT_ACCEPT = ["image/png", "image/jpeg", "image/webp", "image/gif", ...ACCEPTED_FILE_EXTENSIONS].join(",");
 
 export const MAX_ATTACHMENTS = 10;
-
-/** http(s) origin of the gateway. */
-export function gatewayHttpBase(webSocketUrl = gatewayWsUrl): string {
-  try {
-    const url = new URL(webSocketUrl);
-    url.protocol = url.protocol === "wss:" ? "https:" : "http:";
-    return url.origin;
-  } catch {
-    return "http://localhost:8787";
-  }
-}
-
-export function authHeaders(): Record<string, string> {
-  const token = typeof window === "undefined" ? null : readOwnerToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 /** Attachment in the composer: uploading, ready (has a gateway id) or failed. */
 export interface ComposerAttachment {
@@ -55,56 +36,39 @@ export interface UploadedFile {
   summary: string;
 }
 
-export class UploadFailed extends Error {}
-
-/** Upload one file with progress (XHR, since fetch has no upload progress). */
+/** Upload one file with progress. */
 export function uploadFile(
   file: File,
   options: { onProgress?: (fraction: number) => void; conversationId?: string | null } = {}
 ): { promise: Promise<UploadedFile>; abort: () => void } {
-  const xhr = new XMLHttpRequest();
-  const promise = new Promise<UploadedFile>((resolve, reject) => {
-    const query = options.conversationId ? `?conversationId=${encodeURIComponent(options.conversationId)}` : "";
-    xhr.open("POST", `${gatewayHttpBase()}/api/uploads${query}`);
-    for (const [key, value] of Object.entries(authHeaders())) xhr.setRequestHeader(key, value);
-    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name || "pasted-image.png"));
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) options.onProgress?.(event.loaded / event.total);
-    };
-    xhr.onload = () => {
-      let body: { upload?: UploadedFile; message?: string; error?: string } = {};
-      try {
-        body = JSON.parse(xhr.responseText) as typeof body;
-      } catch {
-        // Not JSON (proxy error page).
-      }
-      if (xhr.status === 201 && body.upload) resolve(body.upload);
-      else if (xhr.status === 401) reject(new UploadFailed("Sign in again to upload files."));
-      else reject(new UploadFailed(body.message ?? body.error ?? `Upload failed (${xhr.status || "network"}).`));
-    };
-    xhr.onerror = () => reject(new UploadFailed("Upload failed: the gateway could not be reached."));
-    xhr.onabort = () => reject(new UploadFailed("Upload cancelled."));
-    xhr.send(file);
+  const query = options.conversationId ? `?conversationId=${encodeURIComponent(options.conversationId)}` : "";
+  const upload = gatewayUpload<{ upload?: UploadedFile }>(`/api/uploads${query}`, file, {
+    headers: { "x-filename": encodeURIComponent(file.name || "pasted-image.png") },
+    ...(options.onProgress ? { onProgress: options.onProgress } : {})
   });
-  return { promise, abort: () => xhr.abort() };
+  const promise = upload.promise.then(
+    (body) => {
+      if (!body?.upload) throw new GatewayError("Upload failed: unexpected answer from the gateway.", 0, "invalid_response");
+      return body.upload;
+    },
+    (error: unknown) => {
+      if (error instanceof GatewayError && error.status === 401) throw new GatewayError("Sign in again to upload files.", 401, error.code);
+      throw error;
+    }
+  );
+  return { promise, abort: upload.abort };
 }
 
 const blobUrls = new Map<string, Promise<string>>();
 
-/** Object URL for an uploaded file (fetched with the owner token; cached per page). */
+/** Object URL for an uploaded file (cached per page). */
 export function uploadBlobUrl(id: string): Promise<string> {
   const cached = blobUrls.get(id);
   if (cached) return cached;
-  const promise = fetch(`${gatewayHttpBase()}/api/uploads/${encodeURIComponent(id)}`, { headers: authHeaders() })
-    .then(async (response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return URL.createObjectURL(await response.blob());
-    })
-    .catch((error: unknown) => {
-      blobUrls.delete(id);
-      throw error;
-    });
+  const promise = gatewayObjectUrl(`/api/uploads/${encodeURIComponent(id)}`).catch((error: unknown) => {
+    blobUrls.delete(id);
+    throw error;
+  });
   blobUrls.set(id, promise);
   return promise;
 }
@@ -124,26 +88,4 @@ export function formatBytes(bytes: number | undefined): string {
 
 export function isImageMime(mime: string | undefined): boolean {
   return /^image\/(png|jpe?g|webp|gif)$/i.test(mime ?? "");
-}
-
-/** JSON call to the gateway (memory API). */
-export async function gatewayJson<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const response = await fetch(`${gatewayHttpBase()}${path}`, {
-    method: init.method ?? "GET",
-    headers: { ...authHeaders(), ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}) },
-    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-    cache: "no-store"
-  });
-  const text = await response.text();
-  let body: unknown = undefined;
-  try {
-    body = text ? JSON.parse(text) : undefined;
-  } catch {
-    // ignore
-  }
-  if (!response.ok) {
-    const message = (body as { message?: string; error?: string } | undefined)?.message ?? (body as { error?: string } | undefined)?.error;
-    throw new Error(message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
 }

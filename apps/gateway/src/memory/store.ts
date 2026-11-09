@@ -1,8 +1,11 @@
 /**
  * Memory across chats: small, explicit, user-controlled facts ("I prefer
- * metric units", "my company is Acme"). Stored per owner in `store.kv` as one
- * list, so no new storage contract is needed.
+ * metric units", "my company is Acme"). Stored in `store.kv` as one list per
+ * person per workspace (see memoryKeys), so no new storage contract is needed.
  *
+ * - Personal: a signed-in person's facts are theirs, within the workspace
+ *   they were saved in. The owner token and local mode share the owner's list.
+ * - The on/off switch is per workspace (workspace.settings to change).
  * - Only facts the user stated; never secrets (see `looksSecret`).
  * - Capped: MAX_MEMORIES items of MAX_MEMORY_CHARS each.
  * - Injected into system prompts as a compact block (MEMORY_PROMPT_CHARS),
@@ -10,8 +13,8 @@
  * - SIBYL_MEMORY=false turns the whole feature off; the user can also turn it
  *   off from the Memory tab (kv `memory.enabled`).
  */
-import { randomUUID } from "node:crypto";
-import type { Store } from "@open-gpt-live/core";
+import { DEFAULT_WORKSPACE_ID, type Principal, type Store } from "@open-gpt-live/core";
+import { newId } from "../http/ids.js";
 
 export const MEMORY_ITEMS_KEY = "memory.items";
 export const MEMORY_ENABLED_KEY = "memory.enabled";
@@ -115,7 +118,25 @@ export function cleanMemoryText(raw: unknown): string {
   return text;
 }
 
-export interface MemoryServiceOptions {
+/** Whose memory: the person (absent or not a signed-in user: the owner) in a workspace (absent: default). */
+export interface MemoryScope {
+  principal?: Principal;
+  workspaceId?: string;
+}
+
+/**
+ * The kv keys of one scope. The owner's facts in the default workspace keep
+ * the original keys, so memory saved before workspaces is still found.
+ */
+export function memoryKeys(scope: MemoryScope = {}): { items: string; enabled: string } {
+  const workspaceId = scope.workspaceId || DEFAULT_WORKSPACE_ID;
+  const person = scope.principal?.kind === "user" && scope.principal.userId ? `user:${scope.principal.userId}` : undefined;
+  const enabled = workspaceId === DEFAULT_WORKSPACE_ID ? MEMORY_ENABLED_KEY : `${MEMORY_ENABLED_KEY}:${workspaceId}`;
+  if (!person && workspaceId === DEFAULT_WORKSPACE_ID) return { items: MEMORY_ITEMS_KEY, enabled };
+  return { items: `${MEMORY_ITEMS_KEY}:${workspaceId}:${person ?? "owner"}`, enabled };
+}
+
+export interface MemoryServiceOptions extends MemoryScope {
   store: Store;
   ownerId: string;
   env?: NodeJS.ProcessEnv;
@@ -123,15 +144,17 @@ export interface MemoryServiceOptions {
   createId?: () => string;
 }
 
-/** Per-owner memory list in kv. Writes are serialised so concurrent adds don't clobber each other. */
+/** One person's memory list in kv. Writes are serialised so concurrent adds don't clobber each other. */
 export class MemoryService {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly now: () => number;
   private readonly createId: () => string;
+  private readonly keys: { items: string; enabled: string };
 
   constructor(private readonly options: MemoryServiceOptions) {
     this.now = options.now ?? Date.now;
-    this.createId = options.createId ?? (() => `mem_${randomUUID().replace(/-/g, "").slice(0, 16)}`);
+    this.createId = options.createId ?? (() => newId("mem"));
+    this.keys = memoryKeys(options);
   }
 
   get available(): boolean {
@@ -144,17 +167,17 @@ export class MemoryService {
 
   async enabled(): Promise<boolean> {
     if (!this.available) return false;
-    const value = await this.options.store.kv.get<boolean>(this.options.ownerId, MEMORY_ENABLED_KEY);
+    const value = await this.options.store.kv.get<boolean>(this.options.ownerId, this.keys.enabled);
     return value !== false;
   }
 
   async setEnabled(enabled: boolean): Promise<void> {
-    await this.options.store.kv.set(this.options.ownerId, MEMORY_ENABLED_KEY, enabled);
+    await this.options.store.kv.set(this.options.ownerId, this.keys.enabled, enabled);
   }
 
   /** Pinned first, then most recently updated. */
   async list(): Promise<MemoryItem[]> {
-    const raw = await this.options.store.kv.get<unknown>(this.options.ownerId, MEMORY_ITEMS_KEY);
+    const raw = await this.options.store.kv.get<unknown>(this.options.ownerId, this.keys.items);
     const items = Array.isArray(raw) ? raw.filter(isMemoryItem) : [];
     return sortMemories(items);
   }
@@ -229,7 +252,7 @@ export class MemoryService {
     const run = this.queue.then(async () => {
       const items = await this.list();
       const result = change(items);
-      await this.options.store.kv.set(this.options.ownerId, MEMORY_ITEMS_KEY, items);
+      await this.options.store.kv.set(this.options.ownerId, this.keys.items, items);
       return result;
     });
     this.queue = run.catch(() => undefined);
@@ -268,7 +291,7 @@ function isMemoryItem(value: unknown): value is MemoryItem {
  */
 export async function withUserMemory(
   prompt: string,
-  input: { store: Store; ownerId: string; env?: NodeJS.ProcessEnv }
+  input: { store: Store; ownerId: string; env?: NodeJS.ProcessEnv } & MemoryScope
 ): Promise<string> {
   try {
     const block = await new MemoryService(input).promptBlock();

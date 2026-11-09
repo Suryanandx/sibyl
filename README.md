@@ -12,38 +12,41 @@
 </p>
 
 <p align="center">
+  <a href="apps/site/">Website</a> ·
   <a href="docs/getting-started.md">Get started</a> ·
+  <a href="docs/agents.md">Agents</a> ·
   <a href="docs/voice.md">Voice</a> ·
-  <a href="docs/tools.md">Tools &amp; MCP</a> ·
+  <a href="docs/integrations.md">Integrations</a> ·
   <a href="docs/models-and-costs.md">Models &amp; costs</a> ·
-  <a href="docs/configuration.md">Configuration</a> ·
   <a href="docs/deployment.md">Deployment</a> ·
-  <a href="#roadmap">Roadmap</a>
+  <a href="docs/enterprise.md">Enterprise</a>
 </p>
 
-Sibyl is an open-source assistant you host yourself. Talk to it or type to it, and it answers with interactive visuals, researches the web, works with your own tools and data through MCP, and asks before it changes anything. One OpenRouter key is all you need to start; there is no other service behind it.
+Sibyl is an open-source assistant your team hosts itself. Talk to it or type to it. It answers with interactive visuals, works in your Google, Microsoft and Slack accounts, searches your own files, makes slide decks, and runs agents you build: teammates with their own look, voice, skills and computer that learn as they go. Anything that changes something asks first. One OpenRouter key is all you need to start.
 
-![Sibyl answering with a visual built from real photos](docs/assets/sibyl-hero.png)
+![Sibyl answering with a table it researched, with follow-up questions](docs/assets/sibyl-hero.png)
 
 ## What Sibyl does
 
-**Talk or type, in one conversation.** Type and you get a normal chat reply: text and visuals, nothing read aloud. Turn on the mic and you get a live voice conversation: an audio-native *voice brain* hears your tone and pauses, answers out loud in a second or two, and hands harder work to a *deep brain*. Switch between typing and talking whenever you like; it is the same conversation.
+**Talk or type, in one conversation.** Type and you get a normal chat reply with text and visuals. Turn on the mic for a live voice conversation: a fast *voice brain* answers out loud in a second or two and hands careful work to a *deep brain*. Old chats pick up where they left off. With the optional [LiveKit layer](docs/realtime.md) you get WebRTC voice, group calls where people and agents talk together, and phone calls.
 
-**Answers you can see and use.** Replies can include charts, tables, step-by-step plans, option cards and forms, built with [OpenUI](https://github.com/thesysdev/openui). Buttons and forms send your choice straight back to Sibyl. Visuals are never read aloud.
+**Answers you can see and use.** Replies can include charts, tables, plans, option cards and forms, built with [OpenUI](https://github.com/thesysdev/openui). Buttons and forms send your choice back to Sibyl.
 
-![A comparison table with sources and follow-up suggestions](docs/assets/sibyl-visual.png)
+**Agents you build yourself.** Give an agent a name, a generated avatar, a voice and instructions. Choose what it can use (*everything I can use*, or a controlled list) and how it acts (*ask first*, *act then tell me*, *fully autonomous*, with high-risk actions always asking). Agents learn: after a task they propose a better skill, which you approve or let them save on their own, and you can roll it back. An agent can have its own sandboxed browser you can watch live, answer in Slack and Teams channels, run on a schedule, and keep an eye on your sources. See [agents](docs/agents.md), [agent computers](docs/agent-computers.md) and [Slack and Teams](docs/slack-and-teams.md).
 
-**Real work, with your approval.** The deep brain can call tools: search the web, read a webpage, check the weather, convert currencies, look up world time, calculate and search Wikipedia. Connect your own data sources and tools through any [MCP](https://modelcontextprotocol.io) server. Anything that sends, creates, deletes or spends pauses for an approval card in the chat first.
+**Your files and know-how.** Knowledge bases take almost any file: PDF (scanned ones too), Word, Excel, PowerPoint, OpenDocument, Markdown, CSV, HTML, e-mail, EPUB, code, images and ZIP archives, plus web pages and pasted notes. Sibyl searches them and cites what it used. Skills are instruction packs ("how we write release notes") the brain loads when they fit, and plugins bundle skills, tools and settings into one install. See [knowledge](docs/knowledge.md) and [skills and plugins](docs/skills-and-plugins.md).
 
-**A natural voice.** Emotion cues like `[laughs]` are performed by voices that support them. Talk over Sibyl and it stops. Pause mid-thought and it waits for the rest. Slow providers are hedged with a backup request, and audio plays without gaps.
+**Your apps, with approval.** Native connectors for Google Workspace (Gmail, Calendar, Drive, Docs, Sheets), Microsoft 365 (Outlook, Calendar, OneDrive, Excel, Teams) and Slack. HubSpot and Salesforce come with [Agent Serve](https://valnoraelric.com), the enterprise edition. Anything else connects through [MCP](https://modelcontextprotocol.io). Keys you add go into an encrypted secrets vault and are only ever sent to the hosts you allow. Every action that sends, creates, deletes or spends shows an approval card first. See [integrations](docs/integrations.md) and [secrets](docs/secrets.md).
 
-**Predictable costs.** A built-in *model scout* picks every model from the live OpenRouter catalog by price, Design Arena benchmarks and measured speed. Choose a preset — **Cheapest**, **Balanced**, **Fastest** or **Best quality** — and see the estimated cost per 100 turns before you commit. Every call is metered with the cost OpenRouter reports, and daily and monthly budgets stop spending before it happens.
+**Meetings with people and agents.** A Meet-style room with camera, screen share and captions. Agents join as participants who speak when named, or as silent note-takers. The live summary, transcript and action items become a meeting page you can comment on, search and save to knowledge. See [meetings](docs/meetings.md).
 
-![The Models & voice dialog](docs/assets/sibyl-models.png)
+**Slide decks.** Ask in chat or open Slides to make a deck from a prompt, your files or your connected data. Edit it yourself, and export PPTX or PDF. See [slides](docs/slides.md).
 
-**Yours to keep.** Conversations are stored on your server in SQLite and can be picked up again with full context. A single owner token keeps the gateway private. The web app has searchable history, a composer that queues follow-ups while Sibyl is answering, a quick model menu, light and dark themes, and a layout that works on phones.
+**Work that runs on its own.** Routines run on a schedule; monitors watch Gmail, Outlook, Calendar, files, CRM records, web pages or RSS and tell you, or start a task, when a plain-language condition is met. Everything lands in one Inbox, with approvals for anything that changes data. See [monitors](docs/monitors.md).
 
-![Picking up a saved conversation with full context](docs/assets/sibyl-chat.png)
+**Built for teams.** Workspaces, invitations, roles (owner, admin, member, viewer), two-step sign-in and per-workspace budgets are all free. The enterprise edition, [Agent Serve](https://valnoraelric.com) by valnoraelric.com, adds custom roles, policies, an audit log, SSO and SCIM, advanced usage controls and call recordings.
+
+![A chart with its sources, in dark mode](docs/assets/sibyl-visual.png)
 
 ## Quickstart
 
@@ -58,116 +61,140 @@ cp .env.example .env        # then set OPENROUTER_API_KEY
 corepack pnpm dev
 ```
 
-Open <http://localhost:3000>. Type a message, or tap the mic button and start talking (hold it instead for push-to-talk).
+Open <http://localhost:3000> and create the owner account. A short, skippable setup follows: model access, a style, your tools, a first agent, some knowledge and your team. Then type a message, or tap the mic and start talking.
 
-On the first start the model scout probes the catalog in the background, which takes about a minute. Sibyl is usable right away on the models in `models.config.example.json` and switches to the scout's picks when they are ready. The full walkthrough is in [docs/getting-started.md](docs/getting-started.md).
+On the first start the model scout checks the OpenRouter catalog in the background (about a minute). Sibyl works right away on the models in `models.config.example.json` and switches to the scout's picks when they are ready. The full walkthrough is in [docs/getting-started.md](docs/getting-started.md).
 
 ### With Docker
 
 ```bash
-cp .env.example .env        # set OPENROUTER_API_KEY and SIBYL_OWNER_TOKEN
+cp .env.example .env        # set OPENROUTER_API_KEY
 docker compose up --build
 ```
 
-This starts the web app on port 3000 and the gateway on port 8787. For a public deployment behind TLS, see [docs/deployment.md](docs/deployment.md).
+This starts the web app on port 3000, the gateway on port 8787 and the Slides engine (reached through the web app). Optional parts are Compose profiles:
+
+| Profile | Adds |
+|---|---|
+| `realtime` | LiveKit (WebRTC voice, group calls), egress (recordings) and ingress (live streams) |
+| `phone` | The SIP bridge for phone calls |
+| `computers` | The sandbox image for agent computers |
+
+For a public deployment behind TLS, see [docs/deployment.md](docs/deployment.md).
 
 ## How it works
 
-Sibyl has two processes: a Next.js **web app** for the microphone, playback and interface, and a Node **gateway** that owns every credential, runs the models and tools, and stores your conversations. They talk over one WebSocket with a small, validated JSON protocol.
+Sibyl has a Next.js **web app** and a Node **gateway**. The gateway owns every credential, runs the models and tools, enforces permissions and budgets, and stores everything in SQLite. Browser and gateway talk over one WebSocket with a small, validated protocol, plus a few HTTP routes for files.
 
 ```mermaid
 flowchart LR
-  subgraph Browser["Web app (browser)"]
-    Mic["Mic + voice activity detection"]
-    UI["Chat, visuals, approval cards"]
-    Player["Gapless audio player"]
+  subgraph Browser["Web app"]
+    UI["Chat, visuals, approvals"]
+    Voice["Mic, captions, playback"]
+    Places["Agents · Knowledge · Slides · Integrations · Inbox · Admin"]
   end
 
   subgraph Gateway["Gateway (your server)"]
-    Turns["Turn-taking: merge, barge-in, hedging"]
-    Voice["Voice brain"]
-    Deep["Deep brain + tool loop"]
-    Tools["Built-in tools + MCP servers"]
+    Auth["Accounts, roles, authorize()"]
+    Brains["Voice brain + deep brain"]
+    Agents["Agents: access, autonomy, learning"]
+    Tools["Tools: built-in, connectors, MCP, knowledge, computers"]
+    Jobs["Scheduler: routines + monitors"]
     Store[("SQLite")]
     Meter["Metering + budgets"]
-    Scout["Model scout"]
   end
 
   OR["OpenRouter: chat · transcription · speech"]
+  LK["LiveKit (optional)"]
+  Apps["Google · Microsoft · Slack · HubSpot · Salesforce · MCP"]
 
-  Mic -- "voice" --> Turns --> Voice
-  UI -- "typed message" --> Deep
-  Voice -- "@brain task" --> Deep
-  Deep <--> Tools
-  Voice & Deep --> OR
-  Scout -.-> OR
-  Deep & Voice --> Store
-  Deep & Voice --> Meter
-  Turns -- "text, visuals, audio" --> UI & Player
+  UI & Voice & Places --> Auth --> Brains
+  Brains <--> Agents
+  Brains & Agents <--> Tools --> Apps
+  Jobs --> Agents
+  Brains --> OR
+  Voice <-.-> LK <-.-> Brains
+  Brains & Tools --> Store
+  Brains & Tools --> Meter
 ```
 
-- **Typed messages** go to the deep brain, which can use tools and replies in text and visuals.
-- **Spoken turns** go to the voice brain. It hears your audio and answers out loud; when a request needs careful work, it says something like "let me pull that up" and hands the task to the deep brain, whose visual streams in followed by a short spoken summary.
-- A transcription model writes an accurate transcript of what you said in the background, and both brains share the whole conversation.
+- **Typed messages** go to the deep brain, which can use tools and answers in text and visuals.
+- **Spoken turns** go to the voice brain, which answers out loud and hands harder requests to the deep brain.
+- **Agents, routines, monitors and channel messages** all run through the same agent turn, with the same permissions, approvals and budgets.
 
-Typical timings, measured end to end in the browser on the Balanced preset: about **2.5–3.3 s** from the end of your speech to Sibyl's voice, and about **0.5 s** from talking over Sibyl to silence. See [docs/voice.md](docs/voice.md).
-
-More detail: [architecture](docs/architecture.md) · [voice and turn-taking](docs/voice.md) · [generative UI](docs/generative-ui.md) · [tools, MCP and approvals](docs/tools.md) · [WebSocket protocol](docs/protocol.md).
+More detail: [architecture](docs/architecture.md) · [voice](docs/voice.md) · [realtime](docs/realtime.md) · [generative UI](docs/generative-ui.md) · [tools and approvals](docs/tools.md) · [protocol](docs/protocol.md).
 
 ## Models and costs
 
-Every model call goes through OpenRouter: the voice brain, the deep brain, transcription, speech and web search. With `MODEL_SELECTION=auto` (the default with OpenRouter) the model scout chooses them; with `manual` Sibyl uses only the models you list in `models.config.json`.
+Every model call goes through OpenRouter. With `MODEL_SELECTION=auto` (the default) the model scout picks models from the live catalog by price, benchmarks and measured speed, priced at what a typical provider charges rather than the cheapest one. Pick a preset in the app; prices show for typing and for voice.
 
 An example run of the scout (2026-11-09):
 
-| Preset | Voice brain | Deep brain | Voice | Approx. per 100 turns |
-|---|---|---|---|---|
-| Cheapest | Gemini 2.5 Flash Lite | GLM 5.3 Flash | Kokoro | $0.07 |
-| Balanced | MiMo v2.6 Pro | GLM 5.3 Flash | Kokoro | $0.13 |
-| Fastest | Gemini 3.1 Flash Lite | GLM 5.3 | Kokoro | $0.19 |
-| Best quality | MiMo v2.6 Pro | GLM 5.3 Flash | Gemini 3.8 Flash TTS | $0.36 |
+| Preset | Voice brain | Deep brain | Voice | Per 100 typed messages | Per 100 voice turns |
+|---|---|---|---|---|---|
+| Cheapest | Qwen3.8 Omni Flash | GLM 5.3 Flash | Kokoro 82M | $0.27 | $0.13 |
+| Balanced | Qwen3.8 Omni Flash | GLM 5.3 Flash | Gemini 3.8 Flash Lite TTS | $0.27 | $0.25 |
+| Fastest | MiMo V2.6 Pro | Claude Sonnet 5.5 | Gemini 3.8 Flash Lite TTS | $4.90 | $1.86 |
+| Best quality | MiMo V2.6 Pro | Claude Sonnet 5.5 | MAI-Voice-2 | $4.90 | $2.09 |
 
-Picks change as prices, benchmarks and provider speed change. Set `SIBYL_BUDGET_DAILY_USD` and `SIBYL_BUDGET_MONTHLY_USD` to cap spending, and check the **Usage** tab for what you have spent. See [docs/models-and-costs.md](docs/models-and-costs.md).
+A voice turn is often cheaper than a typed message: the voice brain answers most turns, and the deep brain joins about one in three. Picks change as prices and speeds change. Every call is metered with the cost OpenRouter reports, and **Settings → Usage** shows what you spent and your average reply cost. Daily and monthly budgets for the organization and for each workspace stop spending before it happens. See [docs/models-and-costs.md](docs/models-and-costs.md).
 
 ## Configuration
 
-Sibyl reads one `.env` file at the project root. Only `OPENROUTER_API_KEY` is required. The settings you are most likely to change:
+Sibyl reads one `.env` file at the project root. Only `OPENROUTER_API_KEY` is required. Common settings:
 
 | Setting | What it does |
 |---|---|
-| `SIBYL_OWNER_TOKEN` | Require this token to use the gateway. Set it for anything beyond your own laptop. |
-| `SIBYL_DATA_DIR` | Where the SQLite database lives |
-| `SIBYL_BUDGET_DAILY_USD`, `SIBYL_BUDGET_MONTHLY_USD` | Spending caps |
-| `SIBYL_MCP_CONFIG` | Path to your `mcp.config.json` |
-| `MODEL_STRATEGY` | Default preset: `cheapest`, `balanced`, `fastest` or `best` |
+| `SIBYL_DATA_DIR` | Where the SQLite database, uploads and the secrets key live |
+| `SIBYL_PUBLIC_GATEWAY_URL` | The gateway's public HTTPS address (OAuth callbacks, Slack and Teams events) |
+| `SIBYL_BUDGET_DAILY_USD`, `SIBYL_BUDGET_MONTHLY_USD` | Organization spending caps |
+| `SIBYL_SMTP_URL`, `SIBYL_SMTP_FROM` | Invitations and notices by e-mail |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Turn on the realtime layer |
+| `SIBYL_LICENSE_KEY` | Enterprise licence key (Agent Serve) |
 | `ALLOWED_ORIGINS` | Browser origins allowed to connect to the gateway |
-| `NEXT_PUBLIC_GATEWAY_WS_URL` | Where the browser finds the gateway (build time) |
 
 Every variable, with its default, is in [docs/configuration.md](docs/configuration.md).
+
+## Editions
+
+Sibyl is the open-source product for everyone: download it from GitHub and run it yourself, free.
+
+- **Hosted Sibyl** (coming soon): we run it for you. Free, Pro and Team plans with a small subscription, because you bring your own model key (BYOK). No key? Buy AI credits from us instead.
+- **Enterprise**: [Agent Serve](https://valnoraelric.com) by valnoraelric.com. Talk to us.
+
+| | Sibyl (open source, MIT) | Enterprise (Agent Serve) |
+|---|---|---|
+| Chat, voice, visuals, agents, meetings, knowledge, skills, plugins, slides, routines, monitors | ✓ | ✓ |
+| Google Workspace, Microsoft 365, Slack, MCP | ✓ | ✓ |
+| WebRTC voice, group calls, phone calls (LiveKit) | ✓ | ✓ |
+| Workspaces, invitations, built-in roles, two-step sign-in, budgets | ✓ | ✓ |
+| HubSpot and Salesforce connectors | | ✓ |
+| Custom roles, per-connection grants, policies (blocked tools, model allowlist, second approver, retention) | | ✓ |
+| Audit log (hash-chained, export, SIEM webhook) | | ✓ |
+| SSO (OpenID Connect, SAML), SCIM, session policies | | ✓ |
+| Per-person and per-role budgets, rate limits, alerts, chargeback reports | | ✓ |
+| Call recordings | | ✓ |
+
+Enterprise code lives in [`ee/`](ee/) under the source-available Sibyl Enterprise License and switches on with a licence key from Agent Serve, checked offline. Deleting `ee/` leaves a complete open-source product. See [docs/enterprise.md](docs/enterprise.md) and [LICENSING.md](LICENSING.md).
 
 ## Privacy
 
 Sibyl has no hosted service of its own. Here is where your data goes:
 
-- **Your voice** goes from the browser to your gateway, which forwards it to OpenRouter for the voice brain and for transcription. OpenRouter routes it to the provider behind the model you are using.
-- **Text and conversation history** go to OpenRouter for the voice brain and deep brain. Reply text goes to the speech model you selected.
-- **Tool calls** reach the services they are built on: web search through OpenRouter, weather from Open-Meteo, exchange rates from Frankfurter, and Wikipedia. Reading a webpage fetches that page from your server. MCP servers receive whatever the deep brain sends them.
-- **Instant captions** while you speak come from the browser's own speech recognition. In Chrome this is processed by the browser vendor's service. They are only a display hint; turn them off with `NEXT_PUBLIC_LIVE_CAPTIONS=false`.
-- **Conversations, approvals and usage records** are stored in SQLite on your server (`SIBYL_DATA_DIR`). Nothing is stored anywhere else.
-- **API keys** stay on the gateway. The browser never sees them.
-- **Gateway logs** are structured JSON and redact fields that look like credentials, audio, transcripts or message content.
+- **Voice and text** go from the browser to your gateway, which sends them to OpenRouter for the models you chose. OpenRouter routes them to the provider behind that model.
+- **Connected apps** (Google, Microsoft, Slack, HubSpot, Salesforce, MCP servers) receive what an action sends them, and only after an approval where the action changes something. Their tokens are encrypted in your secrets vault.
+- **Agent computers** browse the public web from a sandbox on your server; private and local addresses are blocked.
+- **Realtime calls** stay on your own LiveKit server unless you point `LIVEKIT_URL` at LiveKit Cloud.
+- **Live captions** while you speak may use the browser's own speech recognition (turn off with `NEXT_PUBLIC_LIVE_CAPTIONS=false`).
+- **Everything else** (conversations, files, knowledge, memory, approvals, usage) is stored on your server in `SIBYL_DATA_DIR`. API keys never reach the browser, and logs redact credentials, audio and message content.
 
-Check each provider's data policy on OpenRouter if this matters for your use. A self-hosted deployment is only as private as the providers you route to.
+A self-hosted deployment is only as private as the providers you route to; check each provider's data policy on OpenRouter.
 
 ## Roadmap
 
-Next:
-
-- **Slides.** Make presentations through a self-hosted Presenton service, inside slides-only Spaces with a library, preview, PPTX and PDF export, and revisions.
-- **Routines.** Scheduled jobs that run on their own, with an approval inbox for anything they want to change and per-routine budgets.
-- **Memory** that carries across conversations.
-- **File uploads** in chat.
-- **A Connections screen** to add and manage MCP servers from the web app.
+- Hosted Sibyl: sign-up is built (`SIBYL_MODE=hosted`, see [hosting](docs/hosting.md)); payments for plans and AI credits come next.
+- Agents answering Slack direct messages and Teams chats.
+- A desktop view for agent computers.
 
 Ideas and feedback are welcome in [GitHub issues](https://github.com/Suryanandx/sibyl/issues).
 
@@ -177,4 +204,4 @@ Bug reports, fixes, latency measurements and documentation improvements are all 
 
 ## License
 
-Sibyl is released under the [MIT License](LICENSE).
+The open-source edition is released under the [MIT License](LICENSE). Code in [`ee/`](ee/) is under the Sibyl Enterprise License; see [LICENSING.md](LICENSING.md).

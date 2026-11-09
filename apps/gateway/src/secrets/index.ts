@@ -4,15 +4,15 @@
  * and the Secrets panel's WebSocket handlers. See docs/secrets.md.
  *
  * Installed once by runtime.ts (`installSecrets`). Integration points:
- * - `resolveSecretRefs(value, { host })` for MCP configs (stdio: host undefined)
+ * - `resolveSecretRefs(value, { host, ownerId, vault })` for MCP configs (stdio: host undefined)
  * - `redactSecrets(ownerId, text)` — the tool loop runs every tool result through it
  * - `service.connect(...)` — one secrets session per WebSocket connection
  */
 import { randomUUID } from "node:crypto";
-import { DEFAULT_OWNER_ID, type Store, type ToolRegistry } from "@open-gpt-live/core";
+import type { AuditEvent, Store, ToolRegistry } from "@open-gpt-live/core";
 import type { FetchLike } from "../tools/builtin/http.js";
-import type { ResolveHost } from "../tools/builtin/ssrf.js";
-import { loadMasterKey, SecretKeyError } from "./crypto.js";
+import type { ResolveHost } from "../net/safe-fetch.js";
+import { loadOrgKey, SecretKeyError } from "./crypto.js";
 import { createSecretTools } from "./tools.js";
 import { referencedSecrets, SecretError, SecretVault } from "./vault.js";
 import { SecretsHub, type SecretsSession } from "./ws.js";
@@ -21,7 +21,8 @@ export { SecretVault, SecretError, referencedSecrets, SECRET_REF, SECRETS_KV_KEY
 export { SecretsHub, isSecretsClientMessage, type SecretsSession } from "./ws.js";
 export { redactSecrets } from "./redact.js";
 export { hostAllowed, normalizeHostList, LOCAL_HOST } from "./hosts.js";
-export { loadMasterKey } from "./crypto.js";
+export { loadMasterKey, loadOrgKey, orgSecretKey } from "./crypto.js";
+export { identitySecrets } from "./identity.js";
 
 export interface SecretsService {
   vault: SecretVault;
@@ -37,6 +38,8 @@ export interface InstallSecretsInput {
   ownerId: string;
   env: NodeJS.ProcessEnv;
   log: (event: string, fields?: Record<string, unknown>) => void;
+  /** The runtime's audit path (secret use and changes, by name only). */
+  audit?: (event: AuditEvent) => void;
   /** Use this key instead of SIBYL_SECRET_KEY / data/secret.key (tests). */
   key?: Buffer;
   createId?: () => string;
@@ -46,8 +49,6 @@ export interface InstallSecretsInput {
   resolveHost?: ResolveHost;
 }
 
-let active: SecretsService | undefined;
-
 /**
  * Install the vault, the prompt hub and the tools. Returns undefined (and
  * logs why) when the master key is misconfigured: the gateway still runs.
@@ -56,7 +57,7 @@ export async function installSecrets(input: InstallSecretsInput): Promise<Secret
   let key = input.key;
   if (!key) {
     try {
-      key = loadMasterKey(input.env, input.log).key;
+      key = loadOrgKey(input.env, input.ownerId, input.log);
     } catch (error) {
       input.log("secrets.unavailable", { error: error instanceof SecretKeyError ? error.message : "could not load the secrets key" });
       return undefined;
@@ -66,6 +67,7 @@ export async function installSecrets(input: InstallSecretsInput): Promise<Secret
     store: input.store,
     key,
     ...(input.now ? { now: input.now } : {}),
+    ...(input.audit ? { audit: input.audit } : {}),
     log: input.log
   });
   // Loaded up front so tool output is redacted from the first call.
@@ -95,10 +97,8 @@ export async function installSecrets(input: InstallSecretsInput): Promise<Secret
     close: () => {
       hub.close();
       vault.close();
-      if (active === service) active = undefined;
     }
   };
-  active = service;
   return service;
 }
 
@@ -112,14 +112,14 @@ type Resolvable = string | number | boolean | null | undefined | Resolvable[] | 
  */
 export async function resolveSecretRefs<T extends Resolvable>(
   value: T,
-  context: { host: string | undefined; ownerId?: string }
+  context: { host: string | undefined; ownerId: string; vault: SecretVault | undefined }
 ): Promise<T> {
-  const ownerId = context.ownerId ?? DEFAULT_OWNER_ID;
+  const { ownerId, vault } = context;
   const walk = async (item: Resolvable): Promise<Resolvable> => {
     if (typeof item === "string") {
       if (referencedSecrets(item).length === 0) return item;
-      if (!active) throw new SecretError("Secrets are not available on this gateway (check SIBYL_SECRET_KEY)");
-      return active.vault.resolveRefs(ownerId, item, { host: context.host });
+      if (!vault) throw new SecretError("Secrets are not available on this gateway (check SIBYL_SECRET_KEY)");
+      return vault.resolveRefs(ownerId, item, { host: context.host });
     }
     if (Array.isArray(item)) return Promise.all(item.map(walk));
     if (item && typeof item === "object") {

@@ -87,7 +87,7 @@ test("create_slides saves a versioned artifact, meters it, and revise_slides cha
   assert.equal(create.effect, "write");
   assert.equal(revise.effect, "write");
   assert.equal(tools.find((t) => t.name === "list_slides")!.effect, "read");
-  assert.equal(create.describeCall({ title: "Q3 market overview", n_slides: 8 }), "Create a 8-slide deck 'Q3 market overview' (≈$0.04)");
+  assert.equal(create.describeCall({ title: "Q3 market overview", n_slides: 8 }), "Create an 8-slide deck 'Q3 market overview' (≈$0.04)");
 
   const result = await create.run({ title: "Q3 market overview", content: "## Slide 1\n- Revenue $4.2B", n_slides: 8, space: "Board" }, context(store, meter));
   assert.ok(!result.isError, result.content);
@@ -149,6 +149,52 @@ test("installSlides registers tools only when the engine is configured or reacha
   const on = await installSlides({ tools: registry, store: createMemoryStore(), meter: createNoopMeter(), env: {}, log: () => {}, client: engine.client });
   assert.ok(on);
   assert.deepEqual(registry.list({ source: "slides" }).map((t) => t.name), ["create_slides", "revise_slides", "list_slides"]);
+});
+
+test("the engine is the source of truth for the deck model, its price and the actual cost", async () => {
+  const registry = createToolRegistry();
+  const usage: Array<Omit<UsageEvent, "id" | "at">> = [];
+  const store = createMemoryStore();
+  const engine = createFakeEngine();
+  // $0.25 / $0.75 per million tokens, reported by the engine.
+  engine.config = { model: "deepseek/deepseek-v4.1-flash", pricing: { prompt: 0.25e-6, completion: 0.75e-6 } };
+  const service = (await installSlides({
+    tools: registry,
+    store,
+    meter: meterWith(usage),
+    env: { SIBYL_SLIDES_MODEL: "something/else" },
+    log: () => {},
+    client: engine.client
+  }))!;
+  assert.equal(service.model, "deepseek/deepseek-v4.1-flash", "the engine's model wins over gateway settings");
+  // 5 slides: (10000 + 25000*5) prompt + (3000 + 4000*5) completion tokens.
+  const priced = 135_000 * 0.25e-6 + 23_000 * 0.75e-6;
+  assert.ok(Math.abs(service.estimateUsd(5) - priced) < 1e-12);
+  const create = registry.list({ source: "slides" }).find((t) => t.name === "create_slides")!;
+  const { summarizeApproval } = await import("../brain/approvals.js");
+  assert.equal(summarizeApproval(create, { title: "Q3", n_slides: 5, content: "x" }), "Create a 5-slide deck 'Q3' (≈$0.05)");
+
+  engine.costUsd = 0.0213;
+  const result = await create.run({ title: "Q3", content: "Facts", n_slides: 5 }, context(store, meterWith(usage)));
+  assert.ok(!result.isError, result.content);
+  assert.equal(usage.at(-1)!.costUsd, 0.0213);
+  assert.equal(usage.at(-1)!.estimated, false);
+  assert.equal(usage.at(-1)!.model, "deepseek/deepseek-v4.1-flash");
+  const saved = (await store.artifacts.list("owner", { kind: "slides" }))[0]!;
+  assert.equal(saved.meta.costUsd, 0.0213);
+  assert.equal(saved.meta.costEstimated, undefined);
+  // Later estimates follow what builds actually cost per slide.
+  assert.ok(Math.abs(service.estimateUsd(10) - 0.0426) < 1e-9);
+
+  // An engine without cost accounting: the estimate is recorded, marked as such.
+  const older = createFakeEngine();
+  const olderUsage: Array<Omit<UsageEvent, "id" | "at">> = [];
+  const fallback = new SlidesService({ client: older.client, store, meter: meterWith(olderUsage), model: "m", usdPerSlide: 0.004 });
+  await fallback.refreshEngineConfig();
+  assert.equal(fallback.model, "m");
+  await fallback.create({ ownerId: "owner", title: "T", content: "C", nSlides: 5 });
+  assert.equal(olderUsage[0]!.costUsd, 0.02);
+  assert.equal(olderUsage[0]!.estimated, true);
 });
 
 /* ───────────── approvals through the gateway ───────────── */
@@ -246,15 +292,31 @@ function parseSse(text: string): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line.slice(6)) as Record<string, unknown>);
 }
 
-test("HTTP API enforces the owner token and allowed origins", async () => {
-  const { service } = setup();
-  const runtime = createTestRuntime({ slides: service });
-  await withApi({ runtime, ownerToken: "secret", allowedOrigins: ["https://sibyl.test"] }, async (base) => {
+/** The real gateway (identity gate in front of /api/slides) with a slides service. */
+async function withGateway(
+  options: { ownerToken?: string; allowedOrigins?: string[] },
+  run: (base: string, env: ReturnType<typeof setup>) => Promise<void>
+): Promise<void> {
+  const env = setup();
+  const runtime = createTestRuntime({ slides: env.service, store: env.store });
+  const llm: LLMProvider = { async *streamText() { yield { delta: "x" }; } };
+  const stt: STTProvider = { transcribe: async () => ({ text: "" }) };
+  const gateway = await createGatewayServer({ providers: { llm, stt }, host: "127.0.0.1", runtime, env: {}, ...options });
+  try {
+    await run(`http://127.0.0.1:${gateway.port}`, env);
+  } finally {
+    await gateway.close();
+  }
+}
+
+test("HTTP API goes through the identity gate: owner token and allowed origins", async () => {
+  await withGateway({ ownerToken: "secret", allowedOrigins: ["https://sibyl.test"] }, async (base) => {
     assert.equal((await fetch(`${base}/api/slides/spaces`)).status, 401);
     assert.equal((await fetch(`${base}/api/slides/spaces`, { headers: { authorization: "Bearer nope" } })).status, 401);
     const ok = await fetch(`${base}/api/slides/spaces`, { headers: { authorization: "Bearer secret", origin: "https://sibyl.test" } });
     assert.equal(ok.status, 200);
     assert.equal(ok.headers.get("access-control-allow-origin"), "https://sibyl.test");
+    assert.equal(ok.headers.get("access-control-allow-credentials"), "true");
     assert.equal((await fetch(`${base}/api/slides/spaces?token=secret`)).status, 200);
     const evil = await fetch(`${base}/api/slides/spaces`, { headers: { authorization: "Bearer secret", origin: "https://evil.test" } });
     assert.equal(evil.status, 403);
@@ -265,11 +327,77 @@ test("HTTP API enforces the owner token and allowed origins", async () => {
   });
 });
 
+test("slides need a session, and a viewer can browse decks but can't generate or change spaces", async () => {
+  await withGateway({}, async (base) => {
+    const call = async (path: string, init: { method?: string; body?: unknown; cookie?: string } = {}) => {
+      const response = await fetch(`${base}${path}`, {
+        method: init.method ?? "GET",
+        headers: { "content-type": "application/json", ...(init.cookie ? { cookie: init.cookie } : {}) },
+        ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {})
+      });
+      const cookie = response.headers.get("set-cookie")?.split(";")[0];
+      return { status: response.status, body: (await response.json().catch(() => null)) as any, cookie };
+    };
+    const password = "correct horse battery staple";
+    const owner = await call("/api/auth/setup", { method: "POST", body: { email: "o@example.com", name: "Olive", password } });
+    assert.equal(owner.status, 201);
+    // Accounts exist now: no session, no slides.
+    assert.equal((await call("/api/slides/decks")).status, 401);
+    assert.equal((await call("/api/slides/generate", { method: "POST", body: { prompt: "x" } })).status, 401);
+
+    const invite = await call("/api/invites", { method: "POST", cookie: owner.cookie!, body: { workspaceId: "default", role: "viewer" } });
+    const token = String(invite.body.url).split("/invite/")[1]!;
+    const viewer = await call(`/api/invites/${token}/accept`, { method: "POST", body: { name: "Vic", email: "v@example.com", password } });
+    assert.equal(viewer.status, 200);
+    assert.equal((await call("/api/slides/decks", { cookie: viewer.cookie! })).status, 200);
+    const generate = await call("/api/slides/generate", { method: "POST", cookie: viewer.cookie!, body: { prompt: "A deck" } });
+    assert.equal(generate.status, 403);
+    assert.equal(generate.body.permission, "slides.manage");
+    assert.equal((await call("/api/slides/spaces", { method: "POST", cookie: viewer.cookie!, body: { name: "Mine" } })).status, 403);
+    // The owner can.
+    assert.equal((await call("/api/slides/spaces", { method: "POST", cookie: owner.cookie!, body: { name: "Board" } })).status, 201);
+  });
+});
+
+test("a deck made in workspace A is invisible from workspace B", async () => {
+  await withGateway({ ownerToken: "s" }, async (base, { service, store, meter }) => {
+    const tools = createSlidesTools(service);
+    const made = await tools[0]!.run({ title: "Alpha plan", content: "Facts", space: "Alpha space" }, { ...context(store, meter), workspaceId: "alpha" });
+    const deckId = (made.data as { id: string }).id;
+    assert.equal((await store.artifacts.get("owner", deckId))?.workspaceId, "alpha");
+    const get = (path: string, workspace: string) => fetch(`${base}${path}`, { headers: { authorization: "Bearer s", "x-sibyl-workspace": workspace } });
+
+    const inAlpha = (await (await get("/api/slides/decks", "alpha")).json()) as { decks: unknown[] };
+    assert.equal(inAlpha.decks.length, 1);
+    const inBeta = (await (await get("/api/slides/decks", "beta")).json()) as { decks: unknown[] };
+    assert.equal(inBeta.decks.length, 0);
+    const spacesBeta = (await (await get("/api/slides/spaces", "beta")).json()) as { spaces: unknown[]; unfiled: number };
+    assert.deepEqual([spacesBeta.spaces.length, spacesBeta.unfiled], [0, 0]);
+    assert.equal((await get(`/api/slides/decks/${deckId}/download?format=pptx`, "beta")).status, 404);
+    assert.equal((await get(`/api/slides/decks/${deckId}/thumbnail`, "beta")).status, 404);
+    assert.equal((await get(`/api/slides/decks/${deckId}/download?format=pptx`, "alpha")).status, 200);
+
+    // The brain tools apply the same rule.
+    const listed = await tools[2]!.run({}, { ...context(store, meter), workspaceId: "beta" });
+    assert.equal(listed.content, "No slide decks yet.");
+    const revised = await tools[1]!.run({ deck_id: deckId, instructions: "More" }, { ...context(store, meter), workspaceId: "beta" });
+    assert.equal(revised.isError, true);
+    // A space of A can't be renamed or removed from B.
+    const alphaSpace = (await store.spaces.list("owner"))[0]!;
+    const patch = await fetch(`${base}/api/slides/spaces/${alphaSpace.id}`, {
+      method: "PATCH",
+      headers: { authorization: "Bearer s", "x-sibyl-workspace": "beta", "content-type": "application/json" },
+      body: JSON.stringify({ name: "Hijacked" })
+    });
+    assert.equal(patch.status, 404);
+  });
+});
+
 test("HTTP API manages spaces, lists decks with versions and proxies downloads", async () => {
   const { service, meter, store } = setup();
   const runtime = createTestRuntime({ slides: service, store });
   const auth = { authorization: "Bearer s", "content-type": "application/json" };
-  await withApi({ runtime, ownerToken: "s" }, async (base) => {
+  await withApi({ runtime }, async (base) => {
     const created = await fetch(`${base}/api/slides/spaces`, { method: "POST", headers: auth, body: JSON.stringify({ name: "Sales", template: "modern", instructions: "For the board" }) });
     assert.equal(created.status, 201);
     const { space } = (await created.json()) as { space: { id: string; name: string; template: string } };
@@ -358,7 +486,7 @@ test("POST /api/slides/generate researches with the selected sources, then build
     const events = parseSse(await response.text());
     assert.deepEqual(
       events.map((e) => (e.type === "step" ? `step:${e.step}` : e.type === "tool" ? `tool:${e.name}:${e.status}` : e.type)),
-      ["step:researching", "tool:crm_query:running", "tool:crm_query:ok", "step:outlining", "step:generating", "done"]
+      ["job", "step:researching", "tool:crm_query:running", "tool:crm_query:ok", "step:outlining", "step:generating", "done"]
     );
     assert.deepEqual(offered[0], ["crm_query"], "only the selected read-only sources are offered");
     assert.deepEqual(searched, [["crm_query", { q: "revenue" }]]);
@@ -376,7 +504,7 @@ test("POST /api/slides/generate researches with the selected sources, then build
     const failed = parseSse(
       await (await fetch(`${base}/api/slides/generate`, { method: "POST", body: JSON.stringify({ prompt: "Plain deck" }) })).text()
     );
-    assert.deepEqual(failed.map((e) => e.type === "step" ? `step:${e.step}` : e.type), ["step:outlining", "step:generating", "error"]);
+    assert.deepEqual(failed.map((e) => e.type === "step" ? `step:${e.step}` : e.type), ["job", "step:outlining", "step:generating", "error"]);
     assert.match(String(failed.at(-1)!.message), /Sibyl Slides hit an error \(500\)/);
 
     assert.equal((await fetch(`${base}/api/slides/generate`, { method: "POST", body: "{}" })).status, 400);
@@ -406,4 +534,133 @@ test("the gateway mounts /api/slides and reports when slides are off", async () 
   } finally {
     await gateway.close();
   }
+});
+
+test("editor URLs never repeat the /slides base path", async () => {
+  const { editorUrl } = await import("./service.js");
+  assert.equal(editorUrl("/slides", "/presentation?id=a"), "/slides/presentation?id=a");
+  assert.equal(editorUrl("/slides", "/slides/presentation?id=a"), "/slides/presentation?id=a");
+  assert.equal(editorUrl("/slides", "presentation?id=a"), "/slides/presentation?id=a");
+});
+
+/* ───────────── v0.4 polish ───────────── */
+
+test("sources list only read-only data sources, grouped Web / Your connections", async () => {
+  const { service } = setup();
+  const runtime = createTestRuntime({ slides: service });
+  const tool = (name: string, source: string, effect: "read" | "write" = "read", provider?: string): ToolDefinition => ({
+    name,
+    title: name,
+    description: name,
+    inputSchema: { type: "object" },
+    effect,
+    source,
+    ...(provider ? { provider } : {}),
+    run: async () => ({ content: "" })
+  });
+  for (const name of ["wikipedia", "web_search", "read_webpage", "weather", "currency_convert", "world_time"]) runtime.tools.register(tool(name, "builtin"));
+  // Read-only, but never a data source.
+  for (const name of ["recall", "list_secrets", "list_routines", "read_file", "calculate"]) runtime.tools.register(tool(name, "builtin"));
+  runtime.tools.register(tool("remember", "builtin", "write"));
+  runtime.tools.register(tool("list_slides", "slides"));
+  runtime.tools.register(tool("mcp_notion_search", "mcp", "read", "notion"));
+  runtime.tools.register(tool("mcp_notion_create_page", "mcp", "write", "notion"));
+  runtime.tools.register(tool("mcp_memory_read_graph", "mcp", "read", "memory"));
+  runtime.tools.register(tool("mcp_vault_get_secret", "mcp", "read", "vault"));
+  runtime.tools.register(tool("kb_search", "knowledge"));
+  await withApi({ runtime }, async (base) => {
+    const body = (await (await fetch(`${base}/api/slides/sources`)).json()) as {
+      sources: Array<{ id: string; label: string; group: string; tools: string[] }>;
+      groups: Array<{ id: string; label: string }>;
+    };
+    assert.deepEqual(body.groups.map((g) => g.label), ["Web", "Your connections"]);
+    assert.deepEqual(
+      body.sources.map((s) => [s.group, s.id, s.label]),
+      [
+        ["web", "tool:web_search", "Web search"],
+        ["web", "tool:read_webpage", "Read a webpage"],
+        ["web", "tool:wikipedia", "Wikipedia"],
+        ["web", "tool:weather", "Weather"],
+        ["web", "tool:currency_convert", "Currency rates"],
+        ["web", "tool:world_time", "World time"],
+        ["connections", "tool:kb_search", "kb_search"],
+        ["connections", "mcp:notion", "notion"]
+      ]
+    );
+    assert.deepEqual(body.sources.find((s) => s.id === "mcp:notion")!.tools, ["mcp_notion_search"]);
+  });
+  // Selecting a forbidden tool by name does nothing.
+  const { selectTools } = await import("./http.js");
+  assert.deepEqual(selectTools(runtime.tools, ["tool:recall", "list_secrets", "mcp:memory", "tool:web_search"]).map((t) => t.name), ["web_search"]);
+});
+
+test("a deck build keeps running when the page goes away, is listed as a job, and Stop cancels", async () => {
+  const { service, store } = setup();
+  const runtime = createTestRuntime({ slides: service, store });
+  await withApi({ runtime }, async (base) => {
+    // Leave mid-stream: read the first event, then drop the connection.
+    const controller = new AbortController();
+    const response = await fetch(`${base}/api/slides/generate`, { method: "POST", body: JSON.stringify({ prompt: "Left the page" }), signal: controller.signal });
+    const reader = response.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    const jobId = (JSON.parse(first.split("data: ")[1]!.split("\n")[0]!) as { id: string }).id;
+    controller.abort();
+    let jobs: Array<{ id: string; status: string; artifact?: { title: string } }> = [];
+    for (let i = 0; i < 50; i += 1) {
+      jobs = ((await (await fetch(`${base}/api/slides/jobs`)).json()) as { jobs: typeof jobs }).jobs;
+      if (jobs.find((j) => j.id === jobId)?.status !== "running") break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const job = jobs.find((j) => j.id === jobId)!;
+    assert.equal(job.status, "done");
+    assert.equal(job.artifact?.title, "Deck", "no title given: the engine names the deck");
+    assert.equal((await store.artifacts.list("owner", { kind: "slides" })).length, 1);
+    assert.equal((await fetch(`${base}/api/slides/jobs/${jobId}`, { method: "DELETE" })).status, 404, "nothing to stop");
+  });
+  const started = service.jobs.start("job-x", "Stopped deck");
+  assert.equal(service.jobs.cancel("job-x"), true);
+  assert.equal(started.controller.signal.aborted, true);
+  assert.equal(service.jobs.list().find((j) => j.id === "job-x")?.status, "cancelled");
+});
+
+test("every deck gets a first-slide thumbnail from the engine, cached by the gateway", async () => {
+  const { service, store, meter, engine } = setup();
+  const runtime = createTestRuntime({ slides: service, store });
+  const created = await createSlidesTools(service)[0]!.run({ title: "Thumbs", content: "Facts" }, context(store, meter));
+  const view = created.data as { id: string; thumbnailUrl: string };
+  assert.equal(view.thumbnailUrl, `/api/slides/decks/${view.id}/thumbnail`);
+  assert.equal((await store.artifacts.get("owner", view.id))!.meta.thumbnail, "/api/v1/ppt/presentation/pres-1/thumbnail");
+  await withApi({ runtime }, async (base) => {
+    const first = await fetch(`${base}${view.thumbnailUrl}`);
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("content-type"), "image/png");
+    assert.equal(await first.text(), "PNG pres-1");
+    const before = engine.calls.filter((c) => c.url.endsWith("/thumbnail")).length;
+    assert.equal(await (await fetch(`${base}${view.thumbnailUrl}`)).text(), "PNG pres-1");
+    assert.equal(engine.calls.filter((c) => c.url.endsWith("/thumbnail")).length, before, "served from the gateway cache");
+    assert.equal((await fetch(`${base}/api/slides/decks/missing/thumbnail`)).status, 404);
+  });
+});
+
+test("approval cards and the brain prompt describe slides in plain words", async () => {
+  const { summarizeApproval } = await import("../brain/approvals.js");
+  const { toolSystemPrompt } = await import("../brain/tool-loop.js");
+  const { SLIDES_PROMPT_GUIDANCE } = await import("./tools.js");
+  const { store, meter, service } = setup();
+  const tools = createSlidesTools(service);
+  const [create, revise] = tools as [ToolDefinition<any>, ToolDefinition<any>];
+  assert.equal(summarizeApproval(create, { title: "Q3 market overview", n_slides: 8, content: "x" }), "Create an 8-slide deck 'Q3 market overview' (≈$0.04)");
+  assert.equal(summarizeApproval(create, { title: "Pricing", n_slides: 5, content: "x", space: "Board" }), "Create a 5-slide deck 'Pricing' in \"Board\" (≈$0.03)");
+  const v1 = await create.run({ title: "Q3 market overview", content: "Facts", n_slides: 6 }, context(store, meter));
+  const id = (v1.data as { id: string }).id;
+  assert.equal(
+    summarizeApproval(revise, { deck_id: id, instructions: "Add a churn slide" }),
+    "Make a new version of 'Q3 market overview' (3 slides, ≈$0.01): Add a churn slide"
+  );
+  assert.match(summarizeApproval(revise, { deck_id: "unknown", instructions: "Shorter" }), /^Make a new version of the deck \(8 slides, ≈\$0\.04\): Shorter$/);
+
+  const prompt = toolSystemPrompt(tools);
+  assert.ok(prompt.endsWith(SLIDES_PROMPT_GUIDANCE), "slides guidance is appended once");
+  assert.equal(prompt.split("## Slide decks").length, 2);
+  assert.ok(!toolSystemPrompt([tools[2]!]).includes("## Slide decks"), "list_slides alone does not add it");
 });

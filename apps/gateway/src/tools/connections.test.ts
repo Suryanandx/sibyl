@@ -386,7 +386,7 @@ describe("catalog", () => {
               catalogId: entry.id
             };
       const parsed = parseConnectionServerInput(input);
-      assert.notEqual(typeof parsed, "string", `${entry.id}: ${String(parsed)}`);
+      assert.equal(parsed.success, true, `${entry.id}: ${parsed.success ? "" : parsed.error}`);
     }
   });
 });

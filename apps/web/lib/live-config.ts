@@ -1,3 +1,7 @@
+import { DEFAULT_VAD_CONFIG, type VadConfig } from "@open-gpt-live/core/vad";
+
+export { DEFAULT_VAD_CONFIG, type VadConfig };
+
 export interface PublicVadEnvironment {
   adaptiveEnabled?: string;
   calibrationMs?: string;
@@ -18,48 +22,6 @@ export interface PublicVadEnvironment {
   playbackThresholdMultiplier?: string;
   playbackSuppressAfterEndMs?: string;
 }
-
-export interface VadConfig {
-  adaptiveEnabled: boolean;
-  calibrationMs: number;
-  noiseFloorSmoothing: number;
-  speechNoiseMultiplier: number;
-  silenceNoiseMultiplier: number;
-  dynamicSpeechMin: number;
-  dynamicSpeechMax: number;
-  dynamicSilenceMin: number;
-  dynamicSilenceMax: number;
-  speechThreshold: number;
-  silenceThreshold: number;
-  startDebounceMs: number;
-  minimumSpeechMs: number;
-  hangoverMs: number;
-  maxTurnMs: number;
-  preRollMs: number;
-  playbackThresholdMultiplier: number;
-  playbackSuppressAfterEndMs: number;
-}
-
-export const DEFAULT_VAD_CONFIG: VadConfig = {
-  adaptiveEnabled: true,
-  calibrationMs: 1_000,
-  noiseFloorSmoothing: 0.08,
-  speechNoiseMultiplier: 3,
-  silenceNoiseMultiplier: 1.8,
-  dynamicSpeechMin: 0.012,
-  dynamicSpeechMax: 0.12,
-  dynamicSilenceMin: 0.006,
-  dynamicSilenceMax: 0.08,
-  speechThreshold: 0.02,
-  silenceThreshold: 0.012,
-  startDebounceMs: 160,
-  minimumSpeechMs: 200,
-  hangoverMs: 400,
-  maxTurnMs: 30_000,
-  preRollMs: 400,
-  playbackThresholdMultiplier: 2.5,
-  playbackSuppressAfterEndMs: 300
-};
 
 /**
  * Resolve browser VAD settings from statically-inlined NEXT_PUBLIC_* values.

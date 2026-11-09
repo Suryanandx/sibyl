@@ -1,5 +1,8 @@
 "use client";
 
+import { presetPriceShort } from "../lib/pricing";
+import type { ReactNode } from "react";
+
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { ModelCatalog, ModelPreset, SessionSettings } from "@open-gpt-live/protocol";
 import { Icon } from "./Icon";
@@ -7,8 +10,11 @@ import { VoiceWave } from "./VoiceWave";
 import { VOICE_LABELS, type VoiceState } from "./voice-state";
 import { ATTACHMENT_ACCEPT, type ComposerAttachment } from "./AttachmentClient";
 import { AttachmentIcon, AttachmentTray } from "./AttachmentChips";
+import { MentionPicker, type MentionItem } from "../features/media/ChatMedia";
 
 interface ComposerProps {
+  /** Who answers: the agent picker (shown before the model menu). */
+  agentSlot?: ReactNode;
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
@@ -39,9 +45,23 @@ interface ComposerProps {
   /** Attach button, drag-and-drop and pasted images. */
   onAddFiles?: (files: File[]) => void;
   onRemoveAttachment?: (localId: string) => void;
+  /** Create mode (Chat | Image | Video | Audio) and its settings pill (features/media). */
+  mediaControls?: ReactNode;
+  /** A media mode is on: its settings pill replaces the chat model menu. */
+  hideModelMenu?: boolean;
+  /** Above the text box: picked references. */
+  topSlot?: ReactNode;
+  placeholder?: string;
+  /** The @ picker: agents, media and files to reference. */
+  mention?: {
+    items: (query: string) => MentionItem[];
+    onOpen: () => void;
+    onPick: (item: MentionItem) => { insert: string; agentPrefix?: string };
+  };
 }
 
 const HOLD_DELAY_MS = 320;
+const MENTION_AT_CARET = /(^|\s)@([\w-]{0,30})$/;
 
 /**
  * Two-row composer: message on top; model pill on the left; round voice and
@@ -56,6 +76,36 @@ export function Composer(props: ComposerProps) {
   const [dragging, setDragging] = useState(false);
   const canAttach = Boolean(props.onAddFiles);
   const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  // The @ picker: open while the word at the caret starts with "@".
+  const [mention, setMention] = useState<{ query: string; start: number; end: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionItems = mention && props.mention ? props.mention.items(mention.query) : [];
+  const readMention = (element: HTMLTextAreaElement) => {
+    if (!props.mention) return;
+    const caret = element.selectionStart ?? element.value.length;
+    const match = MENTION_AT_CARET.exec(element.value.slice(0, caret));
+    if (!match) {
+      setMention(null);
+      return;
+    }
+    if (!mention) props.mention.onOpen();
+    setMention({ query: match[2] ?? "", start: caret - (match[2]?.length ?? 0) - 1, end: caret });
+    setMentionIndex(0);
+  };
+  const pickMention = (item: MentionItem) => {
+    if (!mention || !props.mention) return;
+    const picked = props.mention.onPick(item);
+    const before = props.value.slice(0, mention.start);
+    const after = props.value.slice(mention.end);
+    const next = picked.agentPrefix ? `${picked.agentPrefix}${(before + after).replace(/^@\S+\s*/, "").trimStart()}` : `${before}${picked.insert}${after}`;
+    props.onChange(next);
+    setMention(null);
+    const caret = picked.agentPrefix ? next.length : before.length + picked.insert.length;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(caret, caret);
+    });
+  };
 
   useEffect(() => {
     const input = inputRef.current;
@@ -131,14 +181,25 @@ export function Composer(props: ComposerProps) {
           </div>
         ) : null}
 
+        {props.topSlot}
+        {mention && props.mention ? (
+          <MentionPicker items={mentionItems} active={mentionIndex} onHover={setMentionIndex} onPick={pickMention} />
+        ) : null}
         <textarea
           ref={inputRef}
           className="composerInput"
           rows={1}
           aria-label="Message Sibyl"
-          placeholder={props.liveMode ? "Or type a message…" : "Ask Sibyl anything…"}
+          aria-autocomplete={props.mention ? "list" : undefined}
+          aria-expanded={props.mention ? Boolean(mention) : undefined}
+          placeholder={props.placeholder ?? (props.liveMode ? "Or type a message…" : "Ask Sibyl anything… (@ to mention)")}
           value={props.value}
-          onChange={(event) => props.onChange(event.target.value)}
+          onChange={(event) => {
+            props.onChange(event.target.value);
+            readMention(event.target);
+          }}
+          onClick={(event) => readMention(event.currentTarget)}
+          onBlur={() => setMention(null)}
           onPaste={(event) => {
             if (!canAttach) return;
             const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
@@ -148,6 +209,24 @@ export function Composer(props: ComposerProps) {
             props.onAddFiles?.(files);
           }}
           onKeyDown={(event) => {
+            if (mention && mentionItems.length) {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                setMentionIndex((index) => (index + step + mentionItems.length) % mentionItems.length);
+                return;
+              }
+              if ((event.key === "Enter" || event.key === "Tab") && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                pickMention(mentionItems[Math.min(mentionIndex, mentionItems.length - 1)]!);
+                return;
+              }
+            }
+            if (mention && event.key === "Escape") {
+              event.preventDefault();
+              setMention(null);
+              return;
+            }
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               props.onSubmit();
@@ -184,17 +263,21 @@ export function Composer(props: ComposerProps) {
               </button>
             </>
           ) : null}
-          <ModelMenu
-            catalog={props.catalog}
-            settings={props.settings}
-            activePreset={activePreset}
-            label={activePreset?.label ?? voiceModel?.label ?? "Models"}
-            onChange={props.onChangeSettings}
-            onOpenSettings={props.onOpenSettings}
-            sessionUsd={props.sessionUsd}
-            economyMode={props.economyMode}
-            onOpenUsage={props.onOpenUsage}
-          />
+          {props.hideModelMenu ? null : props.agentSlot}
+          {props.mediaControls}
+          {props.hideModelMenu ? null : (
+            <ModelMenu
+              catalog={props.catalog}
+              settings={props.settings}
+              activePreset={activePreset}
+              label={activePreset?.label ?? voiceModel?.label ?? "Models"}
+              onChange={props.onChangeSettings}
+              onOpenSettings={props.onOpenSettings}
+              sessionUsd={props.sessionUsd}
+              economyMode={props.economyMode}
+              onOpenUsage={props.onOpenUsage}
+            />
+          )}
 
           <div className="composerActions">
             <button
@@ -355,8 +438,10 @@ function ModelMenu(props: {
                 >
                   <span className="monogram preset">{preset.label[0]}</span>
                   <span className="popoverLabel">{preset.label}</span>
-                  {preset.costPer100Turns !== undefined ? (
-                    <span className="badge subtle">${preset.costPer100Turns.toFixed(2)}/100</span>
+                  {presetPriceShort(preset) ? (
+                    <span className="badge subtle" title={presetPriceShort(preset)!.title}>
+                      {presetPriceShort(preset)!.text}/100
+                    </span>
                   ) : null}
                   {preset.id === props.activePreset?.id ? <Icon name="check" size={16} className="popoverCheck" /> : null}
                 </button>

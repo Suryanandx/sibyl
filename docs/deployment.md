@@ -58,6 +58,19 @@ Compose passes your `.env` to the gateway (or the file named by `OPEN_GPT_LIVE_E
 
 The compose file also contains an optional `local-ai` profile for Ollama and Speaches. It is not supported in this release: the gateway image ships an OpenRouter model catalog, and live conversation needs an audio-native voice model. To experiment with a self-hosted OpenAI-compatible provider, see [configuration.md](configuration.md#using-a-different-openai-compatible-provider).
 
+### Sibyl Slides
+
+Compose also builds `Dockerfile.slides` into a `slides` service: the deck engine (`:8000`) and the slide editor (`:3100`) in one container, with a pinned Chromium for PPTX, PDF and thumbnail rendering. The first build takes a while (Python packages, Chromium, the icon-search model).
+
+- **Nothing is published on the host.** The gateway calls `http://slides:8000` (`SIBYL_SLIDES_URL`) and the web app proxies `/slides/*` to `http://slides:3100` (`SIBYL_SLIDES_WEB_URL`, a build argument of the web image). Behind a reverse proxy, route everything to the web app; `/slides` needs no extra rule.
+- **The engine reads the same `.env`.** It needs `OPENROUTER_API_KEY`; set `SIBYL_OWNER_TOKEN` there too so the engine refuses calls without it.
+- **Decks live in the `slides-data` volume** (`/app_data`): database, exports, uploads and cached thumbnails. Back it up with the gateway's data volume; deck versions and spaces are in the gateway's database, the slides themselves in this one.
+- **Health:** the container is healthy when `GET /healthz` on port 8000 answers. The web app waits for it before starting.
+- **Exports take time.** A PDF or PPTX export renders every slide in Chromium (a few seconds for a small deck). If your reverse proxy has short timeouts, allow a few minutes on `/slides/` and on the gateway's `/api/slides/`.
+- **Resources:** give the container at least 2 GB of memory; Chromium exports and the local icon-search model are the heavy parts.
+
+To run without it, leave the `slides` service out (or set `SIBYL_SLIDES=false` on the gateway). See [slides.md](slides.md).
+
 ## Without Docker
 
 ```bash

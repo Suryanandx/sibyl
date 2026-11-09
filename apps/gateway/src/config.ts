@@ -259,7 +259,7 @@ function optionalEnum<const T extends readonly string[]>(
   throw new Error(`${name} must be one of: ${choices.join(", ")}`);
 }
 
-function parseAllowedOrigins(value: string | undefined): string[] {
+export function parseAllowedOrigins(value: string | undefined): string[] {
   const entries = (value ?? "")
     .split(",")
     .map((entry) => entry.trim())

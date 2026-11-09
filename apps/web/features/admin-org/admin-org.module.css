@@ -1,0 +1,70 @@
+/* Admin → Organization and Users: only what the settings rows
+   (components/settings/settings.module.css) and the UI primitives don't cover. */
+
+.filters {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 150px 150px;
+}
+
+.renameForm {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.renameForm > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.person {
+  align-items: flex-start;
+}
+
+.row {
+  flex-wrap: wrap;
+}
+
+.actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.managed {
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.link {
+  margin-top: 8px;
+}
+
+@media (max-width: 560px) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filters > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Name and details take the full line; actions wrap below them. */
+  .main {
+    flex-basis: calc(100% - 46px);
+  }
+
+  .row .actions {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    max-width: calc(100% - 46px);
+    min-width: 0;
+  }
+
+  .renameForm {
+    flex-wrap: wrap;
+  }
+}

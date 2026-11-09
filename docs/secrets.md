@@ -16,7 +16,7 @@ Sibyl: [secure box in the reply]  Connect Higgsfield — paste your key · only 
 | Secure prompt | `request_secret` tool → `secret.request` → `SecretPrompt.tsx` | The assistant asks; you type the key into a password box inside its reply. |
 | Use | `api_request` tool, `resolveSecretRefs()` for MCP configs | `${secret:NAME}` is filled in on the server, only for hosts the secret allows. |
 | Redaction | `redactSecrets()` in the tool loop | Every tool result is scrubbed of stored values before the model reads it. |
-| Management | Secrets button in the rail → `SecretsPanel.tsx` | List, add, replace a value, edit hosts, delete. Values are never displayed. |
+| Management | Settings → Secrets (`/settings/secrets`) → `SecretsPanel.tsx` | List, add, replace a value, edit hosts, delete. Values are never displayed. |
 
 ### Each secret
 

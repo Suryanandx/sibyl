@@ -1,0 +1,3 @@
+# Only the sandbox launcher goes into the agent-computer image.
+*
+!apps/gateway/src/computers/sandbox/server.cjs

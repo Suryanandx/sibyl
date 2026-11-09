@@ -4,19 +4,32 @@
  *   POST /api/uploads      multipart/form-data (first file part), or the raw
  *                          bytes with the name in `X-Filename` (URL-encoded)
  *                          or `?name=` → 201 { upload }
- *   GET  /api/uploads/:id  the file's bytes (owner only)
+ *   GET  /api/uploads/:id  the file's bytes (only from the workspace it was uploaded in)
  *
- * Auth is the owner token (Bearer header or ?token=, like the WebSocket);
- * CORS is limited to ALLOWED_ORIGINS; size is capped by SIBYL_UPLOAD_MAX_MB.
+ * Runs behind the gateway's identity gate (chat.use in the request's
+ * workspace) with the shared CORS rule; size is capped by SIBYL_UPLOAD_MAX_MB.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { BodyTooLargeError, guardRequest, readBody, requestPath, sendJson, type HttpGuardOptions } from "./http-util.js";
+import { AUDIT_ACTIONS } from "@open-gpt-live/core";
+import {
+  BodyTooLargeError,
+  auditRequest,
+  corsGuard,
+  headerValue,
+  isUnder,
+  queryParam,
+  readBody,
+  requestPath,
+  requestWorkspace,
+  runRoute,
+  sendJson,
+  type ApiOptions
+} from "../http/index.js";
 import { boundaryOf, parseMultipartFile } from "./multipart.js";
 import { UploadError, type UploadService } from "./service.js";
 
-export interface UploadsHttpOptions extends HttpGuardOptions {
+export interface UploadsHttpOptions extends ApiOptions {
   uploads: UploadService;
-  log?: (event: string, fields?: Record<string, unknown>) => void;
 }
 
 const METHODS = "GET, POST, OPTIONS";
@@ -26,18 +39,15 @@ const MULTIPART_OVERHEAD = 64 * 1024;
 /** Returns true when the request was for /api/uploads (and is being handled). */
 export function handleUploadsHttp(options: UploadsHttpOptions, request: IncomingMessage, response: ServerResponse): boolean {
   const path = requestPath(request);
-  if (path !== "/api/uploads" && !path.startsWith("/api/uploads/")) return false;
-  void serve(options, request, response, path).catch((error: unknown) => {
-    options.log?.("uploads.http_failed", { error: error instanceof Error ? error.message : String(error) });
-    sendJson(response, 500, { error: "internal_error" });
-  });
-  return true;
+  if (!isUnder(path, "/api/uploads")) return false;
+  return runRoute(response, options.log, "uploads.http_failed", serve(options, request, response, path));
 }
 
 async function serve(options: UploadsHttpOptions, request: IncomingMessage, response: ServerResponse, path: string): Promise<void> {
-  const cors = guardRequest(options, request, response, METHODS);
+  const cors = corsGuard(request, response, options.allowedOrigins, METHODS);
   if (!cors) return;
   const { uploads } = options;
+  const workspaceId = requestWorkspace(request);
   const reply = (status: number, body: unknown) => sendJson(response, status, body, cors);
 
   if (path === "/api/uploads" && request.method === "POST") {
@@ -46,7 +56,7 @@ async function serve(options: UploadsHttpOptions, request: IncomingMessage, resp
       const boundary = boundaryOf(contentType);
       const body = await readBody(request, uploads.maxBytes + (boundary ? MULTIPART_OVERHEAD : 0));
       let data = body;
-      let filename = headerFileName(request) ?? queryName(request);
+      let filename = headerFileName(request) ?? queryParam(request, "name");
       if (boundary) {
         const part = parseMultipartFile(body, boundary);
         if (!part) return reply(400, { error: "no_file", message: "No file in the form data." });
@@ -54,8 +64,8 @@ async function serve(options: UploadsHttpOptions, request: IncomingMessage, resp
         filename = part.filename || filename;
       }
       if (!filename) return reply(400, { error: "no_filename", message: "Send the file name in X-Filename." });
-      const conversationId = new URL(request.url ?? "/", "http://gateway.invalid").searchParams.get("conversationId") ?? undefined;
-      const upload = await uploads.save({ data, filename, ...(conversationId ? { conversationId: conversationId.slice(0, 128) } : {}) });
+      const conversationId = queryParam(request, "conversationId");
+      const upload = await uploads.save({ data, filename, workspaceId, ...(conversationId ? { conversationId: conversationId.slice(0, 128) } : {}) });
       return reply(201, { upload });
     } catch (error) {
       if (error instanceof BodyTooLargeError) {
@@ -70,10 +80,15 @@ async function serve(options: UploadsHttpOptions, request: IncomingMessage, resp
   if (match && (request.method === "GET" || request.method === "HEAD")) {
     request.resume();
     const id = decodeURIComponent(match[1]!);
-    const upload = await uploads.get(id);
+    const upload = await uploads.get(id, { workspaceId });
     if (!upload) return reply(404, { error: "not_found" });
     const bytes = await uploads.readBytes(upload.id);
-    const inline = upload.kind === "image" || upload.kind === "pdf";
+    // Previews open inline (images, PDFs, generated video and audio); `?download=1` asks for a download.
+    const inline = queryParam(request, "download") !== "1" && (upload.kind === "image" || upload.kind === "pdf" || upload.kind === "video" || upload.kind === "audio");
+    // Downloads (not inline previews) go to the audit log.
+    if (!inline && request.method === "GET") {
+      auditRequest(options, request, { action: AUDIT_ACTIONS.EXPORT, target: { kind: "upload", id: upload.id, name: upload.name }, details: { bytes: bytes.byteLength } });
+    }
     response.writeHead(200, {
       ...cors,
       "content-type": upload.mime,
@@ -93,20 +108,11 @@ async function serve(options: UploadsHttpOptions, request: IncomingMessage, resp
 }
 
 function headerFileName(request: IncomingMessage): string | undefined {
-  const raw = request.headers["x-filename"] ?? request.headers["x-sibyl-filename"];
-  const value = Array.isArray(raw) ? raw[0] : raw;
+  const value = headerValue(request, "x-filename") ?? headerValue(request, "x-sibyl-filename");
   if (!value) return undefined;
   try {
     return decodeURIComponent(value);
   } catch {
     return value;
-  }
-}
-
-function queryName(request: IncomingMessage): string | undefined {
-  try {
-    return new URL(request.url ?? "/", "http://gateway.invalid").searchParams.get("name") ?? undefined;
-  } catch {
-    return undefined;
   }
 }

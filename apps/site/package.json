@@ -1,0 +1,12 @@
+{
+  "name": "site",
+  "private": true,
+  "description": "Sibyl's public landing page and docs site. Static HTML; the docs pages are generated from docs/*.md and committed.",
+  "type": "module",
+  "scripts": {
+    "docs": "node scripts/build-docs.mjs"
+  },
+  "devDependencies": {
+    "marked": "18.1.1"
+  }
+}

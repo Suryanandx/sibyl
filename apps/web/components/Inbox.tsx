@@ -1,18 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ROUTINE_EVENTS,
   WS_EVENTS,
   type ApprovalView,
   type ClientMessage,
-  type RoutineNotification,
+  type NotificationView,
   type RoutinePatch,
   type RoutineView,
   type ServerMessage
 } from "@open-gpt-live/protocol";
+import {
+  ACTIVITY_FILTERS,
+  notificationLinks,
+  notificationPermission,
+  notificationTone,
+  unreadFirst,
+  type NotificationsApi
+} from "../lib/notifications";
 import { ApprovalCard } from "./ApprovalCard";
 import { Icon } from "./Icon";
+import { Button, EmptyState, Toolbar, buttonClass, cx } from "./ui";
+import { paths } from "../lib/routes";
+import styles from "./Inbox.module.css";
 
 /* ───────────── state: routines + pending approvals ───────────── */
 
@@ -35,10 +47,7 @@ export interface RoutinesInbox {
  * Keeps the routines list and the approval inbox in sync with the gateway.
  * The returned object is stable (safe in socket listeners registered once).
  */
-export function useRoutinesInbox(options: {
-  send(message: ClientMessage): boolean;
-  onNotification?(notification: RoutineNotification): void;
-}): RoutinesInbox {
+export function useRoutinesInbox(options: { send(message: ClientMessage): boolean }): RoutinesInbox {
   const [routines, setRoutines] = useState<RoutineView[]>([]);
   const [inbox, setInbox] = useState<ApprovalView[]>([]);
   const [submitting, setSubmitting] = useState<Set<string>>(new Set());
@@ -67,9 +76,6 @@ export function useRoutinesInbox(options: {
               const next = new Set([...current].filter((id) => pending.has(id)));
               return next.size === current.size ? current : next;
             });
-            return true;
-          case ROUTINE_EVENTS.ROUTINE_NOTIFICATION:
-            optionsRef.current.onNotification?.(message.notification);
             return true;
           case WS_EVENTS.APPROVAL_REQUEST:
             // Chat cards still render in the thread: don't consume.
@@ -128,73 +134,59 @@ export function countByRoutine(items: ApprovalView[]): Record<string, number> {
 
 /* ───────────── browser notifications ───────────── */
 
-export function notificationPermission(): NotificationPermission | "unsupported" {
-  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
-  return Notification.permission;
-}
-
-/** Show a system notification when the user allowed it (never asks by itself). */
-export function showBrowserNotification(notification: RoutineNotification): void {
-  if (notificationPermission() !== "granted") return;
-  try {
-    const title = notification.kind === "needs_approval" ? "Sibyl needs your approval" : `Routine: ${notification.routineName}`;
-    new Notification(title, { body: notification.message, tag: `${notification.runId}:${notification.kind}`, icon: "/icon.png" });
-  } catch {
-    // Some mobile browsers only allow notifications from a service worker.
-  }
-}
-
 /** Button that asks for notification permission (only on a click). */
 export function NotificationPermissionButton() {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   useEffect(() => setPermission(notificationPermission()), []);
   if (permission !== "default") return null;
   return (
-    <button
-      type="button"
-      className="ghostBtn routinesNotifyBtn"
+    <Button
+      size="sm"
       onClick={() => {
         void Notification.requestPermission().then(setPermission, () => setPermission(notificationPermission()));
       }}
     >
       Turn on desktop notifications
-    </button>
+    </Button>
   );
 }
 
 /* ───────────── icons ───────────── */
 
-export function InboxIcon({ size = 18 }: { size?: number }) {
+/**
+ * The inbox bell (rail on desktop, the chat's top bar on phones): opens
+ * /inbox; the badge counts approvals waiting plus unread notifications.
+ */
+export function InboxBell({ count, className, current = false }: { count: number; className: string; current?: boolean }) {
+  const label = count > 0 ? `Inbox, ${count} new` : "Inbox";
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 13.5 6.4 5.6A1.5 1.5 0 0 1 7.8 4.5h8.4a1.5 1.5 0 0 1 1.4 1.1L20 13.5 M4 13.5V18a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 18v-4.5 M4 13.5h4.5l1.2 2h4.6l1.2-2H20" />
-    </svg>
-  );
-}
-
-/** Rail / topbar button with a pending-count badge. */
-export function InboxButton({ count, className, onClick }: { count: number; className: string; onClick(): void }) {
-  const label = count > 0 ? `Inbox, ${count} waiting` : "Inbox";
-  return (
-    <button type="button" className={`${className} inboxBtn`} aria-label={label} title={label} onClick={onClick}>
-      <InboxIcon />
+    <Link
+      className={`${className} inboxBtn${current ? " active" : ""}`}
+      href={paths.inbox}
+      aria-label={label}
+      title={label}
+      aria-current={current ? "page" : undefined}
+    >
+      <Icon name="bell" />
       {count > 0 ? <span className="inboxBadge" aria-hidden>{count > 9 ? "9+" : count}</span> : null}
-    </button>
+    </Link>
   );
 }
 
 /* ───────────── the inbox panel ───────────── */
 
 interface InboxProps {
-  open: boolean;
   items: ApprovalView[];
   routines: RoutineView[];
   submitting: Set<string>;
   connected: boolean;
+  /** Everything Sibyl told you about (the Activity section). */
+  notifications: NotificationsApi;
   onDecide(id: string, decision: "approve" | "decline"): void;
   onOpenConversation(id: string): void;
   onOpenRoutines(): void;
-  onClose(): void;
+  /** Follow a notification's deep link (an app path). */
+  onOpen(href: string): void;
 }
 
 interface Group {
@@ -204,66 +196,70 @@ interface Group {
   items: ApprovalView[];
 }
 
-/** Everything waiting for a decision, from chats and routines. */
+/**
+ * The Inbox screen's body (/inbox): approvals waiting for a decision (from
+ * chats and routines), then the activity feed of every notification.
+ */
 export function Inbox(props: InboxProps) {
-  const groups = useMemo(() => groupApprovals(props.items, props.routines), [props.items, props.routines]);
-  useEscape(props.open, props.onClose);
-  if (!props.open) return null;
-
   return (
-    <div className="dialogBackdrop" onClick={props.onClose}>
-      <section
-        className="dialog routinesDialog inboxPanel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="inbox-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="iconBtn dialogClose" onClick={props.onClose} aria-label="Close">
-          <Icon name="close" />
-        </button>
-        <header className="dialogHeader">
-          <h2 id="inbox-title">Inbox</h2>
-          <p>Actions waiting for your approval, from chats and routines. Nothing happens until you approve.</p>
-        </header>
-        <div className="routinesToolbar">
-          <NotificationPermissionButton />
-          <button type="button" className="ghostBtn" onClick={props.onOpenRoutines}>
-            <Icon name="history" size={16} /> Routines
-          </button>
-        </div>
+    <div>
+      <Toolbar
+        start={
+          <>
+            <NotificationPermissionButton />
+            <Button size="sm" onClick={props.onOpenRoutines}>
+              <Icon name="history" size={16} /> Routines
+            </Button>
+          </>
+        }
+      />
+      <section className={styles.section} aria-labelledby="inbox-approvals">
+        <h2 className={styles.sectionTitle} id="inbox-approvals">
+          Needs your approval{props.items.length > 0 ? <span className={styles.count}>{props.items.length}</span> : null}
+        </h2>
+        <Approvals {...props} />
+      </section>
+      <section className={styles.section} aria-labelledby="inbox-activity">
+        <Activity notifications={props.notifications} connected={props.connected} onOpen={props.onOpen} />
+      </section>
+    </div>
+  );
+}
 
+function Approvals(props: InboxProps) {
+  const groups = useMemo(() => groupApprovals(props.items, props.routines), [props.items, props.routines]);
+  return (
+    <>
         {groups.length === 0 ? (
-          <div className="routinesEmpty">
-            <Icon name="check" size={22} />
-            <p>All clear — nothing is waiting for you.</p>
-          </div>
+          <EmptyState compact icon={<Icon name="check" size={22} />} title="All clear — nothing is waiting for your approval.">
+            <p>When Sibyl or an agent wants to send, change or delete something for you, it asks here first.</p>
+          </EmptyState>
         ) : (
           groups.map((group) => (
-            <section className={`inboxGroup${group.routine || group.key.startsWith("routine:") ? " routineGroup" : ""}`} key={group.key}>
-              <h3 className="inboxGroupTitle">
+            <section className={styles.group} key={group.key}>
+              <h3 className={styles.groupTitle}>
                 <span>{group.label}</span>
                 {group.routine?.conversationId ? (
-                  <button type="button" className="routineLink" onClick={() => props.onOpenConversation(group.routine!.conversationId!)}>
+                  <button type="button" className={buttonClass({ variant: "link", size: "sm" })} onClick={() => props.onOpenConversation(group.routine!.conversationId!)}>
                     Open chat
                   </button>
                 ) : null}
               </h3>
               {group.items.map((item) => (
-                <div className="inboxItem" key={item.id}>
+                <div className={styles.item} key={item.id}>
                   <ApprovalCard
                     approval={item}
                     status="pending"
                     submitting={props.submitting.has(item.id)}
                     {...(props.connected ? { onDecide: (decision: "approve" | "decline") => props.onDecide(item.id, decision) } : {})}
                   />
-                  <p className="inboxMeta">
+                  <p className={styles.meta}>
                     Asked {relativeTime(item.createdAt)}
                     {item.expiresAt ? ` · expires ${relativeTime(item.expiresAt)}` : ""}
                     {!group.routine && item.conversationId ? (
                       <>
                         {" · "}
-                        <button type="button" className="routineLink" onClick={() => props.onOpenConversation(item.conversationId!)}>
+                        <button type="button" className={buttonClass({ variant: "link", size: "sm" })} onClick={() => props.onOpenConversation(item.conversationId!)}>
                           Open chat
                         </button>
                       </>
@@ -274,9 +270,141 @@ export function Inbox(props: InboxProps) {
             </section>
           ))
         )}
-      </section>
+    </>
+  );
+}
+
+/* ───────────── activity ───────────── */
+
+function Activity({ notifications, connected, onOpen }: { notifications: NotificationsApi; connected: boolean; onOpen(href: string): void }) {
+  const items = useMemo(() => unreadFirst(notifications.items), [notifications.items]);
+  const active = notifications.kinds;
+  const unreadIn = (kinds: readonly string[]): number => kinds.reduce((sum, kind) => sum + (notifications.unread.byKind[kind as keyof typeof notifications.unread.byKind] ?? 0), 0);
+  const isActive = (kinds: readonly string[] | null): boolean => (kinds === null ? active === null : active !== null && kinds.length === active.length && kinds.every((kind) => active.includes(kind as never)));
+  return (
+    <>
+      <div className={styles.sectionHead}>
+        <h2 className={styles.sectionTitle} id="inbox-activity">
+          Activity{notifications.unread.total > 0 ? <span className={styles.count}>{notifications.unread.total} unread</span> : null}
+        </h2>
+        {notifications.unread.total > 0 ? (
+          <Button variant="link" size="sm" disabled={!connected} onClick={notifications.markAllRead}>
+            Mark all read
+          </Button>
+        ) : null}
+      </div>
+      <div className={styles.filters} role="group" aria-label="Show">
+        <button type="button" className={styles.chip} aria-pressed={isActive(null)} onClick={() => notifications.setFilter(null)}>
+          All
+        </button>
+        {ACTIVITY_FILTERS.map((filter) => {
+          const unread = unreadIn(filter.kinds);
+          return (
+            <button
+              key={filter.label}
+              type="button"
+              className={styles.chip}
+              aria-pressed={isActive(filter.kinds)}
+              onClick={() => notifications.setFilter(filter.kinds)}
+            >
+              {filter.label}
+              {unread > 0 ? <span className={styles.chipCount}>{unread}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      {items.length === 0 ? (
+        <EmptyState
+          compact
+          icon={<Icon name="check" size={22} />}
+          title={notifications.loading ? "Loading…" : "Nothing here yet. Routines, monitors and agents report here when they act."}
+        >
+          {notifications.loading ? null : <p>Try asking in chat: &ldquo;Every weekday at 8, send me a summary of tech news.&rdquo;</p>}
+        </EmptyState>
+      ) : (
+        <ul className={styles.activity}>
+          {items.map((item) => (
+            <ActivityItem key={item.id} item={item} connected={connected} onMarkRead={notifications.markRead} onOpen={onOpen} />
+          ))}
+        </ul>
+      )}
+      {notifications.nextCursor ? (
+        <Button size="sm" className={styles.more} disabled={!connected || notifications.loading} onClick={notifications.loadMore}>
+          {notifications.loading ? "Loading…" : "Show older"}
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
+function ActivityItem(props: { item: NotificationView; connected: boolean; onMarkRead(id: string): void; onOpen(href: string): void }) {
+  const { item } = props;
+  const unread = item.readAt === undefined;
+  const open = (href: string): void => {
+    if (unread && props.connected) props.onMarkRead(item.id);
+    props.onOpen(href);
+  };
+  return (
+    <li className={cx(styles.activityItem, styles[`tone_${notificationTone(item.kind)}`], unread && styles.unread)}>
+      <div className={styles.activityText}>
+        <p className={styles.activityTitle}>{item.title}</p>
+        {item.body ? <p className={styles.activityBody}>{item.body}</p> : null}
+        <p className={cx(styles.meta, styles.activityMeta)}>
+          {relativeTime(item.createdAt)}
+          {notificationLinks(item).map((link) => (
+            <span key={link.label}>
+              {" · "}
+              <button type="button" className={buttonClass({ variant: "link", size: "sm" })} onClick={() => open(link.href)}>
+                {link.label}
+              </button>
+            </span>
+          ))}
+        </p>
+      </div>
+      {unread ? (
+        <Button size="sm" disabled={!props.connected} onClick={() => props.onMarkRead(item.id)}>
+          Mark read
+        </Button>
+      ) : null}
+    </li>
+  );
+}
+
+/* ───────────── toast ───────────── */
+
+/** The one toast for new notifications, on every screen. */
+export function NotificationToast(props: { notification: NotificationView | null; onDismiss(): void; onOpen(href: string): void }) {
+  const { notification } = props;
+  if (!notification) return null;
+  const [link] = notificationLinks(notification);
+  return (
+    <div className={`notificationToast ${notificationTone(notification.kind)}`} role="status" aria-live="polite">
+      <span className="notificationToastText">
+        <strong>{notification.title}</strong>
+        {notification.body && notification.body !== notification.title ? <span>{firstLine(notification.body)}</span> : null}
+      </span>
+      {link ? (
+        <button
+          type="button"
+          className="routineLink"
+          onClick={() => {
+            props.onDismiss();
+            props.onOpen(link.href);
+          }}
+        >
+          {link.label === "Review" ? "Review" : "Open"}
+        </button>
+      ) : null}
+      <button type="button" className="iconBtn notificationToastClose" aria-label="Dismiss" onClick={props.onDismiss}>
+        <Icon name="close" size={14} />
+      </button>
     </div>
   );
+}
+
+function firstLine(text: string): string {
+  const line = text.split("\n")[0] ?? "";
+  return line.length > 160 ? `${line.slice(0, 159)}…` : line;
 }
 
 function groupApprovals(items: ApprovalView[], routines: RoutineView[]): Group[] {

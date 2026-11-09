@@ -1,0 +1,190 @@
+/* Inbox: only what the shared primitives (components/ui) don't cover. */
+
+.section + .section {
+  margin-top: 32px;
+}
+
+.sectionHead {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.sectionTitle {
+  align-items: baseline;
+  color: var(--text);
+  display: flex;
+  font-size: 15px;
+  font-weight: 600;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.count {
+  color: var(--text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* ── approvals ── */
+
+.group + .group {
+  margin-top: 22px;
+}
+
+.groupTitle {
+  align-items: baseline;
+  color: var(--text-2);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 10px;
+  justify-content: space-between;
+  letter-spacing: 0.01em;
+  margin: 0 0 4px;
+}
+
+/* The shared approval card, full width; "Don't ask again in this chat" does not apply here. */
+.item :global(.approvalCard) {
+  max-width: none;
+}
+
+.item :global(.approvalRemember) {
+  display: none;
+}
+
+.item :global(.approvalFoot) {
+  justify-content: flex-end;
+}
+
+.meta {
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin: 6px 4px 0;
+}
+
+/* ── activity ── */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.chip {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  gap: 6px;
+  padding: 5px 12px;
+}
+
+.chip:hover {
+  background: var(--subtle);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: transparent;
+  color: var(--ink-text);
+}
+
+.chipCount {
+  background: var(--warning);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activityItem {
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+/* Dot: green (done), amber (needs attention), red (failed); faint once read. */
+.activityItem::before {
+  background: var(--positive);
+  border-radius: 50%;
+  content: "";
+  flex: none;
+  height: 8px;
+  margin-top: 6px;
+  opacity: 0.35;
+  width: 8px;
+}
+
+.tone_warning::before {
+  background: var(--warning);
+}
+
+.tone_danger::before {
+  background: var(--danger);
+}
+
+.unread {
+  border-color: var(--border-strong);
+}
+
+.unread::before {
+  opacity: 1;
+}
+
+.activityText {
+  flex: 1;
+  min-width: 0;
+}
+
+.activityTitle {
+  color: var(--text);
+  font-size: 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.unread .activityTitle {
+  font-weight: 600;
+}
+
+.activityBody {
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+  max-height: 9.5em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.activityMeta {
+  margin-left: 0;
+}
+
+.more {
+  margin-top: 12px;
+}

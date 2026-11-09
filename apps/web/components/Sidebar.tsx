@@ -1,9 +1,14 @@
 "use client";
 
+import { presetPriceShort } from "../lib/pricing";
 import { useMemo, useState } from "react";
 import type { ModelCatalog, SessionSettings } from "@open-gpt-live/protocol";
 import { groupByDay, type ConversationSummary } from "../lib/conversations";
+import Link from "next/link";
 import { Icon } from "./Icon";
+import { useRailEntries } from "./AppRail";
+import { GettingStarted } from "../features/onboarding/GettingStarted";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface SidebarProps {
   open: boolean;
@@ -27,6 +32,7 @@ const PRESET_INITIAL: Record<string, string> = {
 };
 
 export function Sidebar(props: SidebarProps) {
+  const places = useRailEntries().filter((entry) => entry.place !== "chat");
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const groups = useMemo(() => {
@@ -46,6 +52,22 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <aside className={`sidebar${props.open ? " open" : ""}`} aria-label="Conversations">
+      <WorkspaceSwitcher />
+
+      {/* Phones have no rail: the workspace and the rail groups live here (the inbox bell is in the top bar). */}
+      <nav className="sidebarPlaces mobileOnly" aria-label="Sibyl">
+        <ul>
+          {places.map((entry) => (
+            <li key={entry.place}>
+              <Link className="sidebarPlace" href={entry.href} aria-label={entry.label} onClick={props.onClose}>
+                <Icon name={entry.icon} />
+                <span className="itemLabel">{entry.name}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <GettingStarted variant="row" />
+      </nav>
       <div className="sidebarHead">
         <span className="sidebarTitle">Chat</span>
         <button
@@ -93,8 +115,10 @@ export function Sidebar(props: SidebarProps) {
                 >
                   <span className="itemBadge">{PRESET_INITIAL[preset.id] ?? preset.label[0]}</span>
                   <span className="itemLabel">{preset.label}</span>
-                  {preset.costPer100Turns !== undefined ? (
-                    <span className="itemMeta">${preset.costPer100Turns.toFixed(2)}</span>
+                  {presetPriceShort(preset) ? (
+                    <span className="itemMeta" title={presetPriceShort(preset)!.title}>
+                      {presetPriceShort(preset)!.text}
+                    </span>
                   ) : null}
                   {isActivePreset(preset) ? <Icon name="check" size={14} className="itemCheck" /> : null}
                 </button>
@@ -142,7 +166,7 @@ export function Sidebar(props: SidebarProps) {
 
       <button type="button" className="sidebarFooterBtn" onClick={props.onOpenSettings}>
         <Icon name="sliders" size={16} />
-        Models &amp; voice
+        Models &amp; settings
       </button>
     </aside>
   );

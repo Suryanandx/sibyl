@@ -7,7 +7,7 @@
  * server-side code that sends it to a host the secret allows. Decrypted
  * values are kept in memory only to redact them from tool output.
  */
-import type { Store } from "@open-gpt-live/core";
+import { AUDIT_ACTIONS, type AuditActor, type AuditEvent, type Store } from "@open-gpt-live/core";
 import { decryptValue, encryptValue } from "./crypto.js";
 import { hostAllowed, LOCAL_HOST, normalizeHostList } from "./hosts.js";
 import { redactionNeedles, redactWith, registerRedactor, type RedactionEntry } from "./redact.js";
@@ -69,6 +69,8 @@ export interface SecretVaultOptions {
   key: Buffer;
   now?: () => number;
   log?: (event: string, fields?: Record<string, unknown>) => void;
+  /** Audit trail: secret use and changes are recorded by name (never the value). */
+  audit?: (event: AuditEvent) => void;
 }
 
 export class SecretVault {
@@ -113,7 +115,7 @@ export class SecretVault {
   }
 
   /** Create or update a secret. A new secret needs a value and allowed hosts. */
-  async set(ownerId: string, input: SetSecretInput): Promise<SecretMeta> {
+  async set(ownerId: string, input: SetSecretInput, actor?: AuditActor): Promise<SecretMeta> {
     const name = input.name;
     if (!SECRET_NAME.test(name)) throw new SecretError("Secret names are UPPER_SNAKE_CASE, up to 64 characters (e.g. HIGGSFIELD_API_KEY)");
     const value = input.value === undefined ? undefined : input.value.trim();
@@ -163,11 +165,12 @@ export class SecretVault {
       return toMeta(record, state.values.get(name) !== undefined);
     });
     this.options.log?.("secrets.saved", { name, hosts: meta.allowedHosts, valueChanged: value !== undefined });
+    this.options.audit?.({ action: AUDIT_ACTIONS.SECRET_SAVED, ...(actor ? { actor } : {}), target: { kind: "secret", name }, details: { hosts: meta.allowedHosts, valueChanged: value !== undefined } });
     this.emit(ownerId);
     return meta;
   }
 
-  async delete(ownerId: string, name: string): Promise<boolean> {
+  async delete(ownerId: string, name: string, actor?: AuditActor): Promise<boolean> {
     const removed = await this.locked(ownerId, async () => {
       const state = await this.state(ownerId);
       if (!state.records.has(name)) return false;
@@ -185,6 +188,7 @@ export class SecretVault {
     });
     if (removed) {
       this.options.log?.("secrets.deleted", { name });
+      this.options.audit?.({ action: AUDIT_ACTIONS.SECRET_DELETED, ...(actor ? { actor } : {}), target: { kind: "secret", name } });
       this.emit(ownerId);
     }
     return removed;
@@ -199,6 +203,7 @@ export class SecretVault {
     const record = state.records.get(name);
     if (!record) throw new SecretError(`There is no secret named ${name}. Ask the user for it with request_secret.`);
     if (!hostAllowed(record.allowedHosts, context.host)) {
+      this.options.audit?.({ action: AUDIT_ACTIONS.SECRET_USED, outcome: "denied", target: { kind: "secret", name }, details: { host: context.host ?? "local" } });
       const where = context.host === undefined ? "local tools (add \"local\" to its allowed hosts)" : context.host;
       throw new SecretError(`${name} may not be sent to ${where}; it is allowed for ${record.allowedHosts.join(", ")}`);
     }
@@ -207,6 +212,7 @@ export class SecretVault {
       throw new SecretError(`${name} can't be decrypted (was SIBYL_SECRET_KEY or data/secret.key changed?). Ask the user to enter it again.`);
     }
     this.touch(ownerId, name);
+    this.options.audit?.({ action: AUDIT_ACTIONS.SECRET_USED, target: { kind: "secret", name }, details: { host: context.host ?? "local" } });
     return value;
   }
 

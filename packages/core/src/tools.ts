@@ -7,6 +7,9 @@
  */
 import type { Store } from "./store";
 import type { UsageMeter } from "./usage";
+import type { Principal } from "./permissions";
+import type { Governance } from "./governance";
+import type { AgentRecord } from "./agents";
 
 export type ToolEffect = "read" | "write";
 
@@ -27,7 +30,34 @@ export interface ToolDefinition<Input = Record<string, unknown>, Output = unknow
   source: ToolSource;
   /** Optional MCP server / provider id for grouping and toggles. */
   provider?: string;
+  /**
+   * "high": hard to take back — send, delete, share outside the organization,
+   * move money. The approval card says so, and agents always ask before these
+   * whatever their autonomy.
+   */
+  risk?: "high";
+  /**
+   * Optional, "write" tools only: does this particular call need an approval?
+   * Absent means always. For tools whose effect is spending money, where a
+   * small amount may go ahead (create_video asks above
+   * SIBYL_MEDIA_APPROVE_ABOVE_USD). High-risk tools always ask.
+   */
+  approvalNeeded?(input: Input): boolean;
+  /**
+   * Optional: is the tool usable for this caller right now (e.g. a connector
+   * tool needs a connection the person may use)? Absent means always.
+   * Must be synchronous and cheap — it runs every time tools are offered.
+   */
+  isAvailable?(context: ToolAvailabilityScope): boolean;
   run(input: Input, context: ToolContext): Promise<ToolResult<Output>>;
+}
+
+/** Who tools are offered to: the caller, the workspace and, when an agent runs, that agent. */
+export interface ToolAvailabilityScope {
+  principal?: Principal;
+  workspaceId?: string;
+  /** The agent the tools are offered to (absent: Sibyl herself). */
+  agent?: Pick<AgentRecord, "id" | "computer">;
 }
 
 export interface ToolContext {
@@ -36,6 +66,15 @@ export interface ToolContext {
   conversationId?: string;
   /** The brain run this call belongs to (deep-work request id or routine run id). */
   runId: string;
+  /** Who the call acts for (absent: routines and other server-side runs). Check with authorize(). */
+  principal?: Principal;
+  /** Workspace the call runs in (absent: the default workspace). */
+  workspaceId?: string;
+  /**
+   * Set when an agent runs the call: tools that read knowledge bases or
+   * skills should stay within these ids (absent list: no extra limit).
+   */
+  agent?: { id: string; knowledgeBaseIds?: string[]; skillIds?: string[] };
   store: Store;
   meter: UsageMeter;
   log(event: string, fields?: Record<string, unknown>): void;
@@ -54,7 +93,7 @@ export interface ToolResult<Output = unknown> {
 
 export interface ArtifactRef {
   id: string;
-  kind: "slides" | "file";
+  kind: "slides" | "file" | "media";
   title: string;
 }
 
@@ -116,9 +155,50 @@ export function toFunctionTools(tools: ToolDefinition<any, any>[]): Array<{
     function: {
       name: tool.name,
       description: tool.effect === "write"
-        ? `${tool.description}\n(Needs the user's approval before it runs.)`
+        ? `${tool.description}\n(${tool.approvalNeeded ? "May need" : "Needs"} the user's approval before it runs.)`
         : tool.description,
       parameters: tool.inputSchema
     }
   }));
+}
+
+/** Does this call wait for an approval? Write tools do, unless approvalNeeded() says this call needn't. */
+export function needsApproval(
+  tool: Pick<ToolDefinition<any, any>, "name" | "effect" | "risk" | "approvalNeeded">,
+  input: Record<string, unknown>
+): boolean {
+  if (tool.effect !== "write") return false;
+  if (isHighRiskTool(tool) || !tool.approvalNeeded) return true;
+  try {
+    return tool.approvalNeeded(input) !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Hard-to-undo actions always ask, whatever an agent's or monitor's autonomy:
+ * tools tagged `risk: "high"`, plus write actions whose names say they move
+ * money, delete, or share outside the organization. One definition for the
+ * whole product (agents, monitors, approval cards).
+ */
+export const HIGH_RISK_NAME =
+  /(^|[_-])(delete|remove|destroy|erase|wipe|purge|drop|pay|payment|payout|transfer|send_money|refund|charge|purchase|buy|share|publish|invite|grant)([_-]|$)/i;
+
+export function isHighRiskTool(tool: Pick<ToolDefinition, "name" | "effect" | "risk">): boolean {
+  if (tool.risk === "high") return true;
+  return tool.effect === "write" && HIGH_RISK_NAME.test(tool.name);
+}
+
+/**
+ * Tools that can actually run for this caller right now (e.g. a connector
+ * tool needs a connection they may use, and no organization policy blocks
+ * it). Chat, routines and monitors all offer the model only these.
+ */
+export function usableTools<T extends Pick<ToolDefinition, "isAvailable" | "name" | "effect" | "source" | "provider" | "risk">>(
+  tools: T[],
+  scope: ToolAvailabilityScope & { governance?: Pick<Governance, "toolDecision"> }
+): T[] {
+  const { governance, ...who } = scope;
+  return tools.filter((tool) => (!tool.isAvailable || tool.isAvailable(who)) && (!governance || governance.toolDecision(tool, who).allowed));
 }

@@ -1,0 +1,8 @@
+/* Separates the inbox bell from the rail groups. */
+.divider {
+  background: var(--border);
+  flex: none;
+  height: 1px;
+  margin: 4px 0;
+  width: 24px;
+}

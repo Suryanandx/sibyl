@@ -1,0 +1,178 @@
+/* Settings sections (Workspace, Members, Memory, Licence): only what the
+   shared primitives (components/ui) don't cover. */
+
+/* A list of rows inside a card: members, memories, licence features. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 0;
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.rowMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowTitle {
+  align-items: center;
+  display: flex;
+  font-weight: 500;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.rowEnd {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.avatar {
+  align-items: center;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-2);
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.avatarPending {
+  border-style: dashed;
+}
+
+.roleSelect {
+  min-height: 32px;
+  padding-bottom: 4px;
+  padding-top: 4px;
+  width: 140px;
+}
+
+.initials {
+  width: 110px;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 12px;
+}
+
+.fieldRow > :first-child {
+  flex: 1;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+}
+
+.inline > :first-child {
+  flex: 1;
+}
+
+.off {
+  opacity: 0.55;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.facts dd {
+  font-weight: 500;
+  margin: 2px 0 0;
+}
+
+.roles {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.roles legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.roleOption {
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.roleOption:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+}
+
+.roleOption input {
+  accent-color: var(--accent);
+  margin: 3px 0 0;
+}
+
+@media (max-width: 560px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .rowEnd {
+    margin-left: 46px;
+  }
+
+  .fieldRow,
+  .inline {
+    flex-direction: column;
+  }
+
+  .initials {
+    width: 100%;
+  }
+}

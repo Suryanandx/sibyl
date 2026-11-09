@@ -1,5 +1,7 @@
 /**
- * /api/memory — the Memory tab's API (same owner-token auth and CORS as uploads).
+ * /api/memory — the Memory tab's API, behind the gateway's identity gate.
+ * The facts are the caller's own, in the request's workspace (see store.ts);
+ * the on/off switch is the workspace's.
  *
  *   GET    /api/memory               → { available, enabled, items }
  *   POST   /api/memory      {text, pinned?}   → { item }
@@ -10,14 +12,13 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Store } from "@open-gpt-live/core";
-import { BodyTooLargeError, guardRequest, readBody, requestPath, sendJson, type HttpGuardOptions } from "../uploads/http-util.js";
+import { corsGuard, isUnder, readJsonObject, requestCaller, requestPath, requestWorkspace, runRoute, sendBodyError, sendJson, type ApiOptions } from "../http/index.js";
 import { MemoryError, MemoryService } from "./store.js";
 
-export interface MemoryHttpOptions extends HttpGuardOptions {
+export interface MemoryHttpOptions extends ApiOptions {
   store: Store;
   ownerId: string;
   env?: NodeJS.ProcessEnv;
-  log?: (event: string, fields?: Record<string, unknown>) => void;
 }
 
 const METHODS = "GET, POST, PATCH, PUT, DELETE, OPTIONS";
@@ -26,29 +27,26 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** Returns true when the request was for /api/memory (and is being handled). */
 export function handleMemoryHttp(options: MemoryHttpOptions, request: IncomingMessage, response: ServerResponse): boolean {
   const path = requestPath(request);
-  if (path !== "/api/memory" && !path.startsWith("/api/memory/")) return false;
-  void serve(options, request, response, path).catch((error: unknown) => {
-    options.log?.("memory.http_failed", { error: error instanceof Error ? error.message : String(error) });
-    sendJson(response, 500, { error: "internal_error" });
-  });
-  return true;
+  if (!isUnder(path, "/api/memory")) return false;
+  return runRoute(response, options.log, "memory.http_failed", serve(options, request, response, path));
 }
 
 async function serve(options: MemoryHttpOptions, request: IncomingMessage, response: ServerResponse, path: string): Promise<void> {
-  const cors = guardRequest(options, request, response, METHODS);
+  const cors = corsGuard(request, response, options.allowedOrigins, METHODS);
   if (!cors) return;
-  const memory = new MemoryService({ store: options.store, ownerId: options.ownerId, env: options.env });
+  const principal = requestCaller(request)?.principal;
+  const memory = new MemoryService({
+    store: options.store,
+    ownerId: options.ownerId,
+    env: options.env,
+    workspaceId: requestWorkspace(request),
+    ...(principal ? { principal } : {})
+  });
   const reply = (status: number, body: unknown) => sendJson(response, status, body, cors);
   const method = request.method ?? "GET";
   const rest = path.slice("/api/memory".length).replace(/^\//, "");
 
-  const body = async (): Promise<Record<string, unknown>> => {
-    const raw = await readBody(request, 16 * 1024);
-    if (raw.byteLength === 0) return {};
-    const parsed = JSON.parse(raw.toString("utf8")) as unknown;
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new SyntaxError("body must be an object");
-    return parsed as Record<string, unknown>;
-  };
+  const body = () => readJsonObject(request, 16 * 1024);
 
   try {
     if (rest === "" && method === "GET") return reply(200, await memory.state());
@@ -90,8 +88,7 @@ async function serve(options: MemoryHttpOptions, request: IncomingMessage, respo
     if (error instanceof MemoryError) {
       return reply(error.code === "not_found" ? 404 : 400, { error: error.code, message: error.message });
     }
-    if (error instanceof BodyTooLargeError) return reply(413, { error: "too_large" });
-    if (error instanceof SyntaxError) return reply(400, { error: "invalid_json" });
+    if (sendBodyError(response, error, cors)) return;
     throw error;
   }
 }

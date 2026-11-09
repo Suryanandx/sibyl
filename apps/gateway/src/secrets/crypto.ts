@@ -5,8 +5,12 @@
  *
  * The 32-byte master key comes from SIBYL_SECRET_KEY (base64) or is generated
  * once into $SIBYL_DATA_DIR/secret.key with mode 0600.
+ *
+ * Each organization encrypts with its own key, derived from the master key
+ * (HKDF-SHA256, `orgSecretKey`). The self-hosted organization ("owner") keeps
+ * the master key itself, so existing vaults read exactly as before.
  */
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -61,6 +65,23 @@ export function loadMasterKey(
     hint: "Back up this file (or set SIBYL_SECRET_KEY): without it, stored secrets cannot be decrypted."
   });
   return { key, source: "generated", file };
+}
+
+const DEFAULT_ORG = "owner";
+
+/** The organization's own 32-byte key: the master key for the self-hosted organization, else HKDF(master, org id). */
+export function orgSecretKey(master: Buffer, orgId: string): Buffer {
+  if (orgId === DEFAULT_ORG) return master;
+  return Buffer.from(hkdfSync("sha256", master, Buffer.from("sibyl.org-key.v1", "utf8"), Buffer.from(orgId, "utf8"), 32));
+}
+
+/** loadMasterKey() + orgSecretKey(): the key an organization's vault, connector credentials and two-step secrets use. */
+export function loadOrgKey(
+  env: NodeJS.ProcessEnv,
+  orgId: string,
+  log?: (event: string, fields?: Record<string, unknown>) => void
+): Buffer {
+  return orgSecretKey(loadMasterKey(env, log).key, orgId);
 }
 
 function decodeKey(text: string, where: string): Buffer {

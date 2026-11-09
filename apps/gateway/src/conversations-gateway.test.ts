@@ -210,7 +210,12 @@ test("deleting conversations; deleting the live one starts a fresh one", async (
 
     let at = client.messages.length;
     client.send({ type: WS_EVENTS.CONVERSATION_DELETE, conversationId: first!.id });
-    const afterDelete = await client.waitFor<ConversationsListMessage>(isList, at);
+    // A save finishing in the background can push a list just before the delete
+    // lands; wait for the list that reflects the delete.
+    const afterDelete = await client.waitFor<ConversationsListMessage>(
+      (m) => isList(m) && !(m as ConversationsListMessage).items.some((item) => item.id === first!.id),
+      at
+    );
     assert.deepEqual(afterDelete.items.map((item) => item.id), [live.id]);
     assert.equal(client.messages.slice(at).some(isState), false);
 
@@ -219,7 +224,11 @@ test("deleting conversations; deleting the live one starts a fresh one", async (
     const state = await client.waitFor<ConversationStateMessage>(isState, at);
     assert.notEqual(state.conversationId, live.id);
     assert.deepEqual(state.messages, []);
-    assert.deepEqual((await client.waitFor<ConversationsListMessage>(isList, at)).items, []);
+    const emptied = await client.waitFor<ConversationsListMessage>(
+      (m) => isList(m) && (m as ConversationsListMessage).items.length === 0,
+      at
+    );
+    assert.deepEqual(emptied.items, []);
     assert.equal(await runtime.store.conversations.get(runtime.ownerId, live.id), undefined);
 
     client.send({ type: WS_EVENTS.USER_TEXT, requestId: "c1", text: "Third" });

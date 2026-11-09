@@ -11,7 +11,7 @@
  */
 import timersPromises from "node:timers/promises";
 import type { LLMMessage } from "@open-gpt-live/adapters";
-import type { ConversationRecord, Store, StoredMessage } from "@open-gpt-live/core";
+import { DEFAULT_WORKSPACE_ID, type ConversationRecord, type Store, type StoredMessage } from "@open-gpt-live/core";
 import type { AttachmentRef, ConversationSummary } from "@open-gpt-live/protocol";
 import { attachmentNote } from "./uploads/attachments.js";
 
@@ -29,6 +29,27 @@ export interface ConversationRecorderOptions {
   log: (event: string, fields?: Record<string, unknown>) => void;
   /** Called after a write changed the conversation list (title, order). */
   onListChanged: (items: ConversationSummary[]) => void;
+  /**
+   * Who is looking, and where: chats are listed/opened within the workspace,
+   * and only the creator's (or every chat with `viewAll`). Absent: everything.
+   */
+  scope?: () => ConversationScope;
+}
+
+export interface ConversationScope {
+  workspaceId: string;
+  /** Signed-in user (new chats record it as createdBy). */
+  userId?: string;
+  /** chat.view_all: see every chat in the workspace, including ones from before sign-in. */
+  viewAll: boolean;
+}
+
+/** May this scope see the conversation? Records without a workspace belong to "default". */
+export function conversationVisible(record: { workspaceId?: string; createdBy?: string }, scope: ConversationScope | undefined): boolean {
+  if (!scope) return true;
+  if ((record.workspaceId ?? DEFAULT_WORKSPACE_ID) !== scope.workspaceId) return false;
+  if (scope.viewAll) return true;
+  return Boolean(scope.userId) && record.createdBy === scope.userId;
 }
 
 interface PendingTurn {
@@ -89,7 +110,7 @@ export class ConversationRecorder {
   async open(id: string): Promise<ConversationRecord | undefined> {
     await this.flush();
     const record = await this.options.store.conversations.get(this.options.ownerId, id);
-    if (!record) return undefined;
+    if (!record || !conversationVisible(record, this.options.scope?.())) return undefined;
     this.pending.clear();
     this.conversationId = record.id;
     return record;
@@ -103,6 +124,8 @@ export class ConversationRecorder {
   /** Delete a conversation; returns true when it was the live one. */
   async remove(id: string): Promise<boolean> {
     await this.flush();
+    const record = await this.options.store.conversations.get(this.options.ownerId, id);
+    if (record && !conversationVisible(record, this.options.scope?.())) return false;
     await this.options.store.conversations.remove(this.options.ownerId, id);
     return id === this.conversationId;
   }
@@ -242,9 +265,12 @@ export class ConversationRecorder {
         return;
       }
       const createdAt = messages[0]!.createdAt;
+      const scope = this.options.scope?.();
       await store.conversations.upsert({
         id: conversationId,
         ownerId,
+        ...(scope ? { workspaceId: scope.workspaceId } : {}),
+        ...(scope?.userId ? { createdBy: scope.userId } : {}),
         title: conversationTitle(
           firstUser.content.trim() ||
             ((firstUser as StoredWithAttachments).attachments ?? []).map((file) => file.name).join(", ")
@@ -258,8 +284,17 @@ export class ConversationRecorder {
   }
 
   private async listNow(): Promise<ConversationSummary[]> {
-    const items = await this.options.store.conversations.list(this.options.ownerId, LIST_LIMIT);
-    return items.map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
+    const scope = this.options.scope?.();
+    if (!scope) {
+      const items = await this.options.store.conversations.list(this.options.ownerId, LIST_LIMIT);
+      return items.map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
+    }
+    // Over-fetch within the workspace, then keep the ones this person may see.
+    const items = await this.options.store.conversations.list(this.options.ownerId, LIST_LIMIT * 5, { workspaceId: scope.workspaceId });
+    return items
+      .filter((item) => conversationVisible(item, scope))
+      .slice(0, LIST_LIMIT)
+      .map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
   }
 
   private enqueue(task: () => Promise<void>): void {
