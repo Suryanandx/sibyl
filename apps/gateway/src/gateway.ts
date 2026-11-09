@@ -316,7 +316,7 @@ export async function createGatewayServer(
     if (request.method === "GET" && request.url === "/healthz") {
       const body = JSON.stringify({
         status: "ok",
-        service: "open-gpt-live-gateway",
+        service: "sibyl-gateway",
         uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
         connections: webSocketServer.clients.size,
         ...options.healthDetails,

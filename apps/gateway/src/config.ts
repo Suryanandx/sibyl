@@ -152,7 +152,7 @@ export function loadGatewayRuntimeConfig(
     provider === "openrouter"
       ? {
           "HTTP-Referer":
-            nonEmpty(env.OPENROUTER_SITE_URL) ?? "https://github.com/study8677/open-gpt-live",
+            nonEmpty(env.OPENROUTER_SITE_URL) ?? "https://github.com/Suryanandx/sibyl",
           "X-Title": nonEmpty(env.OPENROUTER_APP_NAME) ?? "Sibyl"
         }
       : {};

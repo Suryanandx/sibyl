@@ -87,4 +87,4 @@ An unanswered approval expires after 10 minutes. It is also cancelled when you s
 
 ## Turning tools on and off
 
-Individual tools can be switched off; the setting is stored on the server and applied every time the gateway starts. *(Verify at merge: where this switch appears in the web app.)*
+Individual tools can be switched off; the setting is stored on the server and applied every time the gateway starts. There is no switch in the web app yet; a Connections screen for managing tools and MCP servers is on the roadmap.

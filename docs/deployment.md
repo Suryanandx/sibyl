@@ -52,7 +52,7 @@ Compose passes your `.env` to the gateway (or the file named by `OPEN_GPT_LIVE_E
     sibyl-data:
   ```
 
-- **Keep the scout cache with the data.** The image runs as the unprivileged `node` user, so the default cache location (`/app/.model-scout.json`) is not writable and the scout would re-run on every start. Set `SCOUT_CACHE_FILE=/app/data/model-scout.json`.
+- **Keep the scout cache with the data.** The gateway image sets `SCOUT_CACHE_FILE=/app/data/model-scout.json`, so the cache lives in the data volume and survives restarts.
 - **The model allowlist** comes from `models.config.example.json`, copied to `/app/models.config.json`. Mount your own file there, or point `MODELS_CONFIG_FILE` at a mounted path.
 - **MCP servers** are read from `/app/mcp.config.json` or the path in `SIBYL_MCP_CONFIG`. Stdio servers run inside the gateway container, so the commands they need (for example `npx`) must exist in the image. Remote (HTTP) servers need nothing extra.
 

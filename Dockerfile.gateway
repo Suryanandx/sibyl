@@ -29,7 +29,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     GATEWAY_HOST=0.0.0.0 \
     GATEWAY_PORT=8787 \
-    SIBYL_DATA_DIR=/app/data
+    SIBYL_DATA_DIR=/app/data \
+    SCOUT_CACHE_FILE=/app/data/model-scout.json
 
 COPY --from=build /app/apps/gateway/dist ./dist
 # Default model catalog; override by mounting your own at /app/models.config.json

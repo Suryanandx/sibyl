@@ -179,7 +179,7 @@ Reasoning settings make the biggest difference. For voice, prefer models with pr
 
 ## Budgets and the Usage tab
 
-Model calls — voice brain, deep brain, transcription and speech — are recorded with the cost OpenRouter reports for it (or an estimate when a provider reports none). *(Verify at merge: whether web search, scout probes and warm-up requests are metered too.)* Budgets are checked *before* a call is made, so a cap stops spending rather than reporting it afterwards.
+Model calls — voice brain, deep brain, transcription and speech — are recorded with the cost OpenRouter reports for it (or an estimate when a provider reports none). Web searches, model-scout probes and voice warm-up requests are metered too. Budgets are checked *before* a call is made, so a cap stops spending rather than reporting it afterwards.
 
 | Variable | Effect when reached |
 |---|---|
@@ -187,7 +187,7 @@ Model calls — voice brain, deep brain, transcription and speech — are record
 | `SIBYL_BUDGET_MONTHLY_USD` | Model calls pause until the first of the month. |
 | `SIBYL_BUDGET_ROUTINE_RUN_USD`, `SIBYL_BUDGET_ROUTINE_DAILY_USD` | Reserved for routines (on the roadmap). |
 
-When a cap is reached, Sibyl tells you in the chat which budget was hit and which variable to raise. Close to a cap (85% of it), Sibyl switches to cheaper models and the Usage tab shows that it is in economy mode. *(Verify at merge: exactly which models economy mode swaps.)*
+When a cap is reached, Sibyl tells you in the chat which budget was hit and which variable to raise. Close to a cap (85% of it), Sibyl switches to cheaper models and the Usage tab shows that it is in economy mode. Economy mode swaps the voice and deep-brain models for the Cheapest preset's; the speaking voice stays the same so it does not change mid-conversation.
 
 The **Usage** tab in Models & voice shows what you have spent today, this month and in this session, your budgets, and spend broken down by feature.
 

@@ -303,7 +303,7 @@ test("gateway exposes a no-store health endpoint", async () => {
     assert.equal(response.headers.get("cache-control"), "no-store");
     const body = (await response.json()) as Record<string, unknown>;
     assert.equal(body.status, "ok");
-    assert.equal(body.service, "open-gpt-live-gateway");
+    assert.equal(body.service, "sibyl-gateway");
     assert.equal(body.connections, 0);
     assert.equal(body.version, "test");
     assert.equal(body.realtimeStt, false);
