@@ -31,7 +31,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { isAuthorized } from "./auth.js";
 import { ConversationRecorder, historyFromMessages } from "./conversations.js";
 import { ApprovalBroker } from "./brain/approvals.js";
-import { runToolLoop, toolSystemPrompt } from "./brain/tool-loop.js";
+import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
@@ -180,6 +180,8 @@ interface ActiveRun {
   ttsSequence: number;
   ttsSegmentIndex: number;
   timing: RequestTiming;
+  /** False for typed chat replies: text (and visuals) only, never spoken. */
+  speak: boolean;
 }
 
 interface RequestTiming {
@@ -828,16 +830,20 @@ class GatewayConnection {
       this.interruptCurrentRun("new user message");
     }
 
-    if (this.isLive()) {
+    if (this.isLive() && timing.kind !== "text") {
       this.session.turnCounter += 1;
       await this.runVoiceTurn(requestId, timing, { role: "user", content: text });
       return;
     }
 
+    // Typed chat (or a gateway without live voice): one normal reply from the
+    // llm model, with tools when enabled. In live mode it is never spoken.
+    const typed = this.isLive() && timing.kind === "text";
+    if (typed) this.session.turnCounter += 1;
     const entry: LLMMessage = { role: "user", content: text };
     this.session.history.push(entry);
     this.beginStoredTurn(requestId, entry, timing);
-    await this.streamAssistantResponse(requestId, timing);
+    await this.streamAssistantResponse(requestId, timing, undefined, { typed });
   }
 
   private async handleAudioChunk(message: AudioChunkMessage): Promise<void> {
@@ -1724,32 +1730,21 @@ class GatewayConnection {
     const toolLlm = this.providers.toolLlm;
     try {
       if (toolLlm && tools.length > 0) {
-        const runtime = this.config.runtime;
         const result = await runToolLoop({
-          provider: toolLlm,
-          messages: [
-            { role: "system", content: live.brainPrompt(genUi) + toolSystemPrompt(tools) },
-            ...this.conversation(),
-            { role: "user", content: `Task from the voice: ${task}` }
-          ],
-          model,
-          extraBody: this.llmParamsFor(model),
-          tools,
-          signal: controller.signal,
-          runId: brainId,
-          conversationId: this.conversations.conversationId,
-          ownerId: runtime.ownerId,
-          store: runtime.store,
-          meter: runtime.meter,
-          log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields }),
+          ...this.brainToolLoop({
+            runId: brainId,
+            signal: controller.signal,
+            model,
+            tools,
+            messages: [
+              { role: "system", content: live.brainPrompt(genUi) + toolSystemPrompt(tools) },
+              ...this.conversation(),
+              { role: "user", content: `Task from the voice: ${task}` }
+            ]
+          }),
           onText: (delta) => {
             if (!controller.signal.aborted && !this.disposed) emit(splitter ? splitter.push(delta) : { speech: delta, ui: "" });
-          },
-          onToolStarted: (call) => this.send({ type: WS_EVENTS.TOOL_STARTED, requestId: brainId, ...call }),
-          onToolFinished: ({ callId, status, summary }) =>
-            this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: brainId, callId, status, ...(summary ? { summary } : {}) }),
-          approve: ({ tool, input }) =>
-            this.approvals.request({ runId: brainId, conversationId: this.conversations.conversationId, tool, input, signal: controller.signal })
+          }
         });
         if (result.aborted || controller.signal.aborted || this.disposed) return;
       } else {
@@ -1802,6 +1797,32 @@ class GatewayConnection {
     }
   }
 
+  /** Tool-loop wiring shared by deep work and typed chat (tool steps + approvals). */
+  private brainToolLoop(run: {
+    runId: string;
+    signal: AbortSignal;
+    model: string;
+    tools: ToolLoopInput["tools"];
+    messages: ToolLoopInput["messages"];
+  }): Omit<ToolLoopInput, "onText"> {
+    const runtime = this.config.runtime;
+    const extraBody = this.llmParamsFor(run.model);
+    return {
+      ...run,
+      provider: this.providers.toolLlm!,
+      ...(extraBody ? { extraBody } : {}),
+      conversationId: this.conversations.conversationId,
+      ownerId: runtime.ownerId,
+      store: runtime.store,
+      meter: runtime.meter,
+      log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields }),
+      onToolStarted: (call) => this.send({ type: WS_EVENTS.TOOL_STARTED, requestId: run.runId, ...call }),
+      onToolFinished: ({ callId, status, summary }) =>
+        this.send({ type: WS_EVENTS.TOOL_FINISHED, requestId: run.runId, callId, status, ...(summary ? { summary } : {}) }),
+      approve: ({ tool, input }) => this.approvals.request({ runId: run.runId, conversationId: this.conversations.conversationId, tool, input, signal: run.signal })
+    };
+  }
+
   /** Speak a deep-brain gist now, or after the current reply finishes. */
   private speakWhenIdle(speech: { requestId: string; text: string; turn: number }): void {
     // If the user has started talking about something else, don't interrupt
@@ -1824,7 +1845,8 @@ class GatewayConnection {
   private async streamAssistantResponse(
     requestId: string,
     timing: RequestTiming,
-    plan?: ResponsePlan
+    plan?: ResponsePlan,
+    chat: { typed?: boolean } = {}
   ): Promise<void> {
     const feature = plan?.parser === "voice" ? "voice" : "brain";
     let model = plan ? plan.model : this.session.settings.llmModel;
@@ -1839,6 +1861,7 @@ class GatewayConnection {
     }
     timing.llmStartedAt = this.config.now();
     const run: ActiveRun = {
+      speak: !chat.typed,
       requestId,
       controller: new AbortController(),
       stage: "llm_streaming",
@@ -1937,8 +1960,22 @@ class GatewayConnection {
     const messages = plan ? plan.messages : this.session.history;
     const hedgeAfterMs = this.config.hedge?.voiceAfterMs;
     let winningModel = model;
+    const tools = plan ? [] : this.config.runtime.tools.list({ enabledOnly: true });
     const source: AsyncIterable<{ delta: string }> =
-      plan?.speakOnly !== undefined
+      !plan && model && this.providers.toolLlm && tools.length > 0
+        ? toolLoopStream(
+            this.brainToolLoop({
+              runId: requestId,
+              signal: run.controller.signal,
+              model,
+              tools,
+              messages: [
+                { role: "system", content: String(messages[0]?.content ?? "") + toolSystemPrompt(tools) },
+                ...messages.slice(1)
+              ]
+            })
+          )
+        : plan?.speakOnly !== undefined
         ? singleChunk(plan.speakOnly)
         : plan?.parser === "voice" && hedgeAfterMs !== undefined
           ? hedgedStream(
@@ -2116,6 +2153,7 @@ class GatewayConnection {
     const performable = ttsModel?.emotionTags ? text : stripEmotionTags(text);
     const segmentText = toSpeakableText(performable);
     if (
+      !run.speak ||
       !this.session.settings.speak ||
       !this.providers.tts ||
       !segmentText ||

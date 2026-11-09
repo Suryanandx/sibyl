@@ -166,13 +166,46 @@ test("noise-only turns are ignored and not added to the conversation", async () 
   });
 });
 
+test("typed chat is a normal reply from the llm model; spoken turns still use the voice brain", async () => {
+  const rec: Recorded = { llm: [], tts: [] };
+  const replies = {
+    "voice/fast": "[warmly] Sure thing!",
+    "brain/deep": "Paris is the capital of France.\n```openui-lang\nroot = Card([])\n```\n"
+  };
+  await withLive(providers(replies, rec), async (client) => {
+    await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
+    client.send({ type: WS_EVENTS.USER_TEXT, requestId: "typed-1", text: "capital of France?" });
+    const done = (await client.waitFor((m) => m.type === WS_EVENTS.LLM_DONE && m.requestId === "typed-1")) as { reason: string };
+    assert.equal(done.reason, "stop");
+    await new Promise((r) => setTimeout(r, 30));
+
+    // One plain reply: llm model, normal system prompt, text + visual, no voice.
+    assert.deepEqual(rec.llm.map((c) => c.model), ["brain/deep"]);
+    assert.equal(rec.llm[0]!.messages[0]?.content, "GENUI");
+    assert.equal(deltas(client.messages, WS_EVENTS.LLM_DELTA, "typed-1"), "Paris is the capital of France.\n");
+    assert.equal(deltas(client.messages, WS_EVENTS.UI_DELTA, "typed-1"), "root = Card([])\n");
+    assert.equal(rec.tts.length, 0);
+    assert.equal(client.messages.some((m) => m.type === WS_EVENTS.TTS_START || m.type === WS_EVENTS.TTS_CHUNK), false);
+    assert.equal(client.messages.some((m) => m.type === WS_EVENTS.BRAIN_START), false);
+
+    // A spoken turn still goes to the voice brain, and it sees the typed exchange.
+    speakLive(client, "voice-1", "and Germany?");
+    await client.waitFor((m) => m.type === WS_EVENTS.TTS_END && m.requestId === "voice-1");
+    const voiceCall = rec.llm.at(-1)!;
+    assert.equal(voiceCall.model, "voice/fast");
+    assert.equal(voiceCall.messages[0]?.content, "VOICE PROMPT");
+    assert.ok(voiceCall.messages.some((m) => m.role === "user" && m.content === "capital of France?"));
+    assert.ok(rec.tts.some((t) => /Sure thing!/.test(t.text)));
+  });
+});
+
 test("emotive voices keep emotion cues", async () => {
   const rec: Recorded = { llm: [], tts: [] };
   await withLive(providers({ "voice/fast": "[laughs] That's great!" }, rec), async (client) => {
     await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
     client.send({ type: WS_EVENTS.SESSION_UPDATE, settings: { ttsModel: "tts/emotive" } });
     await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG && (m as { settings: { ttsModel?: string } }).settings.ttsModel === "tts/emotive");
-    client.send({ type: WS_EVENTS.USER_TEXT, requestId: "e-1", text: "I got the job" });
+    speakLive(client, "e-1", "I got the job");
     await client.waitFor((m) => m.type === WS_EVENTS.TTS_END && m.requestId === "e-1");
     assert.equal(rec.tts[0]?.text, "[laughs] That's great!");
   });
@@ -195,10 +228,10 @@ test("a deep-brain gist is not spoken over a newer user turn", async () => {
   };
   await withLive({ ...base, llm }, async (client) => {
     await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
-    client.send({ type: WS_EVENTS.USER_TEXT, requestId: "a", text: "do the long thing" });
+    speakLive(client, "a", "do the long thing");
     const start = (await client.waitFor((m) => m.type === WS_EVENTS.BRAIN_START)) as { requestId: string };
     await client.waitFor((m) => m.type === WS_EVENTS.TTS_END && m.requestId === "a");
-    client.send({ type: WS_EVENTS.USER_TEXT, requestId: "b", text: "actually, something else" });
+    speakLive(client, "b", "actually, something else");
     await client.waitFor((m) => m.type === WS_EVENTS.TTS_END && m.requestId === "b");
     releaseBrain();
     await client.waitFor((m) => m.type === WS_EVENTS.BRAIN_DONE && m.requestId === start.requestId);
@@ -266,7 +299,7 @@ test("a slow voice brain is hedged: the next-best voice model answers", async ()
     { ...base, llm },
     async (client) => {
       await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
-      client.send({ type: WS_EVENTS.USER_TEXT, requestId: "h-1", text: "hi" });
+      speakLive(client, "h-1", "hi");
       await client.waitFor((m) => m.type === WS_EVENTS.LLM_DONE && m.requestId === "h-1");
       assert.equal(deltas(client.messages, WS_EVENTS.LLM_DELTA, "h-1"), "Quick answer.");
       assert.deepEqual(rec.llm.map((c) => c.model), ["voice/slow", "voice/fast"]);
@@ -283,7 +316,7 @@ test("a spoken promise to look into something is kept even without @brain", asyn
   const replies = { "voice/fast": "Ooh, give me a second to think that through.", "brain/deep": "Here you go." };
   await withLive(providers(replies, rec), async (client) => {
     await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
-    client.send({ type: WS_EVENTS.USER_TEXT, requestId: "p-1", text: "compare three laptops" });
+    speakLive(client, "p-1", "compare three laptops");
     const start = (await client.waitFor((m) => m.type === WS_EVENTS.BRAIN_START)) as { parentRequestId: string };
     assert.equal(start.parentRequestId, "p-1");
   });

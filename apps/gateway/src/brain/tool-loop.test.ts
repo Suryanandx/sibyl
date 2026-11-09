@@ -139,7 +139,19 @@ function fakeTool(
   };
 }
 
-const startTask = (h: Harness) => h.send({ type: WS_EVENTS.USER_TEXT, requestId: "u-1", text: "please do it" });
+/** A spoken turn: the voice brain hands the task to the deep brain. */
+const startTask = (h: Harness) => {
+  h.send({ type: WS_EVENTS.VAD_SPEECH_START, requestId: "u-1", turnMode: "live", startedAt: 1 });
+  h.send({
+    type: WS_EVENTS.AUDIO_CHUNK,
+    requestId: "u-1",
+    chunk: Buffer.alloc(4800).toString("base64"),
+    mimeType: "audio/pcm;rate=24000",
+    sequence: 0,
+    turnMode: "live"
+  });
+  h.send({ type: WS_EVENTS.VAD_SPEECH_END, requestId: "u-1", endedAt: 2, reason: "silence", caption: "please do it" });
+};
 const brainDone = (m: ServerMessage) => m.type === WS_EVENTS.BRAIN_DONE;
 const ofType = <T>(h: Harness, type: string) => h.messages.filter((m) => m.type === type) as unknown as T[];
 
@@ -327,4 +339,30 @@ test("approval summaries and details are human and redacted", () => {
   assert.equal(approvalSummary({ title: "Create a calendar event" }, details), "Sibyl will create a calendar event with event title “Lunch” and attendees “a@x.com, b@x.com”.");
   assert.equal(approvalSummary({ title: "SMS the team" }, []), "Sibyl will SMS the team.");
   assert.equal(truncateContent("abc", 2), "ab\n…[truncated 1 characters]");
+});
+
+test("typed chat uses the tool loop as one normal reply (no voice brain, no speech)", async () => {
+  const searches: Array<Record<string, unknown>> = [];
+  const rounds: Round[] = [
+    { calls: [{ id: "t1", name: "web_search", arguments: "{\"query\":\"news\"}" }] },
+    { text: "Here is the news." }
+  ];
+  await withToolGateway(rounds, [fakeTool("web_search", "read", "Searching the web", searches)], async (h) => {
+    await h.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
+    h.send({ type: WS_EVENTS.USER_TEXT, requestId: "typed-1", text: "what's new?" });
+    const done = (await h.waitFor((m) => m.type === WS_EVENTS.LLM_DONE && m.requestId === "typed-1")) as { reason: string };
+    assert.equal(done.reason, "stop");
+    const text = h.messages
+      .filter((m) => m.type === WS_EVENTS.LLM_DELTA && m.requestId === "typed-1")
+      .map((m) => (m as { delta: string }).delta)
+      .join("");
+    assert.equal(text, "Here is the news.");
+    const started = ofType<{ requestId: string; title: string }>(h, WS_EVENTS.TOOL_STARTED);
+    assert.deepEqual(started.map((s) => [s.requestId, s.title]), [["typed-1", "Searching the web"]]);
+    assert.deepEqual(searches, [{ query: "news" }]);
+    assert.equal(h.requests[0]!.options.model, "brain/deep");
+    assert.match(String(h.requests[0]!.messages[0]!.content), /## Tools/);
+    assert.equal(ofType(h, WS_EVENTS.BRAIN_START).length, 0);
+    assert.equal(ofType(h, WS_EVENTS.TTS_START).length, 0);
+  });
 });

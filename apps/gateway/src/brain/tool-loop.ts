@@ -230,3 +230,50 @@ function safeJson(value: unknown): string {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * The loop as a plain text stream, for callers that consume
+ * `AsyncIterable<{ delta }>` (the typed-chat reply path). Tool events still go
+ * through the input's callbacks.
+ */
+export function toolLoopStream(input: Omit<ToolLoopInput, "onText">): AsyncIterable<{ delta: string }> {
+  return {
+    [Symbol.asyncIterator]() {
+      const queue: string[] = [];
+      let finished = false;
+      let failure: unknown;
+      let wake: (() => void) | undefined;
+      const notify = (): void => {
+        wake?.();
+        wake = undefined;
+      };
+      void runToolLoop({
+        ...input,
+        onText: (delta) => {
+          queue.push(delta);
+          notify();
+        }
+      }).then(
+        () => {
+          finished = true;
+          notify();
+        },
+        (error: unknown) => {
+          failure = error;
+          finished = true;
+          notify();
+        }
+      );
+      return {
+        async next(): Promise<IteratorResult<{ delta: string }>> {
+          while (queue.length === 0 && !finished) {
+            await new Promise<void>((resolve) => (wake = resolve));
+          }
+          if (queue.length > 0) return { value: { delta: queue.shift()! }, done: false };
+          if (failure) throw failure;
+          return { value: undefined, done: true };
+        }
+      };
+    }
+  };
+}
