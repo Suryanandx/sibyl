@@ -22,6 +22,7 @@ import { openStore } from "@open-gpt-live/store";
 import { installSlides, type SlidesService } from "./slides/index.js";
 import { installMemoryAndUploadTools } from "./memory/install.js";
 import { RoutineService } from "./routines/service.js";
+import { installSecrets, resolveSecretRefs, type SecretsService } from "./secrets/index.js";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -34,6 +35,8 @@ export interface GatewayRuntime {
   connections?: ConnectionsManager;
   /** Routines + approval inbox (chat tools now; scheduler started by the server). */
   routines?: RoutineService;
+  /** Secrets vault, secure prompt and Secrets panel (see docs/secrets.md). */
+  secrets?: SecretsService;
   close(): Promise<void>;
 }
 
@@ -60,7 +63,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<GatewayRun
     ...(installed.slides ? { slides: installed.slides } : {}),
     connections: installed.connections,
     routines,
+    ...(installed.secrets ? { secrets: installed.secrets } : {}),
     close: async () => {
+      installed.secrets?.close();
       await routines.stop();
       await installed.close();
       await store.close();
@@ -74,14 +79,24 @@ async function installTools(input: {
   meter: UsageMeter;
   ownerId: string;
   options: RuntimeOptions;
-}): Promise<InstalledTools & { slides?: SlidesService }> {
+}): Promise<InstalledTools & { slides?: SlidesService; secrets?: SecretsService }> {
   // Slides first, so the persisted per-tool switches below apply to them too.
   const slides = await installSlides({ ...input, env: input.options.env, log: input.options.log });
   // Memory (remember/forget/recall, unless SIBYL_MEMORY=false) and read_file for uploads.
   installMemoryAndUploadTools({ tools: input.tools, store: input.store, ownerId: input.ownerId, env: input.options.env, log: input.options.log });
+  // Secrets vault + request_secret / list_secrets / api_request (before the switches too).
+  const secrets = await installSecrets({ ...input, env: input.options.env, log: input.options.log });
   // Built-in tools, MCP servers (mcp.config.json) and persisted per-tool switches.
-  const installed = await installSibylTools({ ...input, env: input.options.env, log: input.options.log });
-  return slides ? { ...installed, slides } : installed;
+  // MCP env/header values may use ${secret:NAME}; resolved from the vault only when connecting.
+  const installed = await installSibylTools({
+    ...input,
+    env: input.options.env,
+    log: input.options.log,
+    ...(secrets
+      ? { resolveSecrets: (value: string, ctx: { host?: string }) => resolveSecretRefs(value, { host: ctx.host, ownerId: input.ownerId }) }
+      : {})
+  });
+  return { ...installed, ...(slides ? { slides } : {}), ...(secrets ? { secrets } : {}) };
 }
 
 /** Meter that records nothing and never blocks (until metering is installed). */

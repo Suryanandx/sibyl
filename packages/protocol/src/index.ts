@@ -451,7 +451,8 @@ export type ClientMessage =
   | ConversationOpenMessage
   | ConversationDeleteMessage
   | ConnectionsClientMessage
-  | RoutinesClientMessage;
+  | RoutinesClientMessage
+  | SecretsClientMessage;
 
 export type ServerMessage =
   | ServerSessionStartMessage
@@ -479,6 +480,7 @@ export type ServerMessage =
   | ConversationStateMessage
   | ConnectionsServerMessage
   | RoutinesServerMessage
+  | SecretsServerMessage
   | ErrorMessage;
 
 export type ReservedMessage = never;
@@ -686,7 +688,7 @@ export function parseClientMessage(input: unknown): ClientMessageValidationResul
     }
 
     default:
-      return parseConnectionsClientMessage(input) ?? parseRoutinesClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
+      return parseConnectionsClientMessage(input) ?? parseRoutinesClientMessage(input) ?? parseSecretsClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
   }
 }
 
@@ -973,7 +975,7 @@ export function parseServerMessage(input: unknown): ServerMessageValidationResul
     });
   }
 
-  return parseConnectionsServerMessage(input) ?? parseRoutinesServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
+  return parseConnectionsServerMessage(input) ?? parseRoutinesServerMessage(input) ?? parseSecretsServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
 }
 
 const MAX_MODEL_ID_LENGTH = 200;
@@ -1843,4 +1845,250 @@ function parseRoutinesServerMessage(input: Record<string, unknown>): ServerMessa
     default:
       return undefined;
   }
+}
+
+/* ── Secrets (wave 2) ── */
+/*
+ * Secrets the user stores for integrations (API keys, tokens). The browser
+ * only ever sends a value (secret.provide / secret.update); the gateway never
+ * sends one back — every server message below carries metadata only.
+ */
+
+export const SECRET_EVENTS = {
+  /** Server → client: ask the user for a secret in a secure box. */
+  REQUEST: "secret.request",
+  /** Server → client: a prompt was saved, cancelled, expired or rejected. */
+  RESOLVED: "secret.resolved",
+  /** Client → server: the value typed into a SecretPrompt. */
+  PROVIDE: "secret.provide",
+  /** Client → server: the user dismissed a SecretPrompt. */
+  CANCEL: "secret.cancel",
+  /** Client → server: list stored secrets (answered with secrets.state). */
+  LIST: "secrets.list",
+  /** Server → client: metadata of every stored secret. */
+  STATE: "secrets.state",
+  /** Client → server: add a secret, replace its value, or edit hosts/description. */
+  UPDATE: "secret.update",
+  /** Client → server: delete a secret. */
+  DELETE: "secret.delete"
+} as const;
+
+export const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
+export const SECRET_VALUE_MAX_CHARS = 8192;
+
+export interface SecretMetaView {
+  name: string;
+  service: string;
+  description: string;
+  allowedHosts: string[];
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt?: number;
+  /** False when the value can't be decrypted (the master key changed). */
+  readable: boolean;
+}
+
+export interface SecretRequestView {
+  id: string;
+  /** Brain run (reply) the prompt belongs to. */
+  runId: string;
+  conversationId?: string;
+  name: string;
+  service: string;
+  /** Why it's needed, written by the assistant. */
+  description: string;
+  /** Hosts the value will be sent to (the user may edit them). */
+  allowedHosts: string[];
+  howToGet?: string;
+  /** https link to where the key is created. */
+  docsUrl?: string;
+  /** True when this replaces a stored value. */
+  replace: boolean;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface SecretRequestMessage {
+  type: typeof SECRET_EVENTS.REQUEST;
+  request: SecretRequestView;
+}
+
+export interface SecretResolvedMessage {
+  type: typeof SECRET_EVENTS.RESOLVED;
+  id: string;
+  name: string;
+  /** "invalid": not saved, the prompt stays open and shows `message`. */
+  status: "saved" | "cancelled" | "expired" | "invalid";
+  allowedHosts?: string[];
+  message?: string;
+}
+
+export interface SecretsStateMessage {
+  type: typeof SECRET_EVENTS.STATE;
+  secrets: SecretMetaView[];
+  /** Set when the last secret.update / secret.delete failed. */
+  error?: string;
+}
+
+export interface SecretProvideMessage {
+  type: typeof SECRET_EVENTS.PROVIDE;
+  id: string;
+  value: string;
+  /** The hosts as the user left them (defaults to the requested ones). */
+  allowedHosts?: string[];
+}
+
+export interface SecretCancelMessage {
+  type: typeof SECRET_EVENTS.CANCEL;
+  id: string;
+}
+
+export interface SecretsListMessage {
+  type: typeof SECRET_EVENTS.LIST;
+}
+
+export interface SecretUpdateMessage {
+  type: typeof SECRET_EVENTS.UPDATE;
+  name: string;
+  /** New value; omit to keep the stored one. */
+  value?: string;
+  service?: string;
+  description?: string;
+  allowedHosts?: string[];
+}
+
+export interface SecretDeleteMessage {
+  type: typeof SECRET_EVENTS.DELETE;
+  name: string;
+}
+
+export type SecretsClientMessage =
+  | SecretProvideMessage
+  | SecretCancelMessage
+  | SecretsListMessage
+  | SecretUpdateMessage
+  | SecretDeleteMessage;
+
+export type SecretsServerMessage = SecretRequestMessage | SecretResolvedMessage | SecretsStateMessage;
+
+/** Strict parser for the secrets client messages (undefined: not a secrets message). */
+export function parseSecretsClientMessage(input: Record<string, unknown>): ClientMessageValidationResult | undefined {
+  // Error texts never include the value.
+  switch (input.type) {
+    case SECRET_EVENTS.PROVIDE: {
+      if (!isShortId(input.id)) return invalid("secret.provide id must be a non-empty string");
+      if (!isSecretValue(input.value)) return invalid(`secret.provide value must be 1–${SECRET_VALUE_MAX_CHARS} characters`);
+      const hosts = parseHostList(input.allowedHosts);
+      if (hosts === null) return invalid("secret.provide allowedHosts must be 1–10 host strings");
+      return valid({ type: SECRET_EVENTS.PROVIDE, id: input.id, value: input.value, ...(hosts ? { allowedHosts: hosts } : {}) });
+    }
+    case SECRET_EVENTS.CANCEL:
+      if (!isShortId(input.id)) return invalid("secret.cancel id must be a non-empty string");
+      return valid({ type: SECRET_EVENTS.CANCEL, id: input.id });
+    case SECRET_EVENTS.LIST:
+      return valid({ type: SECRET_EVENTS.LIST });
+    case SECRET_EVENTS.UPDATE: {
+      if (typeof input.name !== "string" || !SECRET_NAME_PATTERN.test(input.name)) {
+        return invalid("secret.update name must be UPPER_SNAKE_CASE (≤ 64 characters)");
+      }
+      if (input.value !== undefined && !isSecretValue(input.value)) {
+        return invalid(`secret.update value must be 1–${SECRET_VALUE_MAX_CHARS} characters`);
+      }
+      if (!isOptionalBoundedString(input.service, 80)) return invalid("secret.update service must be ≤ 80 characters");
+      if (!isOptionalBoundedString(input.description, 500)) return invalid("secret.update description must be ≤ 500 characters");
+      const hosts = parseHostList(input.allowedHosts);
+      if (hosts === null) return invalid("secret.update allowedHosts must be 1–10 host strings");
+      return valid({
+        type: SECRET_EVENTS.UPDATE,
+        name: input.name,
+        ...(input.value === undefined ? {} : { value: input.value as string }),
+        ...(input.service === undefined ? {} : { service: input.service as string }),
+        ...(input.description === undefined ? {} : { description: input.description as string }),
+        ...(hosts ? { allowedHosts: hosts } : {})
+      });
+    }
+    case SECRET_EVENTS.DELETE:
+      if (typeof input.name !== "string" || !SECRET_NAME_PATTERN.test(input.name)) {
+        return invalid("secret.delete name must be UPPER_SNAKE_CASE (≤ 64 characters)");
+      }
+      return valid({ type: SECRET_EVENTS.DELETE, name: input.name });
+    default:
+      return undefined;
+  }
+}
+
+/** Strict parser for the secrets server messages (undefined: not a secrets message). */
+export function parseSecretsServerMessage(input: Record<string, unknown>): ServerMessageValidationResult | undefined {
+  switch (input.type) {
+    case SECRET_EVENTS.REQUEST: {
+      const r = input.request;
+      if (
+        !isRecord(r) ||
+        !isNonEmptyString(r.id) ||
+        !isNonEmptyString(r.runId) ||
+        typeof r.name !== "string" ||
+        !SECRET_NAME_PATTERN.test(r.name) ||
+        typeof r.service !== "string" ||
+        typeof r.description !== "string" ||
+        !isStringArray(r.allowedHosts) ||
+        !isOptionalString(r.howToGet) ||
+        !isOptionalString(r.docsUrl) ||
+        (r.docsUrl !== undefined && !/^https:\/\//i.test(r.docsUrl as string)) ||
+        typeof r.replace !== "boolean" ||
+        !isFiniteNumber(r.createdAt) ||
+        !isFiniteNumber(r.expiresAt)
+      ) {
+        return invalidServer("invalid secret.request message");
+      }
+      return validServer(input as unknown as SecretRequestMessage);
+    }
+    case SECRET_EVENTS.RESOLVED:
+      if (
+        !isNonEmptyString(input.id) ||
+        typeof input.name !== "string" ||
+        !isEnum(input.status, ["saved", "cancelled", "expired", "invalid"] as const) ||
+        !isOptionalString(input.message) ||
+        (input.allowedHosts !== undefined && !isStringArray(input.allowedHosts))
+      ) {
+        return invalidServer("invalid secret.resolved message");
+      }
+      return validServer(input as unknown as SecretResolvedMessage);
+    case SECRET_EVENTS.STATE:
+      if (
+        !Array.isArray(input.secrets) ||
+        !input.secrets.every(
+          (s) => isRecord(s) && typeof s.name === "string" && typeof s.service === "string" && isStringArray(s.allowedHosts) && !("value" in s)
+        ) ||
+        !isOptionalString(input.error)
+      ) {
+        return invalidServer("invalid secrets.state message");
+      }
+      return validServer(input as unknown as SecretsStateMessage);
+    default:
+      return undefined;
+  }
+}
+
+function isShortId(value: unknown): value is string {
+  return isNonEmptyString(value) && value.length <= 100;
+}
+
+function isSecretValue(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= SECRET_VALUE_MAX_CHARS;
+}
+
+function isOptionalBoundedString(value: unknown, max: number): boolean {
+  return value === undefined || (typeof value === "string" && value.length <= max);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+/** undefined when absent, null when invalid. */
+function parseHostList(value: unknown): string[] | undefined | null {
+  if (value === undefined) return undefined;
+  if (!isStringArray(value) || value.length === 0 || value.length > 10) return null;
+  if (!value.every((host) => host.trim().length > 0 && host.length <= 253)) return null;
+  return value.map((host) => host.trim());
 }

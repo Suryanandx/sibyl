@@ -17,6 +17,7 @@ import {
   type UsageMeter
 } from "@open-gpt-live/core";
 import type { ApprovalOutcome } from "./approvals.js";
+import { redactSecrets } from "../secrets/redact.js";
 
 export const MAX_TOOL_ROUNDS = 6;
 export const MAX_TOOL_CONTENT_CHARS = 12_000;
@@ -149,7 +150,8 @@ async function runCall(
     steps.push({ callId: call.id, toolName: call.name, title, status });
     input.onToolFinished({ callId: call.id, toolName: call.name, title, status, ...(summary ? { summary } : {}) });
     input.log("tool.finished", { runId: input.runId, callId: call.id, toolName: call.name, status });
-    return truncateContent(content);
+    // Defence in depth: mask any stored secret value before the model reads it.
+    return truncateContent(redactSecrets(input.ownerId, content));
   };
 
   input.onToolStarted({ callId: call.id, toolName: call.name, title });

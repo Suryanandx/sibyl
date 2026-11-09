@@ -32,6 +32,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { isAuthorized } from "./auth.js";
 import { ConversationRecorder, historyFromMessages } from "./conversations.js";
 import { ApprovalBroker } from "./brain/approvals.js";
+import { isSecretsClientMessage, type SecretsSession } from "./secrets/index.js";
 import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
 import { handleRoutinesMessage } from "./routines/ws.js";
@@ -454,6 +455,7 @@ class GatewayConnection {
   private messageQueue = Promise.resolve();
   private readonly conversations: ConversationRecorder;
   private readonly approvals: ApprovalBroker;
+  private readonly secrets: SecretsSession | undefined;
 
   constructor(
     private readonly socket: WebSocket,
@@ -483,6 +485,11 @@ class GatewayConnection {
       createId: config.createId,
       now: config.now,
       log: (event, fields) => config.logger.info(event, { sessionId: this.session.sessionId, ...fields })
+    });
+    this.secrets = config.runtime.secrets?.connect({
+      ownerId: config.runtime.ownerId,
+      send: (message) => this.send(message),
+      conversationId: () => this.conversations.conversationId
     });
   }
 
@@ -649,6 +656,12 @@ class GatewayConnection {
     }
     // ── routines & inbox (incl. decisions on routine approvals) ──
     if (await handleRoutinesMessage(message, { routines: this.config.runtime.routines, send: (m) => this.send(m), socket: this.socket })) return;
+    // ── secrets (secure prompt + Secrets panel; values never leave secrets/) ──
+    if (isSecretsClientMessage(message)) {
+      if (this.secrets) await this.secrets.handle(message);
+      else this.notAvailable(message.type);
+      return;
+    }
     switch (message.type) {
       // ── approvals (brain tool loop) ──
       case WS_EVENTS.APPROVAL_DECISION:
@@ -2534,6 +2547,7 @@ class GatewayConnection {
     this.session.brainRuns.clear();
     this.session.pendingSpeech = undefined;
     this.approvals.dispose();
+    this.secrets?.dispose();
   }
 
   private send(message: ServerMessage): void {

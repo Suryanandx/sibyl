@@ -12,3 +12,5 @@ models.config.json
 .model-scout.json
 mcp.config.json
 data/
+# Secrets master key (see docs/secrets.md) — never commit it
+secret.key
