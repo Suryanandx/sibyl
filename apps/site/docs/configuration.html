@@ -1090,7 +1090,7 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
 <tbody><tr>
 <td><code>SIBYL_SMTP_URL</code></td>
 <td>unset</td>
-<td>Needed for sign-in links and sign-up codes (the gateway&#39;s one mailer). Unset: those options are hidden.</td>
+<td>Needed for sign-in links and sign-up codes (the gateway&#39;s one mailer). Unset: those options are hidden. See <a href="#email">Email</a>.</td>
 </tr>
 <tr>
 <td><code>SIBYL_SIGNIN_GOOGLE_CLIENT_ID</code>, <code>SIBYL_SIGNIN_GOOGLE_CLIENT_SECRET</code></td>
@@ -1128,6 +1128,140 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
 <td>The gateway&#39;s public address, for the Google / Microsoft redirect URI.</td>
 </tr>
 </tbody></table></div>
+<h2 id="email"><a class="anchor" href="#email" aria-hidden="true" tabindex="-1">#</a>Email</h2>
+<p>Every email Sibyl sends goes through the gateway&#39;s one mailer and one layout (<code>apps/gateway/src/email</code>): HTML and plain text, light and dark, with a line saying why the reader got it. No tracking pixels.</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>SIBYL_SMTP_URL</code></td>
+<td>unset</td>
+<td>The SMTP server, as a URL: <code>smtp://user:pass@host:587</code> (STARTTLS) or <code>smtps://user:pass@host:465</code> (TLS). Options go in the query, for example <code>?requireTLS=true</code>. Unset: no email (people copy invitation links; sign-in links and codes are hidden).</td>
+</tr>
+<tr>
+<td><code>SIBYL_SMTP_FROM</code></td>
+<td><code>Sibyl &lt;no-reply@localhost&gt;</code></td>
+<td>The From address. Set it: real servers refuse <code>localhost</code>.</td>
+</tr>
+<tr>
+<td><code>SIBYL_EMAIL_ASSET_BASE_URL</code></td>
+<td><code>https://opensibyl.world/assets/</code></td>
+<td>Where the logo in emails is loaded from (<code>brand/sibyl-mark-light.png</code> under it). Emails only load images from here.</td>
+</tr>
+<tr>
+<td><code>SIBYL_APP_URL</code></td>
+<td>the request&#39;s origin</td>
+<td>The web app&#39;s address. Buttons in notification emails need it; without it they say &quot;Open Sibyl&quot;.</td>
+</tr>
+</tbody></table></div>
+<h3 id="sending-through-amazon-ses"><a class="anchor" href="#sending-through-amazon-ses" aria-hidden="true" tabindex="-1">#</a>Sending through Amazon SES</h3>
+<p>Sibyl sends from <code>opensibyl.world</code> through Amazon SES in <code>eu-central-1</code> (Frankfurt). Any SES region works the same way with its own host.</p>
+<ol>
+<li>In SES, verify the domain <code>opensibyl.world</code> (DKIM records in DNS) and, while the account is in the sandbox, every address you send to. Ask AWS for production access before real users sign up.</li>
+<li>Create <strong>SMTP credentials</strong>: SES → SMTP settings → Create SMTP credentials. This makes an IAM user and shows an SMTP user name (it starts with <code>AKIA</code>) and an SMTP password once. These are not the IAM user&#39;s access keys: an access key&#39;s secret does not work as an SMTP password, and the SMTP password only works for SMTP in the region it was made for.</li>
+<li>Set:</li>
+</ol>
+<div class="codeBlock"><span class="codeLang">dotenv</span><pre><code class="language-dotenv">SIBYL_SMTP_URL=smtp://AKIAEXAMPLEUSER:URL-ENCODED-SMTP-PASSWORD@email-smtp.eu-central-1.amazonaws.com:587?requireTLS=true
+SIBYL_SMTP_FROM=Sibyl &lt;no-reply@opensibyl.world&gt;</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
+<ul>
+<li>Port <strong>587</strong> with STARTTLS; <code>requireTLS=true</code> refuses to send if the server doesn&#39;t upgrade the connection. Port 465 with <code>smtps://</code> (TLS from the start) works too.</li>
+<li>The SMTP password often contains <code>/</code>, <code>+</code> or <code>=</code>. Percent-encode it in the URL (<code>/</code> → <code>%2F</code>, <code>+</code> → <code>%2B</code>, <code>=</code> → <code>%3D</code>), for example with <code>node -e &#39;console.log(encodeURIComponent(process.argv[1]))&#39; &#39;the-password&#39;</code>.</li>
+<li>The From address must be on the verified domain. <code>no-reply@opensibyl.world</code> is fine; nobody reads replies.</li>
+<li>Keep the URL in your secret store, not in the repository.</li>
+</ul>
+<p>Check it with a sign-in link: open <code>/login</code>, choose &quot;Email me a sign-in link&quot; for an account that exists, and watch the gateway log for <code>signup.email_failed</code>.</p>
+<h3 id="what-sibyl-sends"><a class="anchor" href="#what-sibyl-sends" aria-hidden="true" tabindex="-1">#</a>What Sibyl sends</h3>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Email</th>
+<th>Subject</th>
+<th>Sent when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Sign-in link</td>
+<td>Your Sibyl sign-in link</td>
+<td>Someone asks for a sign-in link on <code>/login</code> or <code>/signup</code> and has an account. Works once, for 15 minutes.</td>
+</tr>
+<tr>
+<td>Sign-up link</td>
+<td>Finish signing up for Sibyl</td>
+<td>Hosted Sibyl: someone without an account asks for a link on <code>/signup</code>.</td>
+</tr>
+<tr>
+<td>Sign-up code</td>
+<td><code>123456</code> is your Sibyl code</td>
+<td>Hosted Sibyl: someone signs up with a password; the 6-digit code confirms the address. 15 minutes.</td>
+</tr>
+<tr>
+<td>Invitation</td>
+<td>Ana invited you to Sales (Acme) on Sibyl</td>
+<td>An admin invites someone by email, or sends an invitation again. 7 days.</td>
+</tr>
+<tr>
+<td>Approval needed</td>
+<td>The approval&#39;s title</td>
+<td>An action waits for an approval (a routine, or a second approval that policy requires), when email is asked for.</td>
+</tr>
+<tr>
+<td>Routine finished / didn&#39;t finish</td>
+<td>Routine finished: name / Routine didn&#39;t finish: name</td>
+<td>A routine run ends, when email is asked for.</td>
+</tr>
+<tr>
+<td>Paused by a budget</td>
+<td>The notice&#39;s title</td>
+<td>A budget stops an agent&#39;s computer or a routine, when email is asked for.</td>
+</tr>
+<tr>
+<td>Monitor found something</td>
+<td>The match summary</td>
+<td>A monitor fires and its notify action includes email.</td>
+</tr>
+<tr>
+<td>Monitor paused</td>
+<td>The reason</td>
+<td>A monitor pauses itself and its notify action includes email.</td>
+</tr>
+<tr>
+<td>Agent acted on its own</td>
+<td>Dot acted on its own</td>
+<td>An agent acts on its own and its settings say to tell you by email.</td>
+</tr>
+<tr>
+<td>Deck ready</td>
+<td>Your deck is ready: title</td>
+<td>A deck you asked for is built, when email is asked for.</td>
+</tr>
+<tr>
+<td>Invitation accepted</td>
+<td>Max joined Sales</td>
+<td>Someone accepts your invitation, when email is asked for.</td>
+</tr>
+<tr>
+<td>Meeting notes</td>
+<td>Notes ready: meeting</td>
+<td>A meeting ends and its notes are written, when email is asked for.</td>
+</tr>
+<tr>
+<td>Voicemail</td>
+<td>Voicemail from number</td>
+<td>Someone leaves a voicemail on a Sibyl phone line, when email is asked for.</td>
+</tr>
+<tr>
+<td>Usage alert (Agent Serve)</td>
+<td>Sibyl usage: Ana used 80% of their monthly budget</td>
+<td>Advanced usage controls: someone crosses an alert threshold, or reaches the budget. Also &quot;Send a test alert&quot;.</td>
+</tr>
+</tbody></table></div>
+<p>Notifications always land in the Inbox; email is a second channel. Today monitors (their notify action) and agents (&quot;tell me&quot; settings) ask for it; the other notices use the same template when a sender asks for email.</p>
+<p>To see them all, run <code>corepack pnpm --filter @open-gpt-live/gateway run email:preview</code>. It writes each email with sample data to <code>apps/gateway/email-preview/</code> (<code>index.html</code>, one <code>.html</code> and <code>.txt</code> per email) and takes desktop, mobile and dark screenshots with headless Chromium (<code>--no-screenshots</code> to skip; <code>CHROMIUM_PATH</code> for another browser).</p>
 <h2 id="media-images-video-audio"><a class="anchor" href="#media-images-video-audio" aria-hidden="true" tabindex="-1">#</a>Media (images, video, audio)</h2>
 <p>Made with the media models on OpenRouter, in chat (Create mode or the <code>create_image</code> / <code>create_video</code> / <code>create_audio</code> tools); kept in Spaces → Media. See <a href="media.html">Media: images, video and audio</a>.</p>
 <div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
@@ -1296,7 +1430,7 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
       <a class="next" href="troubleshooting.html"><span>Next</span>Troubleshooting</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#where-settings-are-read-from">Where settings are read from</a></li><li class="d2"><a href="#minimal-setup">Minimal setup</a></li><li class="d2"><a href="#storage-sign-in-tools-and-budgets">Storage, sign-in, tools and budgets</a></li><li class="d2"><a href="#sibyl-slides">Sibyl Slides</a></li><li class="d2"><a href="#provider-and-models">Provider and models</a></li><li class="d3"><a href="#building-the-catalog-from-variables">Building the catalog from variables</a></li><li class="d2"><a href="#conversation-behaviour">Conversation behaviour</a></li><li class="d2"><a href="#gateway-server">Gateway server</a></li><li class="d2"><a href="#using-a-different-openai-compatible-provider">Using a different OpenAI-compatible provider</a></li><li class="d3"><a href="#openai-realtime-transcription">OpenAI Realtime transcription</a></li><li class="d2"><a href="#web-app-build-time">Web app (build time)</a></li><li class="d3"><a href="#voice-activity-detection">Voice activity detection</a></li><li class="d2"><a href="#local-development-helpers">Local development helpers</a></li><li class="d2"><a href="#startup-validation">Startup validation</a></li><li class="d2"><a href="#model-allowlist">Model allowlist</a></li><li class="d2"><a href="#agents-in-slack-and-teams">Agents in Slack and Teams</a></li><li class="d2"><a href="#files-and-knowledge-ocr">Files and knowledge OCR</a></li><li class="d2"><a href="#enterprise-governance-roles-policies-audit-log">Enterprise governance (roles, policies, audit log)</a></li><li class="d2"><a href="#single-sign-on-scim-and-session-policies-agent-serve">Single sign-on, SCIM and session policies (Agent Serve)</a></li><li class="d2"><a href="#notifications">Notifications</a></li><li class="d2"><a href="#enterprise-advanced-usage-controls">Enterprise: advanced usage controls</a></li><li class="d2"><a href="#agent-computers">Agent computers</a></li><li class="d2"><a href="#realtime-layer-livekit">Realtime layer (LiveKit)</a></li><li class="d3"><a href="#call-recordings-agent-serve-feature-recordings">Call recordings (Agent Serve, feature recordings)</a></li><li class="d2"><a href="#meetings">Meetings</a></li><li class="d2"><a href="#hosted-sibyl">Hosted Sibyl</a></li><li class="d2"><a href="#sign-up-and-sign-in-methods">Sign-up and sign-in methods</a></li><li class="d2"><a href="#media-images-video-audio">Media (images, video, audio)</a></li><li class="d2"><a href="#phone-line">Phone line</a></li><li class="d2"><a href="#voice-engines-gpt-realtime">Voice engines (GPT Realtime)</a></li><li class="d2"><a href="#voice-speed-preemptive-generation-livekit-inference">Voice speed (preemptive generation, LiveKit Inference)</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#where-settings-are-read-from">Where settings are read from</a></li><li class="d2"><a href="#minimal-setup">Minimal setup</a></li><li class="d2"><a href="#storage-sign-in-tools-and-budgets">Storage, sign-in, tools and budgets</a></li><li class="d2"><a href="#sibyl-slides">Sibyl Slides</a></li><li class="d2"><a href="#provider-and-models">Provider and models</a></li><li class="d3"><a href="#building-the-catalog-from-variables">Building the catalog from variables</a></li><li class="d2"><a href="#conversation-behaviour">Conversation behaviour</a></li><li class="d2"><a href="#gateway-server">Gateway server</a></li><li class="d2"><a href="#using-a-different-openai-compatible-provider">Using a different OpenAI-compatible provider</a></li><li class="d3"><a href="#openai-realtime-transcription">OpenAI Realtime transcription</a></li><li class="d2"><a href="#web-app-build-time">Web app (build time)</a></li><li class="d3"><a href="#voice-activity-detection">Voice activity detection</a></li><li class="d2"><a href="#local-development-helpers">Local development helpers</a></li><li class="d2"><a href="#startup-validation">Startup validation</a></li><li class="d2"><a href="#model-allowlist">Model allowlist</a></li><li class="d2"><a href="#agents-in-slack-and-teams">Agents in Slack and Teams</a></li><li class="d2"><a href="#files-and-knowledge-ocr">Files and knowledge OCR</a></li><li class="d2"><a href="#enterprise-governance-roles-policies-audit-log">Enterprise governance (roles, policies, audit log)</a></li><li class="d2"><a href="#single-sign-on-scim-and-session-policies-agent-serve">Single sign-on, SCIM and session policies (Agent Serve)</a></li><li class="d2"><a href="#notifications">Notifications</a></li><li class="d2"><a href="#enterprise-advanced-usage-controls">Enterprise: advanced usage controls</a></li><li class="d2"><a href="#agent-computers">Agent computers</a></li><li class="d2"><a href="#realtime-layer-livekit">Realtime layer (LiveKit)</a></li><li class="d3"><a href="#call-recordings-agent-serve-feature-recordings">Call recordings (Agent Serve, feature recordings)</a></li><li class="d2"><a href="#meetings">Meetings</a></li><li class="d2"><a href="#hosted-sibyl">Hosted Sibyl</a></li><li class="d2"><a href="#sign-up-and-sign-in-methods">Sign-up and sign-in methods</a></li><li class="d2"><a href="#email">Email</a></li><li class="d3"><a href="#sending-through-amazon-ses">Sending through Amazon SES</a></li><li class="d3"><a href="#what-sibyl-sends">What Sibyl sends</a></li><li class="d2"><a href="#media-images-video-audio">Media (images, video, audio)</a></li><li class="d2"><a href="#phone-line">Phone line</a></li><li class="d2"><a href="#voice-engines-gpt-realtime">Voice engines (GPT Realtime)</a></li><li class="d2"><a href="#voice-speed-preemptive-generation-livekit-inference">Voice speed (preemptive generation, LiveKit Inference)</a></li></ul></aside>
 </div>
 
   <footer class="footer">
