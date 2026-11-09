@@ -32,6 +32,9 @@ importers:
       '@open-gpt-live/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@open-gpt-live/store':
+        specifier: workspace:*
+        version: link:../../packages/store
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -154,6 +157,19 @@ importers:
 
   packages/protocol:
     devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.7.3
+
+  packages/store:
+    dependencies:
+      '@open-gpt-live/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.20.1
       typescript:
         specifier: ^5.7.3
         version: 5.7.3

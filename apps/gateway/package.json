@@ -15,6 +15,7 @@
     "@open-gpt-live/core": "workspace:*",
     "@open-gpt-live/genui": "workspace:*",
     "@open-gpt-live/protocol": "workspace:*",
+    "@open-gpt-live/store": "workspace:*",
     "dotenv": "^16.4.7",
     "undici": "^7.30.2",
     "ws": "^8.18.0"

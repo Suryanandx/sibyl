@@ -11,3 +11,4 @@ coverage
 models.config.json
 .model-scout.json
 mcp.config.json
+data/

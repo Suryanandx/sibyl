@@ -3,8 +3,8 @@
  *
  * Wiring lives here (not in server.ts) so each capability is installed in
  * exactly one place:
- * - storage:   replace createMemoryStore() with the SQLite store
- * - metering:  replace createNoopMeter() with the real UsageMeter
+ * - storage:   SQLite store via openStore() (SIBYL_STORAGE=memory for none)
+ * - metering:  createUsageMeter() over the store, budgets from SIBYL_BUDGET_*
  * - tools:     register built-ins / MCP / slides tools in installTools()
  */
 import {
@@ -17,6 +17,7 @@ import {
 } from "@open-gpt-live/core";
 import { createUsageMeter } from "./metering/meter.js";
 import { installSibylTools, type InstalledTools } from "./tools/index.js";
+import { openStore } from "@open-gpt-live/store";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -32,7 +33,9 @@ export interface RuntimeOptions {
 }
 
 export async function createRuntime(options: RuntimeOptions): Promise<GatewayRuntime> {
-  const store = createMemoryStore();
+  // SQLite in $SIBYL_DATA_DIR/sibyl.db (default ./data); SIBYL_STORAGE=memory keeps nothing on disk.
+  const { store, kind, file } = openStore(options.env);
+  options.log("store.opened", { kind, ...(file ? { file } : {}) });
   const tools = createToolRegistry();
   const meter = await createUsageMeter({ store, ownerId: DEFAULT_OWNER_ID, env: options.env, log: options.log });
   const installed = await installTools({ tools, store, meter, ownerId: DEFAULT_OWNER_ID, options });
