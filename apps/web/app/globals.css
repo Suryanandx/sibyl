@@ -2364,6 +2364,8 @@ code {
 @media (max-width: 520px) {
   .usageStats {
     grid-template-columns: 1fr;
+  }
+}
 
 /* ── Approvals & tool steps ── */
 

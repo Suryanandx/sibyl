@@ -193,11 +193,13 @@ test("a read tool runs, its steps stream, results are fed back and usage is mete
     assert.match(results[0]!.content, /truncated/);
     assert.match(results[1]!.content, /no tool named "nope"/);
 
-    assert.equal(h.usage.length, 2);
-    assert.equal(h.usage[0]!.feature, "brain");
-    assert.equal(h.usage[0]!.model, "brain/deep");
-    assert.equal(h.usage[0]!.costUsd, 0.001);
-    assert.equal(h.usage[0]!.requestId, done.requestId);
+    // The voice turn and speech are metered too (metering wrappers); the
+    // tool loop records exactly one event per model round, never twice.
+    const brainUsage = h.usage.filter((event) => event.feature === "brain");
+    assert.equal(brainUsage.length, 2);
+    assert.equal(brainUsage[0]!.model, "brain/deep");
+    assert.equal(brainUsage[0]!.costUsd, 0.001);
+    assert.equal(brainUsage[0]!.requestId, done.requestId);
   });
 });
 

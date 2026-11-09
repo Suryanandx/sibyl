@@ -2342,24 +2342,20 @@ export default function Home() {
                                     {openSources.has(`task:${message.id}`) && message.task ? (
                                       <p className="stepDetail">{message.task}</p>
                                     ) : null}
-                                    <ToolSteps tools={message.tools} settled={Boolean(viewing || message.done)} />
+                                    <ToolSteps tools={message.tools} settled={Boolean(message.done)} />
                                   </div>
                                 ) : message.tools?.length ? (
                                   <div className="steps">
-                                    <ToolSteps tools={message.tools} settled={Boolean(viewing || message.done)} />
+                                    <ToolSteps tools={message.tools} settled={Boolean(message.done)} />
                                   </div>
                                 ) : null}
                                 {message.approvals?.map((entry) => (
                                   <ApprovalCard
                                     key={entry.view.id}
                                     approval={entry.view}
-                                    status={viewing && entry.status === "pending" ? "expired" : entry.status}
+                                    status={entry.status}
                                     submitting={entry.submitting}
-                                    onDecide={
-                                      viewing
-                                        ? undefined
-                                        : (decision, remember) => decideApproval(entry.view.id, decision, remember)
-                                    }
+                                    onDecide={(decision, remember) => decideApproval(entry.view.id, decision, remember)}
                                   />
                                 ))}
                                 {cleanText(message.content) ? (
