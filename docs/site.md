@@ -5,9 +5,10 @@ The public site lives in `apps/site/`. It is plain static HTML, so any static ho
 | Path | What it is |
 | --- | --- |
 | `index.html`, `site.css`, `site.js` | The landing page. `site.js` runs the theme toggle, the Products menu and the phone menu, the product index, install tabs, copy buttons and lazy video. |
+| `products/` | One page per product (Assistant, Meet, Slides, Studio, Agents), generated from `scripts/products.mjs` (below). |
 | `docs/` | The docs site, generated from the repo's Markdown (below). `docs.css` and `docs.js` (search, "On this page") are hand-written; the `.html` pages and `search-index.json` are generated. |
-| `assets/` | Font, brand marks, paintings, painted loops and app clips. |
-| `scripts/build-docs.mjs` | The docs generator. |
+| `assets/` | Font, brand marks, paintings, painted loops, app clips and screenshots (`assets/screens/`). |
+| `scripts/build-docs.mjs`, `scripts/build-products.mjs` | The docs and product page generators. Both take the header and footer from `index.html` through `scripts/chrome.mjs`. |
 
 ## Preview locally
 
@@ -17,7 +18,7 @@ npx serve apps/site -l 3110
 python3 -m http.server 3110 --directory apps/site
 ```
 
-Open <http://localhost:3110> for the landing page and <http://localhost:3110/docs/> for the docs.
+Open <http://localhost:3110> for the landing page, <http://localhost:3110/products/assistant.html> for a product page and <http://localhost:3110/docs/> for the docs.
 
 ## Deploy
 
@@ -25,7 +26,7 @@ Publish the `apps/site` folder as the site root. All paths are relative, so it a
 
 ## The docs site
 
-Every page in `docs/` (not `docs/plans/`) becomes `apps/site/docs/<name>.html`, and the README becomes `docs/overview.html`. Regenerate after changing any Markdown or the landing page's header or footer:
+Every page in `docs/` (not `docs/plans/`) becomes `apps/site/docs/<name>.html`, and the README becomes `docs/overview.html`. The same command also rebuilds the product pages. Regenerate after changing any Markdown, `scripts/products.mjs`, or the landing page's header or footer:
 
 ```bash
 corepack pnpm --filter site run docs
@@ -37,16 +38,23 @@ What the generator does:
 
 - **Same header and footer as the landing page.** It copies them from `index.html` (between the `site:header` and `site:footer` comments) and rewrites their links for the docs folder, so the two never drift apart.
 - **Sidebar groups**, in order: Get started · Using Sibyl · Agents · Knowledge & tools · Meetings & calls · Spaces · Automations · Teams & admin · Hosting & deployment · Enterprise · Reference. The list is `GROUPS` at the top of the script; a new `docs/*.md` that isn't listed lands in Reference, and a listed page that doesn't exist yet (such as `media`) is skipped.
-- **Links.** Links between docs point at the generated pages, including `#anchors` (headings get GitHub-style ids). A link written as a bare file name (`realtime.md`) shows the page title. Links to other repo files (source, `LICENSE`, `docs/plans/`) go to GitHub. Images under `docs/assets/` are copied next to the pages.
+- **Links.** Links between docs point at the generated pages, including `#anchors` (headings get GitHub-style ids). A link written as a bare file name (`realtime.md`) shows the page title. Links to other repo files (source, `LICENSE`, `docs/plans/`) go to GitHub. Images under `docs/assets/` (screenshots in `docs/assets/screens/` too) are copied to `apps/site/docs/assets/`, including the ones in the README's raw-HTML screenshot table. The copies are byte-identical, so git stores each image once.
 - **Pages** have an "On this page" list (wide screens), previous and next links, a link to the Markdown source, code blocks with copy buttons, and styled tables. Mermaid blocks show as their source.
 - **Search** runs in the browser over `search-index.json`: one entry per heading with its text. The index loads the first time you use the search box. Press `/` to jump to it.
 
 Markdown is parsed with [`marked`](https://marked.js.org) (the only dependency, a dev dependency of `apps/site/package.json`).
 
+## Product pages
+
+Sibyl is a family of products in one install: **Sibyl Assistant**, **Sibyl Meet**, **Sibyl Slides**, **Sibyl Studio** and **Sibyl Agents**. Each has a page at `products/<slug>.html` with a plain headline, three to five "What you can do" blocks with real screenshots, **What it costs to run**, **Try it** (the quickstart) and links to its docs pages.
+
+The content lives in `scripts/products.mjs`; the docs home lists the same products from there. Costs on these pages are only numbers that were measured, each with its source (a docs page, or Settings → Usage on the screenshot install). Sibyl Phone has no page until it has been tested on a real phone line; the landing page says it is coming soon.
+
 ## Landing page
 
-- **Header.** A **Products** menu lists Sibyl (chat and voice), Agents, Meetings, Spaces, Library, Automations, and Calls and phone, with one line each. Next to them are the editions: Sibyl self-hosted (free), Sibyl hosted (coming soon) and Agent Serve by valnoraelric.com (talk to us). It follows the disclosure pattern. The button says whether it is open; Esc closes it and returns focus, and so does a click outside. On a phone the menu button opens the same links, and Products expands in place.
-- **Product sections** follow the app's rail: Chat, Agents, Meetings, Spaces, Library, Automations, and Settings and control. Each area has a heading, a few sentences, a painting or a real clip of the app, and a link to its docs page. Features that are still being merged (the chat side panel, Media, phone line settings) are labelled **New** and have no docs link until their page exists.
+- **Hero and product grid.** The hero says what Sibyl is: open-source alternatives to the tools you pay for every month, so you pay only for the AI you use. Below it, a grid links the five product pages, with a line saying a new product joins every week.
+- **Header.** A **Products** menu lists the five products, with one line each. Next to them are the editions: Sibyl self-hosted (free), Sibyl hosted (coming soon) and Agent Serve by valnoraelric.com (talk to us). It follows the disclosure pattern. The button says whether it is open; Esc closes it and returns focus, and so does a click outside. On a phone the menu button opens the same links, and Products expands in place.
+- **Product sections** follow the app's rail: Chat, Agents, Meetings, Spaces, Library, Automations, and Settings and control. Each area has a heading, a few sentences, a painting, a screenshot or a real clip of the app, and a link to its docs page. Agent computers, the side panel, Media and Meetings show screenshots of the real app. Phone lines are labelled **Coming soon**.
 - **Every "Docs" link** goes to the docs site.
 
 ## Content rules
@@ -83,8 +91,8 @@ All made through OpenRouter with one shared style prompt: a refined, finished oi
 
 `google/gemini-3-pro-image` made all 16 paintings, at about $0.139 each (**$2.22** in all):
 
-- On the page: horizon, voice, computer, channels, wires, key, journals, valley, seedling, commons, lighthouse, easel, media and sidepanel.
-- Not shipped: `tools`, which was never used, and `meeting`, which a real screenshot of Meetings replaced.
+- On the page: horizon, voice, channels, wires, key, journals, valley, seedling, commons, lighthouse and easel.
+- Replaced by real screenshots and removed: `computer`, `media` and `sidepanel`. Not shipped: `tools`, which was never used, and `meeting`.
 
 The earlier photographic set (`google/gemini-3.1-flash-image`, about $0.67) was replaced.
 
@@ -103,10 +111,16 @@ Recorded on 2026-11-10 from a fresh local install of the current code, which has
 - `clip-knowledge`: making a knowledge base from four of Sibyl's own docs and searching it (Knowledge).
 - `clip-onboard`: stepping through first-run setup (Getting started).
 
-Screenshots of Skills, Integrations, Models settings and the New meeting dialog are WebP at 1280 × 800.
+Screenshots of Skills, Integrations and Models settings are WebP at 1280 × 800.
+
+### Screenshots of the real app (`assets/screens/`, `docs/assets/screens/`)
+
+Taken on 2026-11-10 from a fresh install of the current code (grouped rail, light mode unless noted) with a temporary data folder and a local test owner, "Alex Morgan". The content was made through the app itself with real OpenRouter models: four agents from the templates (one with a computer, running the `sibyl-computer:1.64.1` image), a knowledge base of six of Sibyl's own docs, chats with a chart, a knowledge answer and an agent browsing Hacker News, three images and a short video in Create mode, a five-slide deck from the Slides engine (Docker), and a routine waiting for approval in the Inbox. The whole run cost **$1.51** on OpenRouter (Settings → Usage), of which $1.08 was the model scout's first catalog check. The meeting screenshots come from the realtime test install of the same day (LiveKit dev server, a fake camera and microphone).
+
+Captured with headless Chromium (Playwright) at 1440 × 900, device scale 2, then scaled to 1600 px wide: palette PNG for the README and docs (`docs/assets/screens/`, about 1.6 MB for 19 images), WebP for the site (`apps/site/assets/screens/`, about 0.8 MB). Test e-mail addresses are hidden.
 
 ## Page weight
 
 The landing page is about 1.3 MB on first load, counting the hero loop, which starts after the page has loaded. Before that, the first paint needs the HTML, CSS, JS, font and hero poster: about 0.3 MB. Everything else loads as you scroll. A docs page is the HTML (20–60 KB) plus the shared CSS, JS and font; the search index (about 220 KB) loads only when you search.
 
-Total generation cost for the current assets: about **$3.02** ($2.22 paintings, $0.80 loops). The comparison tests and the replaced photo set add about $0.96.
+Total generation cost for the current assets: about **$3.02** ($2.22 paintings, $0.80 loops), plus **$1.51** for the screenshot run. The comparison tests and the replaced photo set add about $0.96.

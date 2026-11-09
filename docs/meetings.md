@@ -2,6 +2,8 @@
 
 Meetings are calls where people and agents meet together, like a video call. Sibyl keeps the transcript, writes the notes as you talk, and finds the action items. Afterwards, the meeting has its own page with the notes, the transcript, playback and comments.
 
+![A meeting page: the summary, key points and AI insight, the participants, the recording, and comments with Ask AI](assets/screens/meeting.png)
+
 Meetings are part of the open-source edition. Audio and video recordings of a meeting are part of Agent Serve.
 
 The room needs the realtime layer (LiveKit): see [realtime.md](realtime.md) to turn it on. Without it you can still schedule meetings and read the notes of past ones.

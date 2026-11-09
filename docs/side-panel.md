@@ -2,6 +2,8 @@
 
 The chat has a panel on the right that shows what the AI is doing or made, without leaving the conversation: an agent's computer working live, a deck being built, a visual at full size, a file you sent, or a web page it read.
 
+![A chat with an image made in Create mode, and the side panel on the right showing the image with its prompt, model, settings and cost](assets/screens/side-panel-image.png)
+
 ## What it shows
 
 | Item | What you see |

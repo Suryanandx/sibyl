@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Overview · Sibyl docs</title>
-  <meta name="description" content="Sibyl is an open-source assistant your team hosts itself. Talk to it or type to it. It answers with interactive visuals, works in your Google, Microsoft and Slack accounts, searches your own files, ma" />
+  <meta name="description" content="Sibyl is an initiative to build open-source alternatives to the paid tools teams use every day: the chat assistant, the meeting note-taker, the slide maker, the image studio, the AI agents. You run th" />
   <meta name="color-scheme" content="light dark" />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#161817" media="(prefers-color-scheme: dark)" />
@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -95,10 +93,46 @@
     <p class="crumb"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Get started</p>
     <article class="prose">
 <h1 id="overview">Overview</h1>
-<p>Sibyl is an open-source assistant your team hosts itself. Talk to it or type to it. It answers with interactive visuals, works in your Google, Microsoft and Slack accounts, searches your own files, makes slide decks, and runs agents you build: teammates with their own look, voice, skills and computer that learn as they go. Anything that changes something asks first. One OpenRouter key is all you need to start.</p>
+<p>Sibyl is an initiative to build open-source alternatives to the paid tools teams use every day: the chat assistant, the meeting note-taker, the slide maker, the image studio, the AI agents. You run them yourself, so there are no seats and no subscriptions. You pay your model provider for the AI you actually use, and nothing else.</p>
+<p>Every Sibyl product runs in the same install on your own server. They share one sign-in, one set of permissions, one approval flow and one budget, and they work together: an agent can join your meeting, a deck can come from your knowledge, an image you made can go into a chat. One OpenRouter key is all you need to start.</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Product</th>
+<th>What it is</th>
+<th>Docs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Sibyl Assistant</strong></td>
+<td>Chat and live voice with visual answers, knowledge from any file, Google, Microsoft and Slack, skills and plugins, routines and monitors, with approvals and budgets</td>
+<td><a href="voice.html">voice</a> · <a href="knowledge.html">knowledge</a> · <a href="integrations.html">integrations</a></td>
+</tr>
+<tr>
+<td><strong>Sibyl Meet</strong></td>
+<td>Meetings with people and agents. A silent note-taker writes live notes, the transcript and action items, and each meeting gets its own page</td>
+<td><a href="meetings.html">meetings</a></td>
+</tr>
+<tr>
+<td><strong>Sibyl Slides</strong></td>
+<td>Decks from a prompt, your files or connected data. Edit them, then export PowerPoint or PDF</td>
+<td><a href="slides.html">slides</a></td>
+</tr>
+<tr>
+<td><strong>Sibyl Studio</strong></td>
+<td>Images, video and audio made in chat, with @ references and each model&#39;s own settings, collected in the Media library</td>
+<td><a href="media.html">media</a></td>
+</tr>
+<tr>
+<td><strong>Sibyl Agents</strong></td>
+<td>Agents you build, with a face, a voice, access rules, autonomy, learning and budgets, a sandboxed computer you can watch, and a place in Slack and Teams</td>
+<td><a href="agents.html">agents</a> · <a href="agent-computers.html">agent computers</a></td>
+</tr>
+</tbody></table></div>
+<p>A new product joins every week. Sibyl Phone is next; it ships once it has been tested on a real phone line.</p>
 <p><img src="assets/sibyl-hero.png" alt="Sibyl answering with a table it researched, with follow-up questions" loading="lazy" decoding="async"></p>
 <h2 id="what-sibyl-does"><a class="anchor" href="#what-sibyl-does" aria-hidden="true" tabindex="-1">#</a>What Sibyl does</h2>
-<p><strong>Talk or type, in one conversation.</strong> Type and you get a normal chat reply with text and visuals. Turn on the mic for a live voice conversation: a fast <em>voice brain</em> answers out loud in a second or two and hands careful work to a <em>deep brain</em>. Old chats pick up where they left off. With the optional <a href="realtime.html">LiveKit layer</a> you get WebRTC voice, group calls where people and agents talk together, and phone calls.</p>
+<p><strong>Talk or type, in one conversation.</strong> Type and you get a normal chat reply with text and visuals. Turn on the mic for a live voice conversation: a fast <em>voice brain</em> starts answering out loud about 2–3 seconds after you stop talking (<a href="voice.html#measured-latency">measured</a>) and hands careful work to a <em>deep brain</em>. Old chats pick up where they left off. With the optional <a href="realtime.html">LiveKit layer</a> you get WebRTC voice, group calls where people and agents talk together, and phone calls.</p>
 <p><strong>Answers you can see and use.</strong> Replies can include charts, tables, plans, option cards and forms, built with <a href="https://github.com/thesysdev/openui" rel="noopener">OpenUI</a>. Buttons and forms send your choice back to Sibyl.</p>
 <p><strong>Agents you build yourself.</strong> Give an agent a name, a generated avatar, a voice and instructions. Choose what it can use (<em>everything I can use</em>, or a controlled list) and how it acts (<em>ask first</em>, <em>act then tell me</em>, <em>fully autonomous</em>, with high-risk actions always asking). Agents learn: after a task they propose a better skill, which you approve or let them save on their own, and you can roll it back. An agent can have its own sandboxed browser you can watch live, answer in Slack and Teams channels, run on a schedule, and keep an eye on your sources. See <a href="agents.html">agents</a>, <a href="agent-computers.html">agent computers</a> and <a href="slack-and-teams.html">Slack and Teams</a>.</p>
 <p><strong>Your files and know-how.</strong> Knowledge bases take almost any file: PDF (scanned ones too), Word, Excel, PowerPoint, OpenDocument, Markdown, CSV, HTML, e-mail, EPUB, code, images and ZIP archives, plus web pages and pasted notes. Sibyl searches them and cites what it used. Skills are instruction packs (&quot;how we write release notes&quot;) the brain loads when they fit, and plugins bundle skills, tools and settings into one install. See <a href="knowledge.html">knowledge</a> and <a href="skills-and-plugins.html">skills and plugins</a>.</p>
@@ -107,7 +141,20 @@
 <p><strong>Slide decks.</strong> Ask in chat or open Slides to make a deck from a prompt, your files or your connected data. Edit it yourself, and export PPTX or PDF. See <a href="slides.html">slides</a>.</p>
 <p><strong>Work that runs on its own.</strong> Routines run on a schedule; monitors watch Gmail, Outlook, Calendar, files, CRM records, web pages or RSS and tell you, or start a task, when a plain-language condition is met. Everything lands in one Inbox, with approvals for anything that changes data. See <a href="monitors.html">monitors</a>.</p>
 <p><strong>Built for teams.</strong> Workspaces, invitations, roles (owner, admin, member, viewer), two-step sign-in and per-workspace budgets are all free. The enterprise edition, <a href="https://valnoraelric.com" rel="noopener">Agent Serve</a> by valnoraelric.com, adds custom roles, policies, an audit log, SSO and SCIM, advanced usage controls and call recordings.</p>
-<p><img src="assets/sibyl-visual.png" alt="A chart with its sources, in dark mode" loading="lazy" decoding="async"></p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+  <tr>
+    <td width="50%"><img src="assets/agent-computer-chat.png" alt="An agent at work: Research Dot reads a Hacker News thread on its own computer, which runs live in the side panel next to the chat" /><br /><sub>An agent browsing on its own computer, live in the side panel</sub></td>
+    <td width="50%"><img src="assets/chat-visual-dark.png" alt="A typed question answered with a bar chart of smartphone market share, in dark mode" /><br /><sub>A visual answer with its sources (dark mode)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/agents.png" alt="The Agents screen with four agents, each with its own avatar, autonomy and access" /><br /><sub>Agents you build, each with its own face and rules</sub></td>
+    <td><img src="assets/meeting.png" alt="A meeting page with the summary, key points, AI insight, the recording and comments" /><br /><sub>A meeting page written by the note-taker</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/media-library.png" alt="The Media library with three generated images and a short video" /><br /><sub>Images and video made in chat, kept in Media</sub></td>
+    <td><img src="assets/slides-library.png" alt="The Slides library with a five-slide deck made in chat, with PPTX and PDF downloads" /><br /><sub>A deck made in chat, ready to edit or export</sub></td>
+  </tr>
+</table></div><p><img src="assets/sibyl-visual.png" alt="A chart with its sources, in dark mode" loading="lazy" decoding="async"></p>
 <h2 id="quickstart"><a class="anchor" href="#quickstart" aria-hidden="true" tabindex="-1">#</a>Quickstart</h2>
 <p>You need Node.js 22.13 or newer and an <a href="https://openrouter.ai/keys" rel="noopener">OpenRouter</a> API key. pnpm comes through corepack, which ships with Node up to version 24 (on Node 25 or newer, run <code>npm install -g corepack</code> first).</p>
 <div class="codeBlock"><span class="codeLang">bash</span><pre><code class="language-bash">git clone https://github.com/Suryanandx/sibyl.git
@@ -351,6 +398,7 @@ docker compose up --build</code></pre><button type="button" class="btn btnLine b
 <li><strong>Production licence keys</strong> for the enterprise edition, signed with an offline key.</li>
 <li><strong>Hosted mode on several servers:</strong> today one gateway process serves every organization; see <a href="hosting.html#scaling">Scaling</a> for the plan (Postgres, shared limits, routing per organization).</li>
 <li><strong>A desktop view for agent computers</strong>, next to the browser.</li>
+<li><strong>A faster voice brain:</strong> with streamed speech and preemptive generation, the Balanced preset now starts speaking about 2.4 seconds after your last word (median, 3 s at p90; it was 4–5 s). Most of the rest is the voice brain&#39;s first word (1–2 s), so faster audio-native voice brains are next.</li>
 </ul>
 <p><strong>Help wanted: try it with real accounts</strong></p>
 <p>These are built and tested against local stand-ins, but not yet against real services. If you run one of them, please tell us how it went in an issue:</p>
@@ -383,17 +431,18 @@ docker compose up --build</code></pre><button type="button" class="btn btnLine b
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -429,7 +478,7 @@ docker compose up --build</code></pre><button type="button" class="btn btnLine b
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

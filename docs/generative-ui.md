@@ -2,6 +2,8 @@
 
 Some answers are easier to see than to hear. Alongside its spoken reply, Sibyl can put a visual on screen: a chart, a table, a step-by-step plan, option cards or a short form. Visuals are written by the model in [OpenUI](https://github.com/thesysdev/openui)'s `openui-lang` and rendered in the browser with OpenUI's chat component library (`@openuidev/react-ui`).
 
+![A typed question answered with a bar chart of smartphone market share, with a table and sources further down](assets/screens/chat-visual.png)
+
 ## When visuals appear
 
 - **Typed messages** are answered by the deep brain directly: text plus, when it helps, one visual.

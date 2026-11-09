@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sibyl — the open-source AI assistant you host yourself</title>
-  <meta name="description" content="Sibyl is an open-source, self-hosted AI assistant. Talk or type, get visual answers, build agents, search your own files. Your server, your data, any model through one OpenRouter key. Every action that changes something asks first." />
+  <title>Sibyl — open-source alternatives to the tools you pay for every month</title>
+  <meta name="description" content="Sibyl builds open-source alternatives to the tools you pay for every month: an assistant, meetings with a note-taker, slides, an image and video studio, and AI agents. One install on your own server. Pay only for the AI you use." />
   <meta name="color-scheme" content="light dark" />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#161817" media="(prefers-color-scheme: dark)" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Sibyl — AI you own, not AI you rent" />
-  <meta property="og:description" content="An open-source assistant your team hosts itself. MIT licensed. Your server, your data, your models." />
+  <meta property="og:title" content="Sibyl — open-source alternatives to the tools you pay for every month" />
+  <meta property="og:description" content="Assistant, Meet, Slides, Studio and Agents: open-source products your team hosts itself. Pay only for the AI you use." />
   <meta property="og:image" content="assets/video/loop-horizon-poster.webp" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/png" href="assets/brand/sibyl-mark-light.png" />
@@ -42,13 +42,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -87,11 +85,11 @@
     <!-- Hero -->
     <section class="hero wrap">
       <p class="eyebrow">Open source · Self-hosted · MIT licensed</p>
-      <h1>AI you own, not AI you rent.</h1>
-      <p class="lede">Sibyl is an open-source assistant you run on your own server. Talk to it or type to it, get answers you can see, and build agents that work alongside your team. Your data stays with you, any model is one key away, and nothing changes without your say.</p>
+      <h1 class="wide">Open-source alternatives to the tools you pay for every month.</h1>
+      <p class="lede">Sibyl is an initiative to replace the subscriptions teams pay for — the chat assistant, the meeting note-taker, the slide maker, the image studio, the AI agents — with open-source products you run yourself. Pay only for what matters: the AI you use.</p>
       <div class="ctaRow">
         <a class="btn btnInk" href="#start">Get started — it's free</a>
-        <a class="btn btnLine" href="https://github.com/Suryanandx/sibyl">View on GitHub</a>
+        <a class="btn btnLine" href="#products">See the products</a>
       </div>
       <p class="aside">Need SSO, audit and policies? <a class="link" href="#agent-serve">Talk to us about Agent Serve <span aria-hidden="true">→</span></a></p>
     </section>
@@ -106,9 +104,24 @@
       <figcaption>Freedom is a horizon nobody else owns.</figcaption>
     </figure>
 
+    <!-- The product family: one page each (products/*.html, built from scripts/products.mjs) -->
+    <section class="family wrap" id="products" aria-labelledby="family-title">
+      <p class="eyebrow">The products</p>
+      <h2 id="family-title" class="sectionTitle">Five products, one install.</h2>
+      <p class="sectionLede">Each one does the job of a tool you would otherwise pay for per seat. They share one sign-in, one set of permissions, one approval flow and one budget, so they work together: an agent joins your meeting, a deck comes from your knowledge, an image you made goes into a chat.</p>
+      <ul class="familyGrid">
+        <li><a href="products/assistant.html"><div class="frame app"><img src="assets/screens/chat-visual.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Sibyl Assistant answering a question with a bar chart and a table" /></div><div><h3>Sibyl Assistant</h3><p>Chat and live voice, with answers you can see.</p></div></a></li>
+        <li><a href="products/meet.html"><div class="frame app"><img src="assets/screens/meeting.webp" width="1440" height="900" loading="lazy" decoding="async" alt="A Sibyl Meet meeting page with the summary, key points and the recording" /></div><div><h3>Sibyl Meet</h3><p>Meetings with people and agents, and notes that write themselves.</p></div></a></li>
+        <li><a href="products/slides.html"><div class="frame app"><img src="assets/screens/slides-editor.webp" width="1600" height="1218" loading="lazy" decoding="async" alt="The Sibyl Slides editor with a five-slide deck open" /></div><div><h3>Sibyl Slides</h3><p>Decks from a prompt, your files or connected data.</p></div></a></li>
+        <li><a href="products/studio.html"><div class="frame app"><img src="assets/screens/media-library.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="The Sibyl Studio Media library with generated images and a video" /></div><div><h3>Sibyl Studio</h3><p>Images, video and audio in chat, and a Media library.</p></div></a></li>
+        <li><a href="products/agents.html"><div class="frame app"><img src="assets/screens/agents.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Sibyl Agents: four agents, each with its own avatar and rules" /></div><div><h3>Sibyl Agents</h3><p>Agents you build, with their own face, voice and computer.</p></div></a></li>
+      </ul>
+      <p class="familyNext">A new product joins every week. Next: Sibyl Phone, which ships once it has been tested on a real phone line.</p>
+    </section>
+
     <!-- What it is -->
     <section class="intro wrap" aria-labelledby="what-title">
-      <h2 id="what-title">One assistant for talking, thinking and getting things done — on ground you control.</h2>
+      <h2 id="what-title">One install for talking, meeting, making and getting things done — on ground you control.</h2>
       <div class="introBody">
         <p>Sibyl answers in voice or text, with charts, tables and forms you can click. It searches your own files, works in your Google, Microsoft and Slack accounts, makes slide decks, and runs agents you design. Every action that sends, creates, deletes or spends shows you an approval card first.</p>
         <p>It is a web app and a small gateway that keeps every key, enforces every permission and stores everything in SQLite on your server.</p>
@@ -249,11 +262,12 @@
 
             <article class="feat" id="sidepanel">
               <div class="featText">
-                <h4>Side panel <span class="tag">New</span></h4>
+                <h4>Side panel</h4>
                 <p>A panel on the right of the chat keeps the work beside the conversation: an agent's computer while it browses, the media it made, slide decks, visuals and files. Close it and the chat has the whole width again.</p>
+                <a class="more" href="docs/side-panel.html">Side panel docs <span aria-hidden="true">→</span></a>
               </div>
               <figure class="media">
-                <div class="frame"><img src="assets/img/sidepanel-960.webp" srcset="assets/img/sidepanel-960.webp 960w, assets/img/sidepanel-1920.webp 1920w" sizes="(min-width: 1100px) 560px, (min-width: 800px) 50vw, 100vw" width="1920" height="1072" loading="lazy" decoding="async" alt="An oil painting of a wide desk by a window with a sketchbook, photographs, a map and a framed drawing laid out side by side." /></div>
+                <div class="frame app"><img src="assets/screens/side-panel-image.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="A chat with an image made in Create mode, and the side panel showing the image with its prompt, model, settings and cost" /></div>
               </figure>
             </article>
 
@@ -299,7 +313,7 @@
                 <a class="more" href="docs/agent-computers.html">Agent computers docs <span aria-hidden="true">→</span></a>
               </div>
               <figure class="media">
-                <div class="frame"><img src="assets/img/computer-960.webp" srcset="assets/img/computer-960.webp 960w, assets/img/computer-1920.webp 1920w" sizes="(min-width: 1100px) 560px, (min-width: 800px) 50vw, 100vw" width="1920" height="1072" loading="lazy" decoding="async" alt="An oil painting of a figure seen from behind, working at a laptop by lamplight next to a window at dusk." /></div>
+                <div class="frame app"><img src="assets/screens/agent-computer-chat.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Research Dot reading a Hacker News thread on its own computer, live in the side panel next to its answer in the chat" /></div>
               </figure>
             </article>
 
@@ -327,15 +341,15 @@
                 <a class="more" href="docs/meetings.html">Meetings docs <span aria-hidden="true">→</span></a>
               </div>
               <figure class="media">
-                <div class="frame app"><img src="assets/img/app-meetings.webp" width="1280" height="800" loading="lazy" decoding="async" alt="The Meetings screen in Sibyl with the New meeting dialog: start now or schedule, a title, start time, length, and whether Sibyl joins as a participant or a silent note-taker." /></div>
+                <div class="frame app"><img src="assets/screens/meeting.webp" width="1440" height="900" loading="lazy" decoding="async" alt="A meeting page in Sibyl: the overview, key points and AI insight, the participants, the recording, and comments with Ask AI" /></div>
               </figure>
             </article>
 
             <article class="feat" id="realtime">
               <div class="featText">
                 <h4>Calls and phone</h4>
-                <p>Meetings and calls run on the optional LiveKit layer, which you also host yourself: WebRTC voice, several people and agents in one room, each agent with its own voice and avatar. Sibyl can answer a phone line and calls a number only after your approval. Bring a live stream into a room and an agent takes notes.</p>
-                <p>Phone line settings in the app are <span class="tag">New</span>. Call recordings come with Agent Serve.</p>
+                <p>Meetings and calls run on the optional LiveKit layer, which you also host yourself: WebRTC voice, several people and agents in one room, each agent with its own voice and avatar. Bring a live stream into a room and an agent takes notes.</p>
+                <p>Phone lines are <span class="tag">Coming soon</span>: they ship once they have been tested on a real line. Call recordings come with Agent Serve.</p>
                 <a class="more" href="docs/realtime.html">Realtime docs <span aria-hidden="true">→</span></a>
               </div>
               <figure class="media">
@@ -361,11 +375,12 @@
 
             <article class="feat" id="media">
               <div class="featText">
-                <h4>Media <span class="tag">New</span></h4>
+                <h4>Media</h4>
                 <p>Make images, video and audio from chat or from Spaces → Media. Point at earlier work with @ references, and tune each model's own settings. What you make lands in the Media tab and in the chat's side panel.</p>
+                <a class="more" href="docs/media.html">Media docs <span aria-hidden="true">→</span></a>
               </div>
               <figure class="media">
-                <div class="frame"><img src="assets/img/media-960.webp" srcset="assets/img/media-960.webp 960w, assets/img/media-1920.webp 1920w" sizes="(min-width: 1100px) 560px, (min-width: 800px) 50vw, 100vw" width="1920" height="1072" loading="lazy" decoding="async" alt="An oil painting of a studio table by a window with an old film projector, a framed picture and a gramophone." /></div>
+                <div class="frame app"><img src="assets/screens/media-library.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Spaces, Media with three generated images and a short video, filters by type, model and person, and the Create button" /></div>
               </figure>
             </article>
           </section>
@@ -640,17 +655,18 @@ corepack pnpm dev</code></pre>
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="#product">Overview</a></li>
-            <li><a href="#agents">Agents</a></li>
-            <li><a href="#knowledge">Knowledge</a></li>
+            <li><a href="products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="products/meet.html">Sibyl Meet</a></li>
+            <li><a href="products/slides.html">Sibyl Slides</a></li>
+            <li><a href="products/studio.html">Sibyl Studio</a></li>
+            <li><a href="products/agents.html">Sibyl Agents</a></li>
             <li><a href="#pricing">Pricing</a></li>
-            <li><a href="#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -686,7 +702,7 @@ corepack pnpm dev</code></pre>
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   <!-- /site:footer -->

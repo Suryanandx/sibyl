@@ -7,6 +7,8 @@ sections are part of the free edition: **Organization** and **Users**. The other
 (roles, policies, audit log, single sign-on, SCIM, session policies, usage
 controls) need an Agent Serve licence; see [enterprise.md](enterprise.md).
 
+![Admin → Users: the people in the organization with their role, workspaces, sign-in method and last activity](assets/screens/admin-users.png)
+
 Organization roles are separate from workspace roles. An organization **owner**
 or **admin** can open every workspace and use Admin. An organization **member**
 or **viewer** only sees the workspaces they were invited to, with the role they

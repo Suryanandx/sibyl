@@ -4,6 +4,8 @@ A monitor keeps an eye on a source for you. When something matters, Sibyl tells
 you or starts a task. Ask in chat ("tell me when a deal over $50k moves to
 Negotiation"), or create one on the Monitors screen.
 
+![The Inbox: a routine waiting for approval before it calls an API, with Approve and Decline, and the activity list below](assets/screens/inbox-approval.png)
+
 ## What a monitor is
 
 | Part | What it does |

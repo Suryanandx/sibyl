@@ -2,6 +2,8 @@
 
 Sibyl's live conversation is built from swappable OpenRouter models, not a single vendor's realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, how it stays fast, and what the measured latency looks like (with the same metric names as LiveKit's).
 
+![Settings → Voice: the voice engine picker (Sibyl voice or GPT Realtime with prices per minute), the OpenAI key, and the voice model and voice](assets/screens/settings-voice.png)
+
 For people who want the most natural voice and are happy to pay more, OpenAI's GPT Realtime is available as a premium [voice engine](#voice-engines-sibyl-voice-and-gpt-realtime). Sibyl voice stays the default.
 
 ## WebSocket or LiveKit

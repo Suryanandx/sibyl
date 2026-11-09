@@ -2,6 +2,8 @@
 
 Sibyl Slides builds slide decks from a prompt, an outline or real data, and lets you edit them in a browser editor. Decks export to PowerPoint (PPTX) and PDF.
 
+![Spaces → Slides with a five-slide deck made in chat, ready to open in the editor or download as PPTX or PDF](assets/screens/slides-library.png)
+
 You can make a deck two ways:
 
 - **In chat.** Ask Sibyl for a deck ("make a 6-slide deck on our Q3 pipeline"). Sibyl gathers the facts with its other tools first (web search, your connections), then calls `create_slides`. You approve the build on a card that says what will happen and roughly what it costs, for example *Create an 8-slide deck 'Q3 market overview' (≈$0.03)*. The finished deck shows as a card with **Open in editor**, **PPTX** and **PDF**.

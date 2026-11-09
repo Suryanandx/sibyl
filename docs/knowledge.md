@@ -3,6 +3,8 @@
 A knowledge base is a set of documents — uploaded files, web pages and pasted
 text — that Sibyl searches and cites. Bases belong to a workspace.
 
+![A knowledge base called Product handbook with six of Sibyl's docs, each Ready with its number of passages](assets/screens/knowledge.png)
+
 ## Adding documents
 
 | Source | How it is read |
@@ -134,6 +136,8 @@ Limits: 100 bases per workspace, 1,000 documents per base, 5,000 chunks per docu
   with `[document › section]` citations.
 - `list_knowledge` (read) — the workspace's bases.
 - `save_to_knowledge` (write, needs approval) — saves a chat attachment into a base.
+
+![An answer from the Product handbook with a cost table, and the two docs sections it used listed under Sources](assets/screens/knowledge-chat.png)
 
 **Searched automatically:** a workspace setting (`WorkspaceRecord.knowledgeBaseIds`,
 or a kv fallback for a default workspace without a record). For those bases

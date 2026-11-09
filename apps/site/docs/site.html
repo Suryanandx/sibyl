@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -108,42 +106,50 @@
 <td>The landing page. <code>site.js</code> runs the theme toggle, the Products menu and the phone menu, the product index, install tabs, copy buttons and lazy video.</td>
 </tr>
 <tr>
+<td><code>products/</code></td>
+<td>One page per product (Assistant, Meet, Slides, Studio, Agents), generated from <code>scripts/products.mjs</code> (below).</td>
+</tr>
+<tr>
 <td><code>docs/</code></td>
 <td>The docs site, generated from the repo&#39;s Markdown (below). <code>docs.css</code> and <code>docs.js</code> (search, &quot;On this page&quot;) are hand-written; the <code>.html</code> pages and <code>search-index.json</code> are generated.</td>
 </tr>
 <tr>
 <td><code>assets/</code></td>
-<td>Font, brand marks, paintings, painted loops and app clips.</td>
+<td>Font, brand marks, paintings, painted loops, app clips and screenshots (<code>assets/screens/</code>).</td>
 </tr>
 <tr>
-<td><code>scripts/build-docs.mjs</code></td>
-<td>The docs generator.</td>
+<td><code>scripts/build-docs.mjs</code>, <code>scripts/build-products.mjs</code></td>
+<td>The docs and product page generators. Both take the header and footer from <code>index.html</code> through <code>scripts/chrome.mjs</code>.</td>
 </tr>
 </tbody></table></div>
 <h2 id="preview-locally"><a class="anchor" href="#preview-locally" aria-hidden="true" tabindex="-1">#</a>Preview locally</h2>
 <div class="codeBlock"><span class="codeLang">bash</span><pre><code class="language-bash">npx serve apps/site -l 3110
 # or, without Node:
 python3 -m http.server 3110 --directory apps/site</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
-<p>Open <a href="http://localhost:3110" rel="noopener">http://localhost:3110</a> for the landing page and <a href="http://localhost:3110/docs/" rel="noopener">http://localhost:3110/docs/</a> for the docs.</p>
+<p>Open <a href="http://localhost:3110" rel="noopener">http://localhost:3110</a> for the landing page, <a href="http://localhost:3110/products/assistant.html" rel="noopener">http://localhost:3110/products/assistant.html</a> for a product page and <a href="http://localhost:3110/docs/" rel="noopener">http://localhost:3110/docs/</a> for the docs.</p>
 <h2 id="deploy"><a class="anchor" href="#deploy" aria-hidden="true" tabindex="-1">#</a>Deploy</h2>
 <p>Publish the <code>apps/site</code> folder as the site root. All paths are relative, so it also works from a sub-path such as <code>https://&lt;user&gt;.github.io/sibyl/</code>.</p>
 <h2 id="the-docs-site"><a class="anchor" href="#the-docs-site" aria-hidden="true" tabindex="-1">#</a>The docs site</h2>
-<p>Every page in <code>docs/</code> (not <code>docs/plans/</code>) becomes <code>apps/site/docs/&lt;name&gt;.html</code>, and the README becomes <code>docs/overview.html</code>. Regenerate after changing any Markdown or the landing page&#39;s header or footer:</p>
+<p>Every page in <code>docs/</code> (not <code>docs/plans/</code>) becomes <code>apps/site/docs/&lt;name&gt;.html</code>, and the README becomes <code>docs/overview.html</code>. The same command also rebuilds the product pages. Regenerate after changing any Markdown, <code>scripts/products.mjs</code>, or the landing page&#39;s header or footer:</p>
 <div class="codeBlock"><span class="codeLang">bash</span><pre><code class="language-bash">corepack pnpm --filter site run docs</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
 <p>(<code>pnpm docs</code> on its own is a built-in pnpm command, so the script runs with <code>run</code>.) The generated pages are committed, so hosting needs no build.</p>
 <p>What the generator does:</p>
 <ul>
 <li><strong>Same header and footer as the landing page.</strong> It copies them from <code>index.html</code> (between the <code>site:header</code> and <code>site:footer</code> comments) and rewrites their links for the docs folder, so the two never drift apart.</li>
 <li><strong>Sidebar groups</strong>, in order: Get started · Using Sibyl · Agents · Knowledge &amp; tools · Meetings &amp; calls · Spaces · Automations · Teams &amp; admin · Hosting &amp; deployment · Enterprise · Reference. The list is <code>GROUPS</code> at the top of the script; a new <code>docs/*.md</code> that isn&#39;t listed lands in Reference, and a listed page that doesn&#39;t exist yet (such as <code>media</code>) is skipped.</li>
-<li><strong>Links.</strong> Links between docs point at the generated pages, including <code>#anchors</code> (headings get GitHub-style ids). A link written as a bare file name (<code>realtime.md</code>) shows the page title. Links to other repo files (source, <code>LICENSE</code>, <code>docs/plans/</code>) go to GitHub. Images under <code>docs/assets/</code> are copied next to the pages.</li>
+<li><strong>Links.</strong> Links between docs point at the generated pages, including <code>#anchors</code> (headings get GitHub-style ids). A link written as a bare file name (<code>realtime.md</code>) shows the page title. Links to other repo files (source, <code>LICENSE</code>, <code>docs/plans/</code>) go to GitHub. Images under <code>docs/assets/</code> (screenshots in <code>docs/assets/screens/</code> too) are copied to <code>apps/site/docs/assets/</code>, including the ones in the README&#39;s raw-HTML screenshot table. The copies are byte-identical, so git stores each image once.</li>
 <li><strong>Pages</strong> have an &quot;On this page&quot; list (wide screens), previous and next links, a link to the Markdown source, code blocks with copy buttons, and styled tables. Mermaid blocks show as their source.</li>
 <li><strong>Search</strong> runs in the browser over <code>search-index.json</code>: one entry per heading with its text. The index loads the first time you use the search box. Press <code>/</code> to jump to it.</li>
 </ul>
 <p>Markdown is parsed with <a href="https://marked.js.org" rel="noopener"><code>marked</code></a> (the only dependency, a dev dependency of <code>apps/site/package.json</code>).</p>
+<h2 id="product-pages"><a class="anchor" href="#product-pages" aria-hidden="true" tabindex="-1">#</a>Product pages</h2>
+<p>Sibyl is a family of products in one install: <strong>Sibyl Assistant</strong>, <strong>Sibyl Meet</strong>, <strong>Sibyl Slides</strong>, <strong>Sibyl Studio</strong> and <strong>Sibyl Agents</strong>. Each has a page at <code>products/&lt;slug&gt;.html</code> with a plain headline, three to five &quot;What you can do&quot; blocks with real screenshots, <strong>What it costs to run</strong>, <strong>Try it</strong> (the quickstart) and links to its docs pages.</p>
+<p>The content lives in <code>scripts/products.mjs</code>; the docs home lists the same products from there. Costs on these pages are only numbers that were measured, each with its source (a docs page, or Settings → Usage on the screenshot install). Sibyl Phone has no page until it has been tested on a real phone line; the landing page says it is coming soon.</p>
 <h2 id="landing-page"><a class="anchor" href="#landing-page" aria-hidden="true" tabindex="-1">#</a>Landing page</h2>
 <ul>
-<li><strong>Header.</strong> A <strong>Products</strong> menu lists Sibyl (chat and voice), Agents, Meetings, Spaces, Library, Automations, and Calls and phone, with one line each. Next to them are the editions: Sibyl self-hosted (free), Sibyl hosted (coming soon) and Agent Serve by valnoraelric.com (talk to us). It follows the disclosure pattern. The button says whether it is open; Esc closes it and returns focus, and so does a click outside. On a phone the menu button opens the same links, and Products expands in place.</li>
-<li><strong>Product sections</strong> follow the app&#39;s rail: Chat, Agents, Meetings, Spaces, Library, Automations, and Settings and control. Each area has a heading, a few sentences, a painting or a real clip of the app, and a link to its docs page. Features that are still being merged (the chat side panel, Media, phone line settings) are labelled <strong>New</strong> and have no docs link until their page exists.</li>
+<li><strong>Hero and product grid.</strong> The hero says what Sibyl is: open-source alternatives to the tools you pay for every month, so you pay only for the AI you use. Below it, a grid links the five product pages, with a line saying a new product joins every week.</li>
+<li><strong>Header.</strong> A <strong>Products</strong> menu lists the five products, with one line each. Next to them are the editions: Sibyl self-hosted (free), Sibyl hosted (coming soon) and Agent Serve by valnoraelric.com (talk to us). It follows the disclosure pattern. The button says whether it is open; Esc closes it and returns focus, and so does a click outside. On a phone the menu button opens the same links, and Products expands in place.</li>
+<li><strong>Product sections</strong> follow the app&#39;s rail: Chat, Agents, Meetings, Spaces, Library, Automations, and Settings and control. Each area has a heading, a few sentences, a painting, a screenshot or a real clip of the app, and a link to its docs page. Agent computers, the side panel, Media and Meetings show screenshots of the real app. Phone lines are labelled <strong>Coming soon</strong>.</li>
 <li><strong>Every &quot;Docs&quot; link</strong> goes to the docs site.</li>
 </ul>
 <h2 id="content-rules"><a class="anchor" href="#content-rules" aria-hidden="true" tabindex="-1">#</a>Content rules</h2>
@@ -201,8 +207,8 @@ python3 -m http.server 3110 --directory apps/site</code></pre><button type="butt
 </tbody></table></div>
 <p><code>google/gemini-3-pro-image</code> made all 16 paintings, at about $0.139 each (<strong>$2.22</strong> in all):</p>
 <ul>
-<li>On the page: horizon, voice, computer, channels, wires, key, journals, valley, seedling, commons, lighthouse, easel, media and sidepanel.</li>
-<li>Not shipped: <code>tools</code>, which was never used, and <code>meeting</code>, which a real screenshot of Meetings replaced.</li>
+<li>On the page: horizon, voice, channels, wires, key, journals, valley, seedling, commons, lighthouse and easel.</li>
+<li>Replaced by real screenshots and removed: <code>computer</code>, <code>media</code> and <code>sidepanel</code>. Not shipped: <code>tools</code>, which was never used, and <code>meeting</code>.</li>
 </ul>
 <p>The earlier photographic set (<code>google/gemini-3.1-flash-image</code>, about $0.67) was replaced.</p>
 <p>Paintings are served as WebP at 960 and 1920 px wide and lazy-loaded.</p>
@@ -216,10 +222,13 @@ python3 -m http.server 3110 --directory apps/site</code></pre><button type="butt
 <li><code>clip-knowledge</code>: making a knowledge base from four of Sibyl&#39;s own docs and searching it (Knowledge).</li>
 <li><code>clip-onboard</code>: stepping through first-run setup (Getting started).</li>
 </ul>
-<p>Screenshots of Skills, Integrations, Models settings and the New meeting dialog are WebP at 1280 × 800.</p>
+<p>Screenshots of Skills, Integrations and Models settings are WebP at 1280 × 800.</p>
+<h3 id="screenshots-of-the-real-app-assetsscreens-docsassetsscreens"><a class="anchor" href="#screenshots-of-the-real-app-assetsscreens-docsassetsscreens" aria-hidden="true" tabindex="-1">#</a>Screenshots of the real app (<code>assets/screens/</code>, <code>docs/assets/screens/</code>)</h3>
+<p>Taken on 2026-11-10 from a fresh install of the current code (grouped rail, light mode unless noted) with a temporary data folder and a local test owner, &quot;Alex Morgan&quot;. The content was made through the app itself with real OpenRouter models: four agents from the templates (one with a computer, running the <code>sibyl-computer:1.64.1</code> image), a knowledge base of six of Sibyl&#39;s own docs, chats with a chart, a knowledge answer and an agent browsing Hacker News, three images and a short video in Create mode, a five-slide deck from the Slides engine (Docker), and a routine waiting for approval in the Inbox. The whole run cost <strong>$1.51</strong> on OpenRouter (Settings → Usage), of which $1.08 was the model scout&#39;s first catalog check. The meeting screenshots come from the realtime test install of the same day (LiveKit dev server, a fake camera and microphone).</p>
+<p>Captured with headless Chromium (Playwright) at 1440 × 900, device scale 2, then scaled to 1600 px wide: palette PNG for the README and docs (<code>docs/assets/screens/</code>, about 1.6 MB for 19 images), WebP for the site (<code>apps/site/assets/screens/</code>, about 0.8 MB). Test e-mail addresses are hidden.</p>
 <h2 id="page-weight"><a class="anchor" href="#page-weight" aria-hidden="true" tabindex="-1">#</a>Page weight</h2>
 <p>The landing page is about 1.3 MB on first load, counting the hero loop, which starts after the page has loaded. Before that, the first paint needs the HTML, CSS, JS, font and hero poster: about 0.3 MB. Everything else loads as you scroll. A docs page is the HTML (20–60 KB) plus the shared CSS, JS and font; the search index (about 220 KB) loads only when you search.</p>
-<p>Total generation cost for the current assets: about <strong>$3.02</strong> ($2.22 paintings, $0.80 loops). The comparison tests and the replaced photo set add about $0.96.</p>
+<p>Total generation cost for the current assets: about <strong>$3.02</strong> ($2.22 paintings, $0.80 loops), plus <strong>$1.51</strong> for the screenshot run. The comparison tests and the replaced photo set add about $0.96.</p>
 
     </article>
     <p class="editLink"><a href="https://github.com/Suryanandx/sibyl/blob/HEAD/docs/site.md">View the source of this page on GitHub</a></p>
@@ -228,7 +237,7 @@ python3 -m http.server 3110 --directory apps/site</code></pre><button type="butt
       <span></span>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#preview-locally">Preview locally</a></li><li class="d2"><a href="#deploy">Deploy</a></li><li class="d2"><a href="#the-docs-site">The docs site</a></li><li class="d2"><a href="#landing-page">Landing page</a></li><li class="d2"><a href="#content-rules">Content rules</a></li><li class="d2"><a href="#design">Design</a></li><li class="d2"><a href="#paintings">Paintings</a></li><li class="d2"><a href="#painted-loops">Painted loops</a></li><li class="d2"><a href="#app-clips-and-screenshots">App clips and screenshots</a></li><li class="d2"><a href="#page-weight">Page weight</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#preview-locally">Preview locally</a></li><li class="d2"><a href="#deploy">Deploy</a></li><li class="d2"><a href="#the-docs-site">The docs site</a></li><li class="d2"><a href="#product-pages">Product pages</a></li><li class="d2"><a href="#landing-page">Landing page</a></li><li class="d2"><a href="#content-rules">Content rules</a></li><li class="d2"><a href="#design">Design</a></li><li class="d2"><a href="#paintings">Paintings</a></li><li class="d2"><a href="#painted-loops">Painted loops</a></li><li class="d2"><a href="#app-clips-and-screenshots">App clips and screenshots</a></li><li class="d3"><a href="#screenshots-of-the-real-app-assetsscreens-docsassetsscreens">Screenshots of the real app (assets/screens/, docs/assets/screens/)</a></li><li class="d2"><a href="#page-weight">Page weight</a></li></ul></aside>
 </div>
 
   <footer class="footer">
@@ -238,17 +247,18 @@ python3 -m http.server 3110 --directory apps/site</code></pre><button type="butt
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -284,7 +294,7 @@ python3 -m http.server 3110 --directory apps/site</code></pre><button type="butt
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

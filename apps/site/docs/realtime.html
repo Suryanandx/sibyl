@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -128,7 +126,7 @@ LIVEKIT_API_SECRET=&lt;32 or more random characters&gt;</code></pre><button type
 LIVEKIT_URL=ws://127.0.0.1:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret corepack pnpm dev</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
 <p><code>--dev</code> uses the keys <code>devkey</code> / <code>secret</code>. It has no Redis, so egress, ingress, SIP and webhooks need the compose stack. When the gateway runs on your machine and LiveKit in Docker, point the webhook in <code>livekit.yaml</code> at <code>http://host.docker.internal:&lt;gateway port&gt;/api/realtime/webhook</code>. On macOS, <code>--node-ip 127.0.0.1</code> is needed for media to flow.</p>
 <h3 id="livekit-cloud"><a class="anchor" href="#livekit-cloud" aria-hidden="true" tabindex="-1">#</a>LiveKit Cloud</h3>
-<p>Point <code>LIVEKIT_URL</code> at your Cloud project (<code>wss://&lt;project&gt;.livekit.cloud</code>) with its key and secret. Self-hosted LiveKit stays the documented default.</p>
+<p>Point <code>LIVEKIT_URL</code> at your Cloud project (<code>wss://&lt;project&gt;.livekit.cloud</code>) with its key and secret. Self-hosted LiveKit stays the documented default. With Cloud, Settings → Voice → Speed also offers <a href="voice.html#livekit-inference-speech-livekit-cloud">LiveKit Inference</a> for speech and transcription (opt-in, billed to the LiveKit project).</p>
 <p>If LiveKit can&#39;t be reached, voice falls back to the WebSocket path on its own.</p>
 <h2 id="how-it-works"><a class="anchor" href="#how-it-works" aria-hidden="true" tabindex="-1">#</a>How it works</h2>
 <div class="codeBlock"><span class="codeLang">text</span><pre><code class="language-text">browser ── WebRTC (mic, Sibyl's voice) ──► LiveKit ◄── WebRTC ── gateway: room agent
@@ -432,6 +430,7 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
 </tr>
 </tbody></table></div>
 <p>The voice brain&#39;s first word still dominates. LiveKit&#39;s gains are steadier audio and networks, calls and phones, not a faster brain.</p>
+<p>Re-measured on 2026-11-10 with streamed speech, preemptive generation and the speed-weighted Balanced preset: end of speech → Sibyl&#39;s voice heard in the room <strong>3.0 s</strong> median (4.2 s p90) over six turns, down from 5.0 s (6.6 s) with the same client before those changes. The room agent&#39;s turns report the same <code>turn.metrics</code> as the WebSocket path (<code>transport: &quot;livekit&quot;</code>; see <a href="voice.html#latency-metrics">Voice</a>).</p>
 <h3 id="verified-phone-line-and-recordings"><a class="anchor" href="#verified-phone-line-and-recordings" aria-hidden="true" tabindex="-1">#</a>Verified (phone line and recordings)</h3>
 <p>Run on 2026-11-10 against LiveKit, Redis, egress and SIP in Docker (no real phone network: no PSTN number was available, and nothing was bought):</p>
 <ul>
@@ -469,17 +468,18 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -515,7 +515,7 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

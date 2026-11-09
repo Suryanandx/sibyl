@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -1234,6 +1232,52 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
 <td>Another Realtime-compatible endpoint (and its <code>/v1/models</code> for the key check). For tests and compatible proxies.</td>
 </tr>
 </tbody></table></div>
+<h2 id="voice-speed-preemptive-generation-livekit-inference"><a class="anchor" href="#voice-speed-preemptive-generation-livekit-inference" aria-hidden="true" tabindex="-1">#</a>Voice speed (preemptive generation, LiveKit Inference)</h2>
+<p>How quickly Sibyl voice starts to answer. See <a href="voice.html#staying-fast">Voice</a>. Both choices can also be changed per session in <strong>Settings → Voice → Speed</strong>.</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>SIBYL_PREEMPTIVE_GENERATION</code></td>
+<td><code>true</code></td>
+<td>Start the voice brain when you pause, before the turn is final. <code>false</code> makes new sessions wait for the end of the turn.</td>
+</tr>
+<tr>
+<td><code>SIBYL_LIVEKIT_INFERENCE</code></td>
+<td><code>auto</code></td>
+<td><code>auto</code> offers LiveKit Inference speech when <code>LIVEKIT_URL</code> is a LiveKit Cloud project (<code>*.livekit.cloud</code>) and <code>LIVEKIT_API_KEY</code> / <code>LIVEKIT_API_SECRET</code> are set. <code>off</code> hides it.</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_INFERENCE_TTS</code></td>
+<td><code>cartesia/sonic-3</code></td>
+<td>LiveKit Inference speech model, optionally with a voice: <code>model:voice</code> (for example <code>cartesia/sonic-3:&lt;voice id&gt;</code>). Without a voice, the provider&#39;s default voice is used.</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_INFERENCE_STT</code></td>
+<td><code>deepgram/nova-3</code></td>
+<td>LiveKit Inference transcription model.</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_INFERENCE_LANGUAGE</code></td>
+<td><code>en</code></td>
+<td>Language sent to both.</td>
+</tr>
+<tr>
+<td><code>LIVEKIT_INFERENCE_URL</code></td>
+<td><code>https://agent-gateway.livekit.cloud/v1</code></td>
+<td>Another inference gateway address. Setting it also allows a non-Cloud <code>LIVEKIT_URL</code> (for tests with a local stand-in).</td>
+</tr>
+<tr>
+<td><code>SIBYL_LIVEKIT_INFERENCE_PRICES</code></td>
+<td>LiveKit&#39;s published prices</td>
+<td>JSON to change or add prices: transcription in USD per minute, speech in USD per 1M characters, for example <code>{&quot;inworld/inworld-tts-2&quot;: 25}</code>. Used for metering and the price per minute in Settings.</td>
+</tr>
+</tbody></table></div>
 
     </article>
     <p class="editLink"><a href="https://github.com/Suryanandx/sibyl/blob/HEAD/docs/configuration.md">View the source of this page on GitHub</a></p>
@@ -1242,7 +1286,7 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
       <a class="next" href="troubleshooting.html"><span>Next</span>Troubleshooting</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#where-settings-are-read-from">Where settings are read from</a></li><li class="d2"><a href="#minimal-setup">Minimal setup</a></li><li class="d2"><a href="#storage-sign-in-tools-and-budgets">Storage, sign-in, tools and budgets</a></li><li class="d2"><a href="#sibyl-slides">Sibyl Slides</a></li><li class="d2"><a href="#provider-and-models">Provider and models</a></li><li class="d3"><a href="#building-the-catalog-from-variables">Building the catalog from variables</a></li><li class="d2"><a href="#conversation-behaviour">Conversation behaviour</a></li><li class="d2"><a href="#gateway-server">Gateway server</a></li><li class="d2"><a href="#using-a-different-openai-compatible-provider">Using a different OpenAI-compatible provider</a></li><li class="d3"><a href="#openai-realtime-transcription">OpenAI Realtime transcription</a></li><li class="d2"><a href="#web-app-build-time">Web app (build time)</a></li><li class="d3"><a href="#voice-activity-detection">Voice activity detection</a></li><li class="d2"><a href="#local-development-helpers">Local development helpers</a></li><li class="d2"><a href="#startup-validation">Startup validation</a></li><li class="d2"><a href="#model-allowlist">Model allowlist</a></li><li class="d2"><a href="#agents-in-slack-and-teams">Agents in Slack and Teams</a></li><li class="d2"><a href="#files-and-knowledge-ocr">Files and knowledge OCR</a></li><li class="d2"><a href="#enterprise-governance-roles-policies-audit-log">Enterprise governance (roles, policies, audit log)</a></li><li class="d2"><a href="#single-sign-on-scim-and-session-policies-agent-serve">Single sign-on, SCIM and session policies (Agent Serve)</a></li><li class="d2"><a href="#notifications">Notifications</a></li><li class="d2"><a href="#enterprise-advanced-usage-controls">Enterprise: advanced usage controls</a></li><li class="d2"><a href="#agent-computers">Agent computers</a></li><li class="d2"><a href="#realtime-layer-livekit">Realtime layer (LiveKit)</a></li><li class="d3"><a href="#call-recordings-agent-serve-feature-recordings">Call recordings (Agent Serve, feature recordings)</a></li><li class="d2"><a href="#meetings">Meetings</a></li><li class="d2"><a href="#hosted-sibyl">Hosted Sibyl</a></li><li class="d2"><a href="#sign-up-and-sign-in-methods">Sign-up and sign-in methods</a></li><li class="d2"><a href="#media-images-video-audio">Media (images, video, audio)</a></li><li class="d2"><a href="#phone-line">Phone line</a></li><li class="d2"><a href="#voice-engines-gpt-realtime">Voice engines (GPT Realtime)</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#where-settings-are-read-from">Where settings are read from</a></li><li class="d2"><a href="#minimal-setup">Minimal setup</a></li><li class="d2"><a href="#storage-sign-in-tools-and-budgets">Storage, sign-in, tools and budgets</a></li><li class="d2"><a href="#sibyl-slides">Sibyl Slides</a></li><li class="d2"><a href="#provider-and-models">Provider and models</a></li><li class="d3"><a href="#building-the-catalog-from-variables">Building the catalog from variables</a></li><li class="d2"><a href="#conversation-behaviour">Conversation behaviour</a></li><li class="d2"><a href="#gateway-server">Gateway server</a></li><li class="d2"><a href="#using-a-different-openai-compatible-provider">Using a different OpenAI-compatible provider</a></li><li class="d3"><a href="#openai-realtime-transcription">OpenAI Realtime transcription</a></li><li class="d2"><a href="#web-app-build-time">Web app (build time)</a></li><li class="d3"><a href="#voice-activity-detection">Voice activity detection</a></li><li class="d2"><a href="#local-development-helpers">Local development helpers</a></li><li class="d2"><a href="#startup-validation">Startup validation</a></li><li class="d2"><a href="#model-allowlist">Model allowlist</a></li><li class="d2"><a href="#agents-in-slack-and-teams">Agents in Slack and Teams</a></li><li class="d2"><a href="#files-and-knowledge-ocr">Files and knowledge OCR</a></li><li class="d2"><a href="#enterprise-governance-roles-policies-audit-log">Enterprise governance (roles, policies, audit log)</a></li><li class="d2"><a href="#single-sign-on-scim-and-session-policies-agent-serve">Single sign-on, SCIM and session policies (Agent Serve)</a></li><li class="d2"><a href="#notifications">Notifications</a></li><li class="d2"><a href="#enterprise-advanced-usage-controls">Enterprise: advanced usage controls</a></li><li class="d2"><a href="#agent-computers">Agent computers</a></li><li class="d2"><a href="#realtime-layer-livekit">Realtime layer (LiveKit)</a></li><li class="d3"><a href="#call-recordings-agent-serve-feature-recordings">Call recordings (Agent Serve, feature recordings)</a></li><li class="d2"><a href="#meetings">Meetings</a></li><li class="d2"><a href="#hosted-sibyl">Hosted Sibyl</a></li><li class="d2"><a href="#sign-up-and-sign-in-methods">Sign-up and sign-in methods</a></li><li class="d2"><a href="#media-images-video-audio">Media (images, video, audio)</a></li><li class="d2"><a href="#phone-line">Phone line</a></li><li class="d2"><a href="#voice-engines-gpt-realtime">Voice engines (GPT Realtime)</a></li><li class="d2"><a href="#voice-speed-preemptive-generation-livekit-inference">Voice speed (preemptive generation, LiveKit Inference)</a></li></ul></aside>
 </div>
 
   <footer class="footer">
@@ -1252,17 +1296,18 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -1298,7 +1343,7 @@ the routine scheduler. See <a href="enterprise.html">Enterprise (Agent Serve)</a
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

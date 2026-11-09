@@ -6,6 +6,8 @@ and **budget**. They run on Sibyl's own brain, with the same tools, skills,
 knowledge, approvals and budgets as everything else — there is no second agent
 runtime. An agent only shapes one brain call; the gateway enforces the rest.
 
+![The Agents screen with four agents, each with its own avatar, autonomy and access, and the templates to start from](assets/screens/agents.png)
+
 ## Using an agent
 
 - **Composer:** the "Ask Sibyl ▾" chip picks who answers (`agent.select`, which
@@ -41,6 +43,8 @@ What changes during an agent's turn:
   writes through an admin's agent.
 - Tools receive `context.agent = { id, knowledgeBaseIds?, skillIds? }` so
   knowledge and skill tools can stay inside a controlled agent's lists.
+
+![Editing an agent: its identity, instructions and model, its own voice and voice engine, and the Access and Autonomy choices](assets/screens/agent-editor.png)
 
 ## Autonomy
 

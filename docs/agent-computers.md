@@ -2,6 +2,8 @@
 
 An agent can have its own computer: a real browser in a sandbox, with a folder for files. It can open public websites, read them, click, fill in forms, download files and take screenshots. You can watch it work live, look at each step afterwards, and stop it at any time.
 
+![Research Dot's computer: the live browser on a Hacker News thread, Running with a Stop button, and What it did with a picture of each step](assets/screens/agent-computer.png)
+
 ## Turn it on
 
 1. Build the sandbox image once (it needs Docker):

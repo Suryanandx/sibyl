@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -119,6 +117,7 @@ approval.decision ─────────────►
 <p><strong>Hands-free turn with the voice brain</strong></p>
 <div class="codeBlock"><span class="codeLang">text</span><pre><code class="language-text">vad.speech_start ──────────────►
 audio.chunk × n (PCM) ─────────►
+vad.speech_pause (optional) ───►   (the voice brain may start early)
 vad.speech_end (+ caption) ────►
           ◄───────────────────── transcript.final   (the caption, as a placeholder)
           ◄───────────────────── llm.delta × n      (voice brain's speech)
@@ -202,7 +201,11 @@ vad.speech_end (+ caption) ────►
   &quot;reason&quot;: &quot;silence&quot;,
   &quot;caption&quot;: &quot;what's the weather like in&quot;
 }</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
-<p><code>reason</code> is <code>silence</code>, <code>manual</code> or <code>cancelled</code>. <code>cancelled</code> discards the turn. <code>caption</code> is the optional instant on-device caption (up to 4000 characters), used only as a display hint.</p>
+<p><code>reason</code> is <code>silence</code>, <code>manual</code> or <code>cancelled</code>. <code>cancelled</code> discards the turn. <code>caption</code> is the optional instant on-device caption (up to 4000 characters), used only as a display hint. <code>silenceMs</code> (optional) is the silence the detector waited for before ending the turn; it makes the end-of-utterance metric start at your last word.</p>
+<h3 id="vadspeech_pause-and-vadspeech_resume"><a class="anchor" href="#vadspeech_pause-and-vadspeech_resume" aria-hidden="true" tabindex="-1">#</a><code>vad.speech_pause</code> and <code>vad.speech_resume</code></h3>
+<div class="codeBlock"><span class="codeLang">json</span><pre><code class="language-json">{ &quot;type&quot;: &quot;vad.speech_pause&quot;, &quot;requestId&quot;: &quot;uuid&quot;, &quot;silenceMs&quot;: 200 }
+{ &quot;type&quot;: &quot;vad.speech_resume&quot;, &quot;requestId&quot;: &quot;uuid&quot; }</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
+<p>The detector heard a short silence inside the turn but hasn&#39;t ended it yet; then, if you carry on, speech again. On a pause the gateway may start the voice brain early (<a href="voice.html#preemptive-generation">preemptive generation</a>); a resume cancels that start.</p>
 <h3 id="interrupt"><a class="anchor" href="#interrupt" aria-hidden="true" tabindex="-1">#</a><code>interrupt</code></h3>
 <p>Stop the current reply, for example on barge-in or the stop button.</p>
 <div class="codeBlock"><span class="codeLang">json</span><pre><code class="language-json">{ &quot;type&quot;: &quot;interrupt&quot;, &quot;requestId&quot;: &quot;uuid&quot;, &quot;reason&quot;: &quot;barge-in&quot; }</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
@@ -236,6 +239,13 @@ vad.speech_end (+ caption) ────►
 <h3 id="transcriptupdate"><a class="anchor" href="#transcriptupdate" aria-hidden="true" tabindex="-1">#</a><code>transcript.update</code></h3>
 <p>The accurate transcript for a turn that has already started; replaces the caption.</p>
 <div class="codeBlock"><span class="codeLang">json</span><pre><code class="language-json">{ &quot;type&quot;: &quot;transcript.update&quot;, &quot;requestId&quot;: &quot;uuid&quot;, &quot;text&quot;: &quot;What's the weather like in Porto?&quot; }</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
+<h3 id="turnmetrics"><a class="anchor" href="#turnmetrics" aria-hidden="true" tabindex="-1">#</a><code>turn.metrics</code></h3>
+<p>Timings of one spoken reply, with LiveKit Agents&#39; metric names (<a href="voice.html#latency-metrics">Voice</a>), on the WebSocket and the LiveKit path. Durations in ms; any may be missing.</p>
+<div class="codeBlock"><span class="codeLang">json</span><pre><code class="language-json">{
+  &quot;type&quot;: &quot;turn.metrics&quot;,
+  &quot;requestId&quot;: &quot;uuid&quot;,
+  &quot;metrics&quot;: { &quot;transport&quot;: &quot;websocket&quot;, &quot;eouDelayMs&quot;: 300, &quot;transcriptionDelayMs&quot;: 1400, &quot;llmTtftMs&quot;: 1350, &quot;ttsTtfbMs&quot;: 420, &quot;e2eLatencyMs&quot;: 2400, &quot;preemptive&quot;: true, &quot;voiceModel&quot;: &quot;qwen/qwen3.8-omni-flash&quot;, &quot;ttsModel&quot;: &quot;assemblyai/assemblyai-tts-1&quot; }
+}</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
 <h3 id="turnmerged"><a class="anchor" href="#turnmerged" aria-hidden="true" tabindex="-1">#</a><code>turn.merged</code></h3>
 <p>You kept talking after a short pause, before Sibyl answered aloud. The earlier turn <code>mergedRequestId</code> is folded into <code>requestId</code> and answered once.</p>
 <div class="codeBlock"><span class="codeLang">json</span><pre><code class="language-json">{ &quot;type&quot;: &quot;turn.merged&quot;, &quot;requestId&quot;: &quot;uuid-2&quot;, &quot;mergedRequestId&quot;: &quot;uuid-1&quot; }</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
@@ -342,7 +352,7 @@ vad.speech_end (+ caption) ────►
       <a class="next" href="site.html"><span>Next</span>Website and docs site</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#connection">Connection</a></li><li class="d2"><a href="#typical-flows">Typical flows</a></li><li class="d2"><a href="#client--gateway">Client → gateway</a></li><li class="d3"><a href="#sessionstart">session.start</a></li><li class="d3"><a href="#sessionupdate">session.update</a></li><li class="d3"><a href="#usertext">user.text</a></li><li class="d3"><a href="#audiochunk">audio.chunk</a></li><li class="d3"><a href="#vadspeech_start">vad.speech_start</a></li><li class="d3"><a href="#vadspeech_end">vad.speech_end</a></li><li class="d3"><a href="#interrupt">interrupt</a></li><li class="d3"><a href="#playbackack">playback.ack</a></li><li class="d2"><a href="#gateway--client">Gateway → client</a></li><li class="d3"><a href="#sessionstart-1">session.start</a></li><li class="d3"><a href="#sessionconfig">session.config</a></li><li class="d3"><a href="#transcriptpartial">transcript.partial</a></li><li class="d3"><a href="#transcriptfinal">transcript.final</a></li><li class="d3"><a href="#transcriptupdate">transcript.update</a></li><li class="d3"><a href="#turnmerged">turn.merged</a></li><li class="d3"><a href="#llmdelta-and-llmdone">llm.delta and llm.done</a></li><li class="d3"><a href="#uidelta">ui.delta</a></li><li class="d3"><a href="#brainstart-braindelta-braindone">brain.start, brain.delta, brain.done</a></li><li class="d3"><a href="#ttsstart-ttschunk-ttsend">tts.start, tts.chunk, tts.end</a></li><li class="d3"><a href="#error">error</a></li><li class="d2"><a href="#conversations">Conversations</a></li><li class="d3"><a href="#conversationsrequest--conversationslist">conversations.request → conversations.list</a></li><li class="d3"><a href="#conversationopen--conversationstate">conversation.open → conversation.state</a></li><li class="d3"><a href="#conversationdelete">conversation.delete</a></li><li class="d2"><a href="#tools-and-approvals">Tools and approvals</a></li><li class="d3"><a href="#toolstarted-toolfinished">tool.started, tool.finished</a></li><li class="d3"><a href="#approvalrequest">approval.request</a></li><li class="d3"><a href="#approvaldecision">approval.decision</a></li><li class="d3"><a href="#approvalresolved">approval.resolved</a></li><li class="d2"><a href="#usage-and-budgets">Usage and budgets</a></li><li class="d3"><a href="#usagerequest--usageupdate">usage.request → usage.update</a></li><li class="d3"><a href="#budgetblocked">budget.blocked</a></li><li class="d2"><a href="#changing-the-protocol">Changing the protocol</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#connection">Connection</a></li><li class="d2"><a href="#typical-flows">Typical flows</a></li><li class="d2"><a href="#client--gateway">Client → gateway</a></li><li class="d3"><a href="#sessionstart">session.start</a></li><li class="d3"><a href="#sessionupdate">session.update</a></li><li class="d3"><a href="#usertext">user.text</a></li><li class="d3"><a href="#audiochunk">audio.chunk</a></li><li class="d3"><a href="#vadspeech_start">vad.speech_start</a></li><li class="d3"><a href="#vadspeech_end">vad.speech_end</a></li><li class="d3"><a href="#vadspeech_pause-and-vadspeech_resume">vad.speech_pause and vad.speech_resume</a></li><li class="d3"><a href="#interrupt">interrupt</a></li><li class="d3"><a href="#playbackack">playback.ack</a></li><li class="d2"><a href="#gateway--client">Gateway → client</a></li><li class="d3"><a href="#sessionstart-1">session.start</a></li><li class="d3"><a href="#sessionconfig">session.config</a></li><li class="d3"><a href="#transcriptpartial">transcript.partial</a></li><li class="d3"><a href="#transcriptfinal">transcript.final</a></li><li class="d3"><a href="#transcriptupdate">transcript.update</a></li><li class="d3"><a href="#turnmetrics">turn.metrics</a></li><li class="d3"><a href="#turnmerged">turn.merged</a></li><li class="d3"><a href="#llmdelta-and-llmdone">llm.delta and llm.done</a></li><li class="d3"><a href="#uidelta">ui.delta</a></li><li class="d3"><a href="#brainstart-braindelta-braindone">brain.start, brain.delta, brain.done</a></li><li class="d3"><a href="#ttsstart-ttschunk-ttsend">tts.start, tts.chunk, tts.end</a></li><li class="d3"><a href="#error">error</a></li><li class="d2"><a href="#conversations">Conversations</a></li><li class="d3"><a href="#conversationsrequest--conversationslist">conversations.request → conversations.list</a></li><li class="d3"><a href="#conversationopen--conversationstate">conversation.open → conversation.state</a></li><li class="d3"><a href="#conversationdelete">conversation.delete</a></li><li class="d2"><a href="#tools-and-approvals">Tools and approvals</a></li><li class="d3"><a href="#toolstarted-toolfinished">tool.started, tool.finished</a></li><li class="d3"><a href="#approvalrequest">approval.request</a></li><li class="d3"><a href="#approvaldecision">approval.decision</a></li><li class="d3"><a href="#approvalresolved">approval.resolved</a></li><li class="d2"><a href="#usage-and-budgets">Usage and budgets</a></li><li class="d3"><a href="#usagerequest--usageupdate">usage.request → usage.update</a></li><li class="d3"><a href="#budgetblocked">budget.blocked</a></li><li class="d2"><a href="#changing-the-protocol">Changing the protocol</a></li></ul></aside>
 </div>
 
   <footer class="footer">
@@ -352,17 +362,18 @@ vad.speech_end (+ caption) ────►
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -398,7 +409,7 @@ vad.speech_end (+ caption) ────►
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

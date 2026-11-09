@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -145,6 +143,7 @@ corepack pnpm install</code></pre><button type="button" class="btn btnLine btnXs
 <p>On the first start the model scout reads the OpenRouter catalog and measures latency in the background. This takes about a minute and sends a few dozen small paid requests. Sibyl works immediately on the models from your config file and switches to the scout&#39;s picks when they are ready; connected sessions update live. The result is cached for 24 hours in <code>.model-scout.json</code>, relative to the gateway&#39;s working directory (<code>apps/gateway</code> during development), so later starts are instant.</p>
 <h2 id="4-first-run-owner-account-and-setup"><a class="anchor" href="#4-first-run-owner-account-and-setup" aria-hidden="true" tabindex="-1">#</a>4. First run: owner account and setup</h2>
 <p>Open <a href="http://localhost:3000" rel="noopener">http://localhost:3000</a>. The first time, Sibyl asks you to create the <strong>owner account</strong> (name, email, password). If you set <code>SIBYL_OWNER_TOKEN</code>, enter it there too. Just you on this computer? Choose <strong>Continue without an account</strong>; you can add one later.</p>
+<p><img src="assets/onboarding.png" alt="The first setup step: a name and an avatar you can shuffle, with Continue and Finish later" loading="lazy" decoding="async"></p>
 <p>Then a short setup starts. Each step is one screen with its own address (<code>/welcome/&lt;step&gt;</code>), so Back and Forward work, and <strong>Skip</strong> is on every optional step:</p>
 <ol>
 <li><strong>Welcome</strong> — your name and the face (avatar) people see. Shuffle until you like it.</li>
@@ -159,6 +158,7 @@ corepack pnpm install</code></pre><button type="button" class="btn btnLine btnXs
 <p><strong>Finish later</strong> leaves setup; it picks up where you were, on any device. People you invite get the same setup, without the steps they can&#39;t do (a member doesn&#39;t set the model key or invite people).</p>
 <h3 id="getting-started-checklist"><a class="anchor" href="#getting-started-checklist" aria-hidden="true" tabindex="-1">#</a>Getting started checklist</h3>
 <p>Until you finish or dismiss it, a ring in the left rail shows how far along you are (on a phone it is in the menu). Open it for the list: connect a model key, pick a style, connect a tool, create an agent, add knowledge, invite your team, talk to Sibyl. Each item opens the right screen and ticks itself when the thing is really done, wherever you did it.</p>
+<p><img src="assets/getting-started-checklist.png" alt="The Getting started checklist open from the rail, four of seven items done" loading="lazy" decoding="async"></p>
 <h2 id="5-talk-or-type"><a class="anchor" href="#5-talk-or-type" aria-hidden="true" tabindex="-1">#</a>5. Talk or type</h2>
 <ul>
 <li><strong>Typing:</strong> use the composer. You get a normal chat reply with text and visuals, and nothing is read aloud. Messages you send while Sibyl is still answering join a queue; you can reorder, edit or remove them before they go.</li>
@@ -204,17 +204,18 @@ corepack pnpm install</code></pre><button type="button" class="btn btnLine btnXs
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -250,7 +251,7 @@ corepack pnpm install</code></pre><button type="button" class="btn btnLine btnXs
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

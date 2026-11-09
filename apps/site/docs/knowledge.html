@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -97,6 +95,7 @@
 <h1 id="knowledge-bases">Knowledge bases</h1>
 <p>A knowledge base is a set of documents — uploaded files, web pages and pasted
 text — that Sibyl searches and cites. Bases belong to a workspace.</p>
+<p><img src="assets/knowledge.png" alt="A knowledge base called Product handbook with six of Sibyl's docs, each Ready with its number of passages" loading="lazy" decoding="async"></p>
 <h2 id="adding-documents"><a class="anchor" href="#adding-documents" aria-hidden="true" tabindex="-1">#</a>Adding documents</h2>
 <div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
 <thead>
@@ -313,6 +312,7 @@ with <code>[document › section]</code> citations.</li>
 <li><code>list_knowledge</code> (read) — the workspace&#39;s bases.</li>
 <li><code>save_to_knowledge</code> (write, needs approval) — saves a chat attachment into a base.</li>
 </ul>
+<p><img src="assets/knowledge-chat.png" alt="An answer from the Product handbook with a cost table, and the two docs sections it used listed under Sources" loading="lazy" decoding="async"></p>
 <p><strong>Searched automatically:</strong> a workspace setting (<code>WorkspaceRecord.knowledgeBaseIds</code>,
 or a kv fallback for a default workspace without a record). For those bases
 the deep brain and typed chat get a short <strong>Relevant knowledge</strong> block on
@@ -437,17 +437,18 @@ save for a chat attachment: <code>&lt;SaveToKnowledgeButton uploadId={id} /&gt;<
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -483,7 +484,7 @@ save for a chat attachment: <code>&lt;SaveToKnowledgeButton uploadId={id} /&gt;<
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Voice · Sibyl docs</title>
-  <meta name="description" content="Sibyl's live conversation is built from swappable OpenRouter models, not a single vendor's realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, and what " />
+  <meta name="description" content="Sibyl's live conversation is built from swappable OpenRouter models, not a single vendor's realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, how it st" />
   <meta name="color-scheme" content="light dark" />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#161817" media="(prefers-color-scheme: dark)" />
@@ -38,13 +38,11 @@
             <div class="menuCol">
               <p class="menuHead">Products</p>
               <ul>
-                <li><a href="../index.html#talk"><strong>Sibyl</strong><span>The assistant: chat and live voice</span></a></li>
-                <li><a href="../index.html#agents"><strong>Agents</strong><span>Teammates with their own face, voice and computer</span></a></li>
-                <li><a href="../index.html#meetings"><strong>Meetings</strong><span>People and agents together, with live notes</span></a></li>
-                <li><a href="../index.html#spaces"><strong>Spaces</strong><span>Slides and Media</span></a></li>
-                <li><a href="../index.html#library"><strong>Library</strong><span>Knowledge, Skills, Plugins, Integrations</span></a></li>
-                <li><a href="../index.html#routines"><strong>Automations</strong><span>Routines and Monitors</span></a></li>
-                <li><a href="../index.html#realtime"><strong>Calls and phone</strong><span>WebRTC calls, phone lines and streams</span></a></li>
+                <li><a href="../products/assistant.html"><strong>Sibyl Assistant</strong><span>Chat and live voice, with answers you can see</span></a></li>
+                <li><a href="../products/meet.html"><strong>Sibyl Meet</strong><span>Meetings with people and agents, and notes that write themselves</span></a></li>
+                <li><a href="../products/slides.html"><strong>Sibyl Slides</strong><span>Decks from a prompt, your files or connected data</span></a></li>
+                <li><a href="../products/studio.html"><strong>Sibyl Studio</strong><span>Images, video and audio in chat, and a Media library</span></a></li>
+                <li><a href="../products/agents.html"><strong>Sibyl Agents</strong><span>Agents you build, with their own face, voice and computer</span></a></li>
               </ul>
             </div>
             <div class="menuCol">
@@ -95,7 +93,8 @@
     <p class="crumb"><a href="index.html">Docs</a> <span aria-hidden="true">/</span> Using Sibyl</p>
     <article class="prose">
 <h1 id="voice">Voice</h1>
-<p>Sibyl&#39;s live conversation is built from swappable OpenRouter models, not a single vendor&#39;s realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, and what the measured latency looks like.</p>
+<p>Sibyl&#39;s live conversation is built from swappable OpenRouter models, not a single vendor&#39;s realtime API. This page explains how a spoken turn flows, how Sibyl decides when you have finished, how it stays fast, and what the measured latency looks like (with the same metric names as LiveKit&#39;s).</p>
+<p><img src="assets/settings-voice.png" alt="Settings → Voice: the voice engine picker (Sibyl voice or GPT Realtime with prices per minute), the OpenAI key, and the voice model and voice" loading="lazy" decoding="async"></p>
 <p>For people who want the most natural voice and are happy to pay more, OpenAI&#39;s GPT Realtime is available as a premium <a href="#voice-engines-sibyl-voice-and-gpt-realtime">voice engine</a>. Sibyl voice stays the default.</p>
 <h2 id="websocket-or-livekit"><a class="anchor" href="#websocket-or-livekit" aria-hidden="true" tabindex="-1">#</a>WebSocket or LiveKit</h2>
 <p>By default the browser streams your voice to the gateway over its WebSocket, and Sibyl&#39;s voice comes back the same way. Nothing else is needed.</p>
@@ -136,8 +135,8 @@
                                                 │                          │
                          speech + emotion cues ─┘                          └─ &quot;@brain &lt;task&gt;&quot;
                                 │                                                  │
-          expressive speech, segments synthesized in parallel        DEEP BRAIN (stronger model)
-          and played gaplessly; talking over it stops it             reasons with the whole conversation,
+          expressive speech, streamed and played as it arrives       DEEP BRAIN (stronger model)
+          and gaplessly; talking over it stops it                    reasons with the whole conversation,
                                                                      streams a visual, then a short
           background transcription ──► accurate transcript           spoken gist when you're free</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
 <h3 id="the-voice-brain"><a class="anchor" href="#the-voice-brain" aria-hidden="true" tabindex="-1">#</a>The voice brain</h3>
@@ -165,7 +164,7 @@
 <p>While you speak, the browser shows an instant caption from its own speech recognition (where available). This is only a display hint: the voice brain hears the real audio. After the turn, a transcription model writes an accurate transcript in the background, and the gateway replaces the caption with it (<code>transcript.update</code>).</p>
 <h2 id="turn-taking"><a class="anchor" href="#turn-taking" aria-hidden="true" tabindex="-1">#</a>Turn-taking</h2>
 <h3 id="ending-a-turn"><a class="anchor" href="#ending-a-turn" aria-hidden="true" tabindex="-1">#</a>Ending a turn</h3>
-<p>The browser&#39;s voice activity detector ends a turn after 0.4 seconds of silence (<code>NEXT_PUBLIC_VAD_HANGOVER_MS</code>). That is quick on purpose, because turn merging handles people who pause mid-thought. Other safeguards:</p>
+<p>The browser&#39;s voice activity detector ends a turn after 0.4 seconds of silence (<code>NEXT_PUBLIC_VAD_HANGOVER_MS</code>). That is quick on purpose, because turn merging handles people who pause mid-thought. After 0.2 seconds of silence it already reports a pause, so the reply can start early (<a href="#preemptive-generation">preemptive generation</a>). Other safeguards:</p>
 <ul>
 <li>a turn starts only after 160 ms of sound, and turns with less than 200 ms of voiced audio are discarded;</li>
 <li>400 ms of audio from just before speech was detected is kept, so the first syllable isn&#39;t lost;</li>
@@ -178,6 +177,24 @@
 <h3 id="barge-in"><a class="anchor" href="#barge-in" aria-hidden="true" tabindex="-1">#</a>Barge-in</h3>
 <p>Talk over Sibyl and it stops: the browser stops playback at once, and the gateway cancels the reply and any speech still being generated. A deep-brain gist that hasn&#39;t been spoken yet is dropped once your new turn starts. Measured time from you starting to talk to silence is about half a second.</p>
 <h2 id="staying-fast"><a class="anchor" href="#staying-fast" aria-hidden="true" tabindex="-1">#</a>Staying fast</h2>
+<p>What you wait for after you stop talking is, in order: the speech detector deciding you have finished, the voice brain&#39;s first words, and the speech model&#39;s first audio. Sibyl works on all three.</p>
+<h3 id="preemptive-generation"><a class="anchor" href="#preemptive-generation" aria-hidden="true" tabindex="-1">#</a>Preemptive generation</h3>
+<p>After 0.2 seconds of silence the speech detector reports a pause (<code>vad.speech_pause</code>), before it decides your turn is over. The gateway starts the voice brain on the audio so far. If the turn then ends without more speech, that reply is used, so the voice brain has already been working for part of the wait. If you carry on (<code>vad.speech_resume</code>), or anything the reply depends on changed (the conversation, the model), it is cancelled and the full turn is answered once.</p>
+<ul>
+<li>This is the same idea as LiveKit Agents&#39; <code>preemptive_generation</code>, which starts the LLM on the final transcript before the end of turn is confirmed.</li>
+<li>A cancelled start still costs its input (the audio so far), typically a fraction of a cent. At most three starts are made per turn, and a start that is never used is cancelled after 10 seconds.</li>
+<li>On by default. Turn it off for one session in <strong>Settings → Voice → Speed</strong>, or for everyone with <code>SIBYL_PREEMPTIVE_GENERATION=false</code>.</li>
+<li>It works on both paths: the browser&#39;s detector and the LiveKit room agent&#39;s detector report pauses the same way.</li>
+<li>A turn addressed to an agent is answered once the turn is final (the agent&#39;s own prompt is only known then).</li>
+</ul>
+<h3 id="speech-that-plays-as-it-streams"><a class="anchor" href="#speech-that-plays-as-it-streams" aria-hidden="true" tabindex="-1">#</a>Speech that plays as it streams</h3>
+<ul>
+<li><strong>Small first segment.</strong> The reply is split into speech segments; the first ends at the first clause boundary (&quot;Oh, nice,&quot; / &quot;Sure.&quot;) after about 14 characters, or at a word boundary after 60 characters when there is no punctuation. Later segments take whole clauses. A full stop inside a number (&quot;3.5&quot;) or an abbreviation doesn&#39;t end a segment.</li>
+<li><strong>Streaming playback.</strong> Each segment&#39;s audio is sent on in small pieces while the speech model is still producing it (the first piece after 120 ms of audio, then 300 ms pieces). Raw PCM and WAV are cut as they arrive; MP3 is decoded on the gateway and sent as 24 kHz WAV. Opus, AAC and FLAC are still sent whole.</li>
+<li>Segments are synthesized in parallel and played in order, gaplessly, in the browser or the LiveKit room.</li>
+</ul>
+<h3 id="the-model-check-weighs-speed"><a class="anchor" href="#the-model-check-weighs-speed" aria-hidden="true" tabindex="-1">#</a>The model check weighs speed</h3>
+<p>The <a href="models-and-costs.html">model scout</a> measures each voice brain&#39;s time to first word and each speech model&#39;s time to first audio (TTS TTFB) with short live probes. The speech probe says a sentence about the size of a reply&#39;s first segment, and a speech model is judged by the slowest of three starts. For <strong>Balanced</strong> and <strong>Fastest</strong>, these two numbers weigh more than before, and models over a time budget (Balanced: 1.6 s voice brain, 1.3 s speech; Fastest: 1.3 s and 1.0 s) rank far lower.</p>
 <h3 id="hedged-requests"><a class="anchor" href="#hedged-requests" aria-hidden="true" tabindex="-1">#</a>Hedged requests</h3>
 <p>Latency on shared provider routes varies a lot; the same model has been measured at 1 second on one call and 14 on the next. With <code>HEDGE_REQUESTS=true</code> (the default):</p>
 <ul>
@@ -189,49 +206,60 @@
 <ul>
 <li><strong>Learning from live turns.</strong> In auto mode the gateway tracks each voice brain&#39;s real time to first word and uses whichever of the scout&#39;s top three has been fastest recently. A model you choose yourself always wins.</li>
 <li><strong>Warm connections.</strong> Each session sends a small warm-up request to the voice brain, and provider connections are kept open for up to a minute between turns instead of Node&#39;s default four seconds.</li>
-<li><strong>Small first segments.</strong> The reply is split into speech segments starting from about 14 characters, so the first audio starts sooner. Segments are synthesized in parallel.</li>
-<li><strong>Gapless playback.</strong> Each segment is decoded and scheduled back to back on one Web Audio timeline, so there are no pauses between sentences.</li>
 </ul>
-<h2 id="measured-latency"><a class="anchor" href="#measured-latency" aria-hidden="true" tabindex="-1">#</a>Measured latency</h2>
-<p>Measured end to end in the browser (injected microphone audio, real OpenRouter, Balanced preset, 2026-11-09):</p>
-<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
-<thead>
-<tr>
-<th>Step</th>
-<th>Typical</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>End of speech detected</td>
-<td>0.4 s of silence</td>
-</tr>
-<tr>
-<td>→ voice brain&#39;s first word</td>
-<td>~1.5–2.1 s for a 4 s question</td>
-</tr>
-<tr>
-<td>→ first audio</td>
-<td>+0.6–1.0 s</td>
-</tr>
-<tr>
-<td><strong>End of speech → Sibyl&#39;s voice</strong></td>
-<td><strong>~2.5–3.3 s</strong></td>
-</tr>
-<tr>
-<td>Barge-in (you talk over it) → silence</td>
-<td>~0.5 s</td>
-</tr>
-<tr>
-<td>Deep brain&#39;s spoken gist</td>
-<td>~5–8 s after handoff, with the visual streaming in alongside</td>
-</tr>
-</tbody></table></div>
-<p>Native speech-to-speech models can start in under a second because one model does everything. Sibyl&#39;s pipeline is model-agnostic and cheaper. The <strong>Fastest</strong> preset trades some cost for the lowest measured latency.</p>
-<p>The <strong>Diagnostics</strong> tab in Models &amp; voice shows the latest turn&#39;s timings in your own browser:</p>
+<h3 id="livekit-inference-speech-livekit-cloud"><a class="anchor" href="#livekit-inference-speech-livekit-cloud" aria-hidden="true" tabindex="-1">#</a>LiveKit Inference speech (LiveKit Cloud)</h3>
+<p>When <code>LIVEKIT_URL</code> points at a LiveKit Cloud project (<code>*.livekit.cloud</code>), <strong>Settings → Voice → Speed</strong> offers <strong>LiveKit Inference</strong> for speech and transcription instead of OpenRouter:</p>
+<ul>
+<li>Speech comes from LiveKit&#39;s hosted streaming models (default Cartesia Sonic 3, <code>LIVEKIT_INFERENCE_TTS</code>) and your transcript from Deepgram Nova-3 (<code>LIVEKIT_INFERENCE_STT</code>), reached with the LiveKit project&#39;s API key. No other provider key is needed.</li>
+<li>The voice brain and the deep brain stay on OpenRouter, so one OpenRouter key keeps working and remains the default.</li>
+<li>Settings shows the price per minute of conversation for speech and transcription, from LiveKit&#39;s published prices: about <strong>$0.021 a minute</strong> with the defaults (25 seconds of you at $0.0048 a minute, plus about 375 characters of reply at $50 per 1M characters). LiveKit bills your LiveKit project; Sibyl meters each call at the same prices (<code>livekit:&lt;model&gt;</code> in Usage), so budgets apply.</li>
+<li>Live turns are PCM, which LiveKit transcribes; push-to-talk clips in other formats still go to the OpenRouter transcription model.</li>
+<li>Choosing it needs <code>models.choose</code>, like choosing models.</li>
+<li><strong>Not verified live.</strong> No LiveKit Cloud project was available while this was built. It follows the protocol LiveKit&#39;s own Agents SDK uses (see the research notes below) and is tested against a local stand-in (<code>apps/gateway/src/voice/fake-livekit-inference.ts</code>). Please report how it works on a real project.</li>
+</ul>
+<h2 id="latency-metrics"><a class="anchor" href="#latency-metrics" aria-hidden="true" tabindex="-1">#</a>Latency metrics</h2>
+<p>Sibyl measures each spoken reply with the same names and definitions as LiveKit Agents&#39; metrics, so the numbers can be compared with LiveKit&#39;s:</p>
 <div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
 <thead>
 <tr>
 <th>Metric</th>
+<th>LiveKit name</th>
+<th>From → to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>End-of-utterance delay</td>
+<td><code>end_of_utterance_delay</code></td>
+<td>end of speech (last voiced audio) → the turn is committed. Includes the silence the detector waited for.</td>
+</tr>
+<tr>
+<td>Transcription delay</td>
+<td><code>transcription_delay</code></td>
+<td>end of speech → the final transcript. The voice brain hears the audio itself, so on Sibyl voice this runs in parallel and isn&#39;t waited for.</td>
+</tr>
+<tr>
+<td>LLM TTFT</td>
+<td><code>ttft</code></td>
+<td>request to the voice brain → its first token. With preemptive generation the request starts during the pause.</td>
+</tr>
+<tr>
+<td>TTS TTFB</td>
+<td><code>ttfb</code></td>
+<td>first speech request → first audio byte from the speech model.</td>
+</tr>
+<tr>
+<td>Total latency</td>
+<td><code>e2e_latency</code></td>
+<td>end of speech → first audio sent to you (the WebSocket or the LiveKit room).</td>
+</tr>
+</tbody></table></div>
+<p>LiveKit approximates total latency as end-of-utterance delay + LLM TTFT + TTS TTFB. Sibyl&#39;s total is measured directly; it also includes waiting for the first clause of text.</p>
+<p>The gateway logs them as <code>latency.turn</code> and sends them to the browser (<code>turn.metrics</code>) on the WebSocket and the LiveKit path alike. &quot;End of speech&quot; is when the detector&#39;s <code>vad.speech_end</code> arrived, minus the silence it waited for (<code>silenceMs</code>).</p>
+<p><strong>Settings → Diagnostics</strong> shows the latest reply&#39;s turn metrics, the path (WebSocket or LiveKit) and whether it was started early, and next to them what your browser measured itself:</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>In this browser</th>
 <th>Measured from → to</th>
 </tr>
 </thead>
@@ -252,11 +280,97 @@
 <td>first reply text → audio actually playing</td>
 </tr>
 <tr>
-<td>Speech end → audio</td>
+<td>Speech end → audio playing</td>
 <td>end of speech → audio actually playing</td>
 </tr>
 </tbody></table></div>
 <p>It also shows the voice activity detector&#39;s state, input level, noise floor and thresholds.</p>
+<h2 id="measured-latency"><a class="anchor" href="#measured-latency" aria-hidden="true" tabindex="-1">#</a>Measured latency</h2>
+<p>Measured on 2026-11-10 with a scripted client: macOS <code>say</code> speech sent as live 24 kHz PCM over the WebSocket, 0.3 s of trailing silence, a <code>vad.speech_pause</code> after 0.2 s of it (as the browser&#39;s detector does), real OpenRouter, the <strong>Balanced</strong> preset of that day. Each condition ran 6–16 turns of short questions; numbers are medians with p90 in brackets.</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th></th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Models (Balanced)</td>
+<td>Qwen3.8 Omni Flash, Gemini 3.8 Flash Lite TTS</td>
+<td>Qwen3.8 Omni Flash, AssemblyAI TTS 1</td>
+</tr>
+<tr>
+<td><strong>End of speech → first audio sent</strong> (<code>e2e_latency</code>)</td>
+<td><strong>4.0 s</strong> (5.0 s), 14 turns</td>
+<td><strong>2.4 s</strong> (3.0 s), 16 turns</td>
+</tr>
+<tr>
+<td>Speech end signal → first audio sent</td>
+<td>3.7 s (4.6 s)</td>
+<td>2.1 s (2.7 s)</td>
+</tr>
+<tr>
+<td>End-of-utterance delay</td>
+<td>0.3 s (the client&#39;s silence)</td>
+<td>0.3 s</td>
+</tr>
+<tr>
+<td>LLM TTFT (voice brain)</td>
+<td>1.0 s (2.2 s)</td>
+<td>1.4 s (1.7 s), counted from the pause</td>
+</tr>
+<tr>
+<td>TTS TTFB</td>
+<td>2.3 s (2.8 s), whole first segment</td>
+<td>0.4 s (0.8 s), first streamed byte</td>
+</tr>
+<tr>
+<td>Same, LiveKit room: end of speech → first audio heard by the other participant</td>
+<td>5.0 s (6.6 s), 6 turns</td>
+<td>3.0 s (4.2 s), 6 turns; <code>e2e_latency</code> 2.7 s</td>
+</tr>
+</tbody></table></div>
+<p>Where the time went: the speech model was the biggest part before (Gemini TTS sends nothing until the whole segment is made). The scout now picks a speech model that starts in about 0.4–0.8 s, and its audio plays as it streams. Preemptive generation alone saved about 0.2 s at the median and 0.45 s at p90 (with it off: 2.6 s and 3.4 s). The voice brain&#39;s first token, 1–2 seconds, is now the largest part.</p>
+<p>In a browser add the speech detector&#39;s wait (0.4 s of silence instead of the client&#39;s 0.3 s; the pause is reported at 0.2 s either way), the network and starting playback. The <strong>Fastest</strong> preset picked the same models as Balanced on that day. Native speech-to-speech models (see <a href="#voice-engines-sibyl-voice-and-gpt-realtime">GPT Realtime</a>) can start in under a second because one model does everything.</p>
+<p>Earlier figures: 2.5–3.3 s on 2026-11-09 (Balanced used Kokoro then, measured in the browser) and 4.2–5.8 s on the morning of 2026-11-10 (Gemini 3.8 Flash Lite TTS).</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Other</th>
+<th>Typical</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Barge-in (you talk over it) → silence</td>
+<td>~0.5 s</td>
+</tr>
+<tr>
+<td>Deep brain&#39;s spoken gist</td>
+<td>~5–8 s after handoff, with the visual streaming in alongside</td>
+</tr>
+</tbody></table></div>
+<h2 id="livekits-realtime-stack-research-notes-2026-11-10"><a class="anchor" href="#livekits-realtime-stack-research-notes-2026-11-10" aria-hidden="true" tabindex="-1">#</a>LiveKit&#39;s realtime stack: research notes (2026-11-10)</h2>
+<p>From LiveKit&#39;s documentation and the <code>@livekit/agents</code> 1.9.5 source (Node), checked on 2026-11-10:</p>
+<ul>
+<li><strong>Agents framework</strong> (<a href="https://docs.livekit.io/agents.md" rel="noopener">docs</a>): <code>AgentSession</code> runs VAD, turn detection, STT → LLM → TTS, interruptions and playout inside a LiveKit room. Sibyl doesn&#39;t use it: its room agent (<code>@livekit/rtc-node</code>) drives the same session as the browser so tools, approvals, budgets and the deep brain stay in one place (see <a href="realtime.html">Realtime calls (LiveKit)</a>). Its latency ideas are reused here: metrics, preemptive generation, streaming TTS.</li>
+<li><strong>Metrics</strong> (<a href="https://docs.livekit.io/testing/observability/data.md" rel="noopener">data</a>): <code>EOUMetrics</code> (<code>endOfUtteranceDelayMs</code>, <code>transcriptionDelayMs</code>, <code>onUserTurnCompletedDelayMs</code>), <code>LLMMetrics.ttftMs</code>, <code>TTSMetrics.ttfbMs</code>, and <code>e2e_latency</code> (user stopped speaking → agent started speaking). LiveKit publishes no typical values for them.</li>
+<li><strong>LiveKit Inference</strong> (<a href="https://docs.livekit.io/agents/models/inference.md" rel="noopener">overview</a>, <a href="https://livekit.com/pricing/inference" rel="noopener">pricing</a>): hosted STT, LLM and TTS reached with a LiveKit Cloud project&#39;s key; it needs LiveKit Cloud. Speech-to-text per minute: Deepgram Nova-3 $0.0048, AssemblyAI Universal-Streaming $0.0025, Cartesia Ink-Whisper $0.003, Deepgram Flux $0.0065. Speech per 1M characters: Cartesia Sonic 3 $50, Deepgram Aura-2 $30, Inworld TTS 2 $25, Rime Mist v3 $30. LLMs per 1M tokens, e.g. GPT-4.1 mini $0.40 in / $1.60 out, Gemini 3 Flash $0.50 / $3.00. The free Build plan includes $2.50 of credit a month and allows 5 concurrent speech-to-text and 5 text-to-speech connections (<a href="https://docs.livekit.io/deploy/admin/quotas-and-limits.md" rel="noopener">quotas</a>). The protocol (from <code>src/inference/{stt,tts}.ts</code>): WebSockets at <code>wss://agent-gateway.livekit.cloud/v1/{stt,tts}?model=…</code> with a JWT carrying the <code>inference</code> grant; <code>session.create</code>, <code>input_audio</code> / <code>input_transcript</code>, <code>session.finalize</code> / <code>session.flush</code>; <code>final_transcript</code>, <code>output_audio</code>, <code>done</code>. LLMs are OpenAI-compatible chat completions on the same gateway. Sibyl uses only speech: the voice brain needs audio input and must stay on the one OpenRouter key.</li>
+<li><strong>Turn detector</strong> (<a href="https://docs.livekit.io/agents/logic/turns/turn-detector.md" rel="noopener">docs</a>, <a href="https://huggingface.co/livekit/turn-detector" rel="noopener">model</a>): decides from what was said (text model, a distilled Qwen2.5-0.5B, 50–160 ms on CPU, 66 MB English / 396 MB multilingual) or, newer, from the audio (<code>v1-mini</code> runs locally through <code>@livekit/local-inference</code>; <code>v1</code> runs on LiveKit Cloud at $0.50 per 1,000 requests, 7,500 a month free). It lowers the wait when you sound finished and raises it (up to 3 s by default) when you don&#39;t. The text model is deprecated in favour of the audio one.</li>
+<li><strong>Preemptive generation</strong> (<a href="https://docs.livekit.io/agents/logic/turns/tuning.md" rel="noopener">tuning</a>): on by default in Agents; starts the reply on each final transcript and reuses it if the committed turn is the same. LiveKit warns it may not always lower latency; Sibyl&#39;s measurement above shows it does here, because the voice brain hears the audio and needs no transcript first.</li>
+<li><strong>Endpointing and interruptions</strong>: defaults 0.5 s minimum and 3 s maximum endpointing delay (0.3 / 2.5 s with the audio turn detector). Adaptive interruption handling (telling backchannels like &quot;mm-hm&quot; from real interruptions) runs only on LiveKit Cloud inference ($1.20 per 1,000 requests, 40,000 a month free) (<a href="https://docs.livekit.io/agents/logic/turns/adaptive-interruption-handling.md" rel="noopener">docs</a>).</li>
+<li><strong>Noise cancellation</strong> (<a href="https://docs.livekit.io/transport/media/noise-cancellation.md" rel="noopener">docs</a>): Krisp noise and background-voice cancellation (<code>@livekit/noise-cancellation-node</code>, works with <code>rtc-node</code>) requires LiveKit Cloud and is under LiveKit&#39;s terms of service, not open source. Sibyl doesn&#39;t include it; browsers keep their own echo cancellation and noise suppression.</li>
+</ul>
+<h3 id="the-turn-detectors-licence-and-why-sibyl-doesnt-use-it-yet"><a class="anchor" href="#the-turn-detectors-licence-and-why-sibyl-doesnt-use-it-yet" aria-hidden="true" tabindex="-1">#</a>The turn detector&#39;s licence, and why Sibyl doesn&#39;t use it yet</h3>
+<p>The turn-detector weights (text model and <code>v1-mini</code>) are under the <strong>LiveKit Model License Agreement</strong> (2024-11-25, <a href="https://huggingface.co/livekit/turn-detector/blob/main/LICENSE" rel="noopener">text</a>). In short:</p>
+<ul>
+<li><strong>Allowed:</strong> use, copy, distribute and modify, worldwide and royalty-free, including commercially (commercial use isn&#39;t restricted separately).</li>
+<li><strong>Only with LiveKit Agents:</strong> the licence forbids using the models &quot;on a standalone basis or with any frameworks other than LiveKit Agents&quot;.</li>
+<li><strong>No training:</strong> the models and their outputs may not be used to improve other models.</li>
+<li><strong>Redistribution</strong> only under the same licence with its notice; changed versions are LiveKit Models under the same terms.</li>
+<li>No trademark rights; provided as is; ends automatically on a breach; California law.</li>
+</ul>
+<p>Sibyl&#39;s room agent and the browser are not LiveKit Agents, so running the model in them would breach that clause, even as an opt-in. The audio model <code>v1</code> runs only on LiveKit Cloud and is called by the Agents SDK. So, per decision 3 in <a href="https://github.com/Suryanandx/sibyl/blob/HEAD/docs/plans/livekit.md#decisions-agreed-2026-11-09">the LiveKit plan</a>, it is not wired in. Sibyl keeps its own detector, turn merging (a pause and a continuation become one turn) and, with GPT Realtime, OpenAI&#39;s semantic turn detection. Using it would mean running the room agent on <code>@livekit/agents</code> (<code>AgentSession</code> with <code>turnDetection</code>), which the plan chose not to do. This is a reading of the licence, not legal advice; the owner decides.</p>
 <h2 id="single-model-mode"><a class="anchor" href="#single-model-mode" aria-hidden="true" tabindex="-1">#</a>Single-model mode</h2>
 <p>With <code>LIVE_CONVERSATION=false</code>, or when no voice brain is configured, each turn uses one model:</p>
 <div class="codeBlock"><span class="codeLang">text</span><pre><code class="language-text">audio ──► transcription ──► chat model (voice reply + optional visual) ──► speech</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
@@ -393,7 +507,7 @@
       <a class="next" href="generative-ui.html"><span>Next</span>Generative UI</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#websocket-or-livekit">WebSocket or LiveKit</a></li><li class="d2"><a href="#three-ways-to-talk">Three ways to talk</a></li><li class="d2"><a href="#the-live-pipeline">The live pipeline</a></li><li class="d3"><a href="#the-voice-brain">The voice brain</a></li><li class="d3"><a href="#the-deep-brain">The deep brain</a></li><li class="d3"><a href="#transcripts">Transcripts</a></li><li class="d2"><a href="#turn-taking">Turn-taking</a></li><li class="d3"><a href="#ending-a-turn">Ending a turn</a></li><li class="d3"><a href="#turn-merging">Turn merging</a></li><li class="d3"><a href="#barge-in">Barge-in</a></li><li class="d2"><a href="#staying-fast">Staying fast</a></li><li class="d3"><a href="#hedged-requests">Hedged requests</a></li><li class="d3"><a href="#other-latency-work">Other latency work</a></li><li class="d2"><a href="#measured-latency">Measured latency</a></li><li class="d2"><a href="#single-model-mode">Single-model mode</a></li><li class="d2"><a href="#voice-engines-sibyl-voice-and-gpt-realtime">Voice engines: Sibyl voice and GPT Realtime</a></li><li class="d3"><a href="#turning-it-on">Turning it on</a></li><li class="d3"><a href="#how-a-gpt-realtime-turn-works">How a GPT Realtime turn works</a></li><li class="d3"><a href="#costs-and-budgets">Costs and budgets</a></li><li class="d3"><a href="#the-openai-realtime-api-research-notes-2026-11-10">The OpenAI Realtime API (research notes, 2026-11-10)</a></li><li class="d3"><a href="#measured">Measured</a></li><li class="d2"><a href="#when-speech-fails">When speech fails</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#websocket-or-livekit">WebSocket or LiveKit</a></li><li class="d2"><a href="#three-ways-to-talk">Three ways to talk</a></li><li class="d2"><a href="#the-live-pipeline">The live pipeline</a></li><li class="d3"><a href="#the-voice-brain">The voice brain</a></li><li class="d3"><a href="#the-deep-brain">The deep brain</a></li><li class="d3"><a href="#transcripts">Transcripts</a></li><li class="d2"><a href="#turn-taking">Turn-taking</a></li><li class="d3"><a href="#ending-a-turn">Ending a turn</a></li><li class="d3"><a href="#turn-merging">Turn merging</a></li><li class="d3"><a href="#barge-in">Barge-in</a></li><li class="d2"><a href="#staying-fast">Staying fast</a></li><li class="d3"><a href="#preemptive-generation">Preemptive generation</a></li><li class="d3"><a href="#speech-that-plays-as-it-streams">Speech that plays as it streams</a></li><li class="d3"><a href="#the-model-check-weighs-speed">The model check weighs speed</a></li><li class="d3"><a href="#hedged-requests">Hedged requests</a></li><li class="d3"><a href="#other-latency-work">Other latency work</a></li><li class="d3"><a href="#livekit-inference-speech-livekit-cloud">LiveKit Inference speech (LiveKit Cloud)</a></li><li class="d2"><a href="#latency-metrics">Latency metrics</a></li><li class="d2"><a href="#measured-latency">Measured latency</a></li><li class="d2"><a href="#livekits-realtime-stack-research-notes-2026-11-10">LiveKit's realtime stack: research notes (2026-11-10)</a></li><li class="d3"><a href="#the-turn-detectors-licence-and-why-sibyl-doesnt-use-it-yet">The turn detector's licence, and why Sibyl doesn't use it yet</a></li><li class="d2"><a href="#single-model-mode">Single-model mode</a></li><li class="d2"><a href="#voice-engines-sibyl-voice-and-gpt-realtime">Voice engines: Sibyl voice and GPT Realtime</a></li><li class="d3"><a href="#turning-it-on">Turning it on</a></li><li class="d3"><a href="#how-a-gpt-realtime-turn-works">How a GPT Realtime turn works</a></li><li class="d3"><a href="#costs-and-budgets">Costs and budgets</a></li><li class="d3"><a href="#the-openai-realtime-api-research-notes-2026-11-10">The OpenAI Realtime API (research notes, 2026-11-10)</a></li><li class="d3"><a href="#measured">Measured</a></li><li class="d2"><a href="#when-speech-fails">When speech fails</a></li></ul></aside>
 </div>
 
   <footer class="footer">
@@ -403,17 +517,18 @@
           <span class="mark" aria-hidden="true"><span class="markBase"></span></span>
           <span class="wordmark" aria-hidden="true"></span>
         </a>
-        <p>The open-source AI assistant you host yourself.</p>
+        <p>Open-source alternatives to the tools you pay for every month.</p>
       </div>
       <nav class="footCols" aria-label="Footer">
         <div>
-          <h2>Product</h2>
+          <h2>Products</h2>
           <ul>
-            <li><a href="../index.html#product">Overview</a></li>
-            <li><a href="../index.html#agents">Agents</a></li>
-            <li><a href="../index.html#knowledge">Knowledge</a></li>
+            <li><a href="../products/assistant.html">Sibyl Assistant</a></li>
+            <li><a href="../products/meet.html">Sibyl Meet</a></li>
+            <li><a href="../products/slides.html">Sibyl Slides</a></li>
+            <li><a href="../products/studio.html">Sibyl Studio</a></li>
+            <li><a href="../products/agents.html">Sibyl Agents</a></li>
             <li><a href="../index.html#pricing">Pricing</a></li>
-            <li><a href="../index.html#start">Get started</a></li>
           </ul>
         </div>
         <div>
@@ -449,7 +564,7 @@
       </nav>
     </div>
     <div class="wrap footBase">
-      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
+      <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
   </footer>
   

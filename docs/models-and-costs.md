@@ -2,6 +2,8 @@
 
 Sibyl uses four kinds of model, all through OpenRouter:
 
+![Settings → Models: model access with an OpenRouter key, and the presets with their price per 100 messages and the models each one uses](assets/screens/settings-models.png)
+
 | Role | What it does | Example |
 |---|---|---|
 | **Voice brain** | Hears your audio directly and talks back. Must accept audio input. | Gemini Flash Lite, MiMo, Qwen Omni |

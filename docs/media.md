@@ -2,6 +2,8 @@
 
 Sibyl makes images, short videos, voice-overs and music with the media models on OpenRouter. Chat is where you make them; **Spaces → Media** is the library where everything made in the workspace is kept.
 
+![Spaces → Media with three generated images and a short video, filters by type, model and person, and the Create button](assets/screens/media-library.png)
+
 One OpenRouter key runs all of it (`OPENROUTER_API_KEY`). There is no separate setup.
 
 ## Making media in chat

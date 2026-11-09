@@ -8,7 +8,8 @@
 <h1 align="center">Sibyl</h1>
 
 <p align="center">
-  <strong>Talk naturally. Sibyl listens, thinks, and shows you.</strong>
+  <strong>Open-source alternatives to the tools you pay for every month.</strong><br />
+  Pay only for what matters: the AI you use.
 </p>
 
 <p align="center">
@@ -22,7 +23,19 @@
   <a href="docs/enterprise.md">Enterprise</a>
 </p>
 
-Sibyl is an open-source assistant your team hosts itself. Talk to it or type to it. It answers with interactive visuals, works in your Google, Microsoft and Slack accounts, searches your own files, makes slide decks, and runs agents you build: teammates with their own look, voice, skills and computer that learn as they go. Anything that changes something asks first. One OpenRouter key is all you need to start.
+Sibyl is an initiative to build open-source alternatives to the paid tools teams use every day: the chat assistant, the meeting note-taker, the slide maker, the image studio, the AI agents. You run them yourself, so there are no seats and no subscriptions. You pay your model provider for the AI you actually use, and nothing else.
+
+Every Sibyl product runs in the same install on your own server. They share one sign-in, one set of permissions, one approval flow and one budget, and they work together: an agent can join your meeting, a deck can come from your knowledge, an image you made can go into a chat. One OpenRouter key is all you need to start.
+
+| Product | What it is | Docs |
+|---|---|---|
+| **Sibyl Assistant** | Chat and live voice with visual answers, knowledge from any file, Google, Microsoft and Slack, skills and plugins, routines and monitors, with approvals and budgets | [voice](docs/voice.md) · [knowledge](docs/knowledge.md) · [integrations](docs/integrations.md) |
+| **Sibyl Meet** | Meetings with people and agents. A silent note-taker writes live notes, the transcript and action items, and each meeting gets its own page | [meetings](docs/meetings.md) |
+| **Sibyl Slides** | Decks from a prompt, your files or connected data. Edit them, then export PowerPoint or PDF | [slides](docs/slides.md) |
+| **Sibyl Studio** | Images, video and audio made in chat, with @ references and each model's own settings, collected in the Media library | [media](docs/media.md) |
+| **Sibyl Agents** | Agents you build, with a face, a voice, access rules, autonomy, learning and budgets, a sandboxed computer you can watch, and a place in Slack and Teams | [agents](docs/agents.md) · [agent computers](docs/agent-computers.md) |
+
+A new product joins every week. Sibyl Phone is next; it ships once it has been tested on a real phone line.
 
 ![Sibyl answering with a table it researched, with follow-up questions](docs/assets/sibyl-hero.png)
 
@@ -45,6 +58,21 @@ Sibyl is an open-source assistant your team hosts itself. Talk to it or type to 
 **Work that runs on its own.** Routines run on a schedule; monitors watch Gmail, Outlook, Calendar, files, CRM records, web pages or RSS and tell you, or start a task, when a plain-language condition is met. Everything lands in one Inbox, with approvals for anything that changes data. See [monitors](docs/monitors.md).
 
 **Built for teams.** Workspaces, invitations, roles (owner, admin, member, viewer), two-step sign-in and per-workspace budgets are all free. The enterprise edition, [Agent Serve](https://valnoraelric.com) by valnoraelric.com, adds custom roles, policies, an audit log, SSO and SCIM, advanced usage controls and call recordings.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/screens/agent-computer-chat.png" alt="An agent at work: Research Dot reads a Hacker News thread on its own computer, which runs live in the side panel next to the chat" /><br /><sub>An agent browsing on its own computer, live in the side panel</sub></td>
+    <td width="50%"><img src="docs/assets/screens/chat-visual-dark.png" alt="A typed question answered with a bar chart of smartphone market share, in dark mode" /><br /><sub>A visual answer with its sources (dark mode)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screens/agents.png" alt="The Agents screen with four agents, each with its own avatar, autonomy and access" /><br /><sub>Agents you build, each with its own face and rules</sub></td>
+    <td><img src="docs/assets/screens/meeting.png" alt="A meeting page with the summary, key points, AI insight, the recording and comments" /><br /><sub>A meeting page written by the note-taker</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screens/media-library.png" alt="The Media library with three generated images and a short video" /><br /><sub>Images and video made in chat, kept in Media</sub></td>
+    <td><img src="docs/assets/screens/slides-library.png" alt="The Slides library with a five-slide deck made in chat, with PPTX and PDF downloads" /><br /><sub>A deck made in chat, ready to edit or export</sub></td>
+  </tr>
+</table>
 
 ![A chart with its sources, in dark mode](docs/assets/sibyl-visual.png)
 

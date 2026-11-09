@@ -5,6 +5,8 @@ for you: **Google Workspace**, **Microsoft 365** and **Slack** (open source), an
 **HubSpot** and **Salesforce** (Agent Serve). Anything else can be added as
 a custom connector through MCP (Integrations → Advanced).
 
+![The Integrations screen: Google Workspace, Microsoft 365 and Slack, HubSpot and Salesforce marked Enterprise, and custom connectors through MCP](assets/screens/integrations.png)
+
 Connectors bundle no prompts. Each one is a list of actions the brain can call
 (for example `google_gmail_search` or `microsoft_outlook_send`). Actions that
 change something (`write`) always show an approval card first; actions that

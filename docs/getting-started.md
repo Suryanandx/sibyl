@@ -66,6 +66,8 @@ On the first start the model scout reads the OpenRouter catalog and measures lat
 
 Open <http://localhost:3000>. The first time, Sibyl asks you to create the **owner account** (name, email, password). If you set `SIBYL_OWNER_TOKEN`, enter it there too. Just you on this computer? Choose **Continue without an account**; you can add one later.
 
+![The first setup step: a name and an avatar you can shuffle, with Continue and Finish later](assets/screens/onboarding.png)
+
 Then a short setup starts. Each step is one screen with its own address (`/welcome/<step>`), so Back and Forward work, and **Skip** is on every optional step:
 
 1. **Welcome** — your name and the face (avatar) people see. Shuffle until you like it.
@@ -82,6 +84,8 @@ Then a short setup starts. Each step is one screen with its own address (`/welco
 ### Getting started checklist
 
 Until you finish or dismiss it, a ring in the left rail shows how far along you are (on a phone it is in the menu). Open it for the list: connect a model key, pick a style, connect a tool, create an agent, add knowledge, invite your team, talk to Sibyl. Each item opens the right screen and ticks itself when the thing is really done, wherever you did it.
+
+![The Getting started checklist open from the rail, four of seven items done](assets/screens/getting-started-checklist.png)
 
 ## 5. Talk or type
 
