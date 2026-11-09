@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  '@openuidev/lang-core': false
+  esbuild: true

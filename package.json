@@ -1,0 +1,22 @@
+{
+  "name": "open-gpt-live",
+  "version": "0.2.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "pnpm --parallel --stream --filter @open-gpt-live/gateway --filter @open-gpt-live/web dev",
+    "build": "pnpm --filter @open-gpt-live/gateway build && pnpm --filter @open-gpt-live/web build",
+    "start": "NODE_ENV=production pnpm --parallel --stream --filter @open-gpt-live/gateway --filter @open-gpt-live/web start",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "local-ai:check": "node --env-file=.env scripts/check-local-ai.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules
+.next
+.playwright-cli
+dist
+.turbo
+.env
+.env.local
+*.log
+*.tsbuildinfo
+coverage
+models.config.json
+.model-scout.json
