@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, type ReactNode } from "react";
+import { Component, useEffect, useRef, type ReactNode } from "react";
 import {
   BuiltinActionType,
   Renderer,
@@ -28,6 +28,9 @@ interface GenUiViewProps {
  * portaled popups (selects, date pickers, modals) are themed too.
  */
 export function GenUiView({ source, streaming, onAction }: GenUiViewProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  useImageGuard(wrapperRef);
+
   if (!source.trim()) {
     return null;
   }
@@ -53,7 +56,7 @@ export function GenUiView({ source, streaming, onAction }: GenUiViewProps) {
 
   return (
     <RenderBoundary>
-      <div className="genui">
+      <div className="genui" ref={wrapperRef}>
           <Renderer
             response={source}
             library={openuiChatLibrary}
@@ -82,5 +85,72 @@ class RenderBoundary extends Component<{ children: ReactNode }, { failed: boolea
       return <p className="genuiError">This visual could not be rendered.</p>;
     }
     return this.props.children;
+  }
+}
+
+const CARD_IMAGE_VAR = "--openui-visual-card-image";
+const checked = new WeakMap<Element, string>();
+
+/**
+ * Keeps images in generated visuals light and never broken:
+ * - Wikimedia originals are requested at display size (Special:FilePath and
+ *   upload.wikimedia.org thumbnails), instead of multi-megabyte originals;
+ * - an image that fails to load is replaced by a calm placeholder instead of
+ *   an empty box (the card keeps its text).
+ */
+function useImageGuard(ref: React.RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    const markBroken = (element: Element) => element.classList.add("genuiImageBroken");
+
+    const guard = (element: Element) => {
+      if (element instanceof HTMLImageElement) {
+        const url = element.getAttribute("src") ?? "";
+        if (checked.get(element) === url) return;
+        checked.set(element, url);
+        const sized = sizedImageUrl(url);
+        if (sized !== url) element.setAttribute("src", sized);
+        if (!url || !/^https?:|^data:|^\//i.test(url)) return markBroken(element);
+        element.addEventListener("error", () => markBroken(element), { once: true });
+        if (element.complete && element.naturalWidth === 0 && url) markBroken(element);
+        return;
+      }
+      const html = element as HTMLElement;
+      const value = html.style.getPropertyValue(CARD_IMAGE_VAR);
+      if (!value || checked.get(element) === value) return;
+      const url = /url\((["']?)(.*?)\1\)/.exec(value)?.[2] ?? "";
+      const sized = sizedImageUrl(url);
+      const finalValue = sized !== url ? `url("${sized}")` : value;
+      checked.set(element, finalValue);
+      if (sized !== url) html.style.setProperty(CARD_IMAGE_VAR, finalValue);
+      if (!/^https?:/i.test(sized)) return markBroken(element);
+      const probe = new Image();
+      probe.onerror = () => markBroken(element);
+      probe.src = sized;
+    };
+
+    const scan = () => {
+      root.querySelectorAll(`img, [style*="${CARD_IMAGE_VAR}"]`).forEach(guard);
+    };
+    scan();
+    const observer = new MutationObserver(scan);
+    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["src", "style"] });
+    return () => observer.disconnect();
+  }, [ref]);
+}
+
+/** Ask Wikimedia for a display-sized rendition instead of the original file. */
+export function sizedImageUrl(url: string, width = 960): string {
+  try {
+    const parsed = new URL(url);
+    if (/(^|\.)wikimedia\.org$|(^|\.)wikipedia\.org$/.test(parsed.hostname) && /Special:FilePath/i.test(parsed.pathname)) {
+      if (!parsed.searchParams.has("width")) parsed.searchParams.set("width", String(width));
+      return parsed.toString();
+    }
+    return url;
+  } catch {
+    return url;
   }
 }

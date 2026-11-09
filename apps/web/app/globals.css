@@ -1266,6 +1266,39 @@ code {
   }
 }
 
+/* Primary buttons inside visuals: ink pill with readable text in both themes. */
+.genui .openui-button-base-primary {
+  background: var(--ink) !important;
+  border-color: var(--ink) !important;
+  color: var(--ink-text) !important;
+}
+
+.genui .openui-button-base-primary:hover {
+  opacity: 0.88;
+}
+
+.genui .openui-button-base-primary svg {
+  color: currentColor;
+}
+
+/* Images: a calm surface while loading, and a placeholder when one fails. */
+.genui img {
+  background: var(--subtle);
+}
+
+.genui img.genuiImageBroken {
+  min-height: 120px;
+  object-position: -9999px -9999px;
+}
+
+.genui .genuiImageBroken {
+  --openui-visual-card-image: none !important;
+  background:
+    url("/brand/sibyl-mark-mask.png") center / 44px 44px no-repeat,
+    linear-gradient(var(--subtle), var(--subtle)) !important;
+  background-blend-mode: luminosity;
+}
+
 .genui .openui-step-number-inner {
   background: var(--ink);
   color: var(--ink-text);

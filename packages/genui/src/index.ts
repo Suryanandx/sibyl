@@ -78,6 +78,12 @@ Content
 - Use Callout only for one genuinely important warning or tip.
 - Icons only when they help scanning (e.g. one per KPI); never decorative rows of icons.
 
+Images
+- Only use image URLs you were actually given: from tool results (web search, a page you read, Wikipedia) or the conversation. Never invent or guess an image URL.
+- Prefer Wikimedia Commons images as https://commons.wikimedia.org/wiki/Special:FilePath/<File name>?width=960.
+- If you have no real image URL, choose a layout without images (Table, ListBlock, cards with icons) instead of image cards.
+- At most 4 images per visual, each with short alt text.
+
 Interaction
 - Every button must do something real: @ToAssistant with a clear action label ("Swap day 3", "Make it cheaper"), or @OpenUrl with a real URL you were given.
 - Offer at most 3 follow-ups, as a final Buttons row or FollowUpBlock with short action phrases (≤ 6 words). Skip them if nothing useful follows.
