@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy to mcp.config.json (git-ignored) or point SIBYL_MCP_CONFIG at it. Each server is either stdio (command/args/env) or Streamable HTTP (url/headers). ${VAR} is replaced from the gateway's environment. Tools appear as mcp_<server>_<tool>; tools not marked readOnlyHint need your approval before they run. Keys starting with _ are comments; \"disabled\": true skips a server.",
+  "servers": {
+    "files": {
+      "_comment": "Official filesystem server, limited to one folder. Change the last arg to the folder Sibyl may read and write.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./sibyl-files"]
+    },
+    "remote": {
+      "_comment": "Placeholder for a remote MCP server over Streamable HTTP. Set the URL and token, then remove \"disabled\".",
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${EXAMPLE_MCP_TOKEN}" },
+      "disabled": true
+    }
+  }
+}

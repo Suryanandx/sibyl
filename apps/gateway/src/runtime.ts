@@ -16,6 +16,7 @@ import {
   type UsageMeter
 } from "@open-gpt-live/core";
 import { createUsageMeter } from "./metering/meter.js";
+import { installSibylTools, type InstalledTools } from "./tools/index.js";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -34,23 +35,29 @@ export async function createRuntime(options: RuntimeOptions): Promise<GatewayRun
   const store = createMemoryStore();
   const tools = createToolRegistry();
   const meter = await createUsageMeter({ store, ownerId: DEFAULT_OWNER_ID, env: options.env, log: options.log });
-  await installTools({ tools, store, meter, options });
+  const installed = await installTools({ tools, store, meter, ownerId: DEFAULT_OWNER_ID, options });
   return {
     ownerId: DEFAULT_OWNER_ID,
     store,
     tools,
     meter,
-    close: () => store.close()
+    close: async () => {
+      await installed.close();
+      await store.close();
+    }
   };
 }
 
-async function installTools(_input: {
+async function installTools(input: {
   tools: ToolRegistry;
   store: Store;
   meter: UsageMeter;
+  ownerId: string;
   options: RuntimeOptions;
-}): Promise<void> {
-  // Built-in tools, MCP servers and slides register here.
+}): Promise<InstalledTools> {
+  // Built-in tools, MCP servers (mcp.config.json) and persisted per-tool switches.
+  // Slides register here too.
+  return installSibylTools({ ...input, env: input.options.env, log: input.options.log });
 }
 
 /** Meter that records nothing and never blocks (until metering is installed). */

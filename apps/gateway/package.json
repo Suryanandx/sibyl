@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@open-gpt-live/adapters": "workspace:*",
     "@open-gpt-live/core": "workspace:*",
     "@open-gpt-live/genui": "workspace:*",
