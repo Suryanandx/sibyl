@@ -2364,5 +2364,212 @@ code {
 @media (max-width: 520px) {
   .usageStats {
     grid-template-columns: 1fr;
+
+/* ── Approvals & tool steps ── */
+
+.toolStep {
+  cursor: default;
+}
+
+.toolStep:hover {
+  color: var(--text-2);
+}
+
+.toolStep.declined .stepIcon.fail {
+  color: var(--text-3);
+}
+
+.approvalCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 10px 0 4px;
+  max-width: 560px;
+  padding: 18px 18px 16px;
+}
+
+.approvalCard.pending {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.approvalHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approvalEyebrow {
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.approvalCard:not(.pending) .approvalEyebrow {
+  color: var(--text-3);
+}
+
+.approvalTitle {
+  color: var(--text);
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.approvalSummary {
+  color: var(--text);
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.approvalDetails {
+  background: var(--subtle);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.approvalDetail {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(84px, 30%) minmax(0, 1fr);
+}
+
+.approvalDetail dt {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.approvalDetail dd {
+  color: var(--text);
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.approvalFoot {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.approvalRemember {
+  align-items: center;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13.5px;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.approvalRemember input {
+  accent-color: var(--ink);
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.approvalButtons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.approvalBtn {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 500;
+  gap: 8px;
+  height: 38px;
+  justify-content: center;
+  min-width: 96px;
+  padding: 0 18px;
+}
+
+.approvalBtn:hover:not(:disabled) {
+  background: var(--subtle);
+}
+
+.approvalBtn.primary {
+  background: var(--ink);
+  border-color: transparent;
+  color: var(--ink-text);
+}
+
+.approvalBtn.primary:hover:not(:disabled) {
+  background: var(--ink-hover);
+}
+
+.approvalBtn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.approvalBtn.primary .spinner {
+  border-color: var(--ink-text);
+  height: 13px;
+  width: 13px;
+}
+
+.approvalStatus {
+  align-items: center;
+  color: var(--text-2);
+  display: flex;
+  font-size: 13.5px;
+  gap: 6px;
+  margin: 0;
+}
+
+.approvalStatus:empty {
+  display: none;
+}
+
+.approvalStatusIcon.approved {
+  color: var(--accent);
+}
+
+.approvalStatusIcon.declined,
+.approvalStatusIcon.expired {
+  color: var(--text-3);
+}
+
+@media (max-width: 760px) {
+  .approvalCard {
+    border-radius: 18px;
+    padding: 16px 14px 14px;
+  }
+
+  .approvalDetail {
+    gap: 2px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .approvalButtons {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .approvalBtn {
+    flex: 1;
+    height: 44px;
   }
 }

@@ -6,6 +6,7 @@ import {
   WS_EVENTS,
   createRequestId,
   parseServerMessage,
+  type ApprovalView,
   type ClientMessage,
   type ModelCatalog,
   type ServerMessage,
@@ -19,6 +20,7 @@ import { SettingsPanel, type SettingsTab } from "../components/SettingsPanel";
 import { Composer } from "../components/Composer";
 import { QueueStack, type QueuedMessage } from "../components/QueueStack";
 import { Sidebar } from "../components/Sidebar";
+import { ApprovalCard, type ApprovalCardStatus } from "../components/ApprovalCard";
 import { Icon, type IconName } from "../components/Icon";
 import { Mark, SilverMark } from "../components/Brand";
 import type { VoiceState } from "../components/voice-state";
@@ -74,6 +76,23 @@ interface ChatMessage {
   task?: string;
   model?: string;
   failed?: boolean;
+  /** Tools the deep brain called (shown as step rows). */
+  tools?: ToolStep[];
+  /** Approval cards for "write" tools in this run. */
+  approvals?: ApprovalEntry[];
+}
+
+interface ToolStep {
+  callId: string;
+  title: string;
+  status: "running" | "ok" | "error" | "declined";
+  summary?: string;
+}
+
+interface ApprovalEntry {
+  view: ApprovalView;
+  status: ApprovalCardStatus;
+  submitting?: boolean;
 }
 
 const SETTINGS_STORAGE_KEY = "open-gpt-live.settings.v1";
@@ -579,7 +598,86 @@ export default function Home() {
       setMessages((current) =>
         current.map((item) =>
           item.requestId === message.requestId && item.kind === "brain"
-            ? { ...item, done: true, failed: message.reason === "error" }
+            ? {
+                ...item,
+                done: true,
+                failed: message.reason === "error",
+                // A run that ended can't still be using a tool.
+                tools: item.tools?.map((tool) =>
+                  tool.status === "running" ? { ...tool, status: "error" as const } : tool
+                )
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    if (message.type === WS_EVENTS.TOOL_STARTED) {
+      setMessages((current) =>
+        current.map((item) =>
+          item.requestId === message.requestId && item.role === "assistant"
+            ? {
+                ...item,
+                tools: [
+                  ...(item.tools ?? []).filter((tool) => tool.callId !== message.callId),
+                  { callId: message.callId, title: message.title, status: "running" as const }
+                ]
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    if (message.type === WS_EVENTS.TOOL_FINISHED) {
+      setMessages((current) =>
+        current.map((item) =>
+          item.requestId === message.requestId && item.role === "assistant"
+            ? {
+                ...item,
+                tools: (item.tools ?? []).map((tool) =>
+                  tool.callId === message.callId
+                    ? { ...tool, status: message.status, summary: message.summary }
+                    : tool
+                )
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    if (message.type === WS_EVENTS.APPROVAL_REQUEST) {
+      const view = message.approval;
+      setMessages((current) =>
+        current.map((item) =>
+          item.requestId === view.runId && item.role === "assistant"
+            ? {
+                ...item,
+                approvals: [
+                  ...(item.approvals ?? []).filter((entry) => entry.view.id !== view.id),
+                  { view, status: "pending" as const }
+                ]
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    if (message.type === WS_EVENTS.APPROVAL_RESOLVED) {
+      setMessages((current) =>
+        current.map((item) =>
+          item.approvals?.some((entry) => entry.view.id === message.id)
+            ? {
+                ...item,
+                approvals: item.approvals.map((entry) =>
+                  entry.view.id === message.id
+                    ? { ...entry, status: message.status, submitting: false }
+                    : entry
+                )
+              }
             : item
         )
       );
@@ -905,6 +1003,30 @@ export default function Home() {
     }
     if (!socket) return;
     sendRaw(socket, { type: WS_EVENTS.SESSION_UPDATE, settings: patch });
+  }
+
+  function decideApproval(id: string, decision: "approve" | "decline", remember: boolean): void {
+    const socket = socketRef.current;
+    if (!socket) return;
+    const sent = sendRaw(socket, {
+      type: WS_EVENTS.APPROVAL_DECISION,
+      id,
+      decision,
+      ...(remember ? { remember: "conversation" as const } : {})
+    });
+    if (!sent) return;
+    setMessages((current) =>
+      current.map((item) =>
+        item.approvals?.some((entry) => entry.view.id === id)
+          ? {
+              ...item,
+              approvals: item.approvals.map((entry) =>
+                entry.view.id === id ? { ...entry, submitting: true } : entry
+              )
+            }
+          : item
+      )
+    );
   }
 
   function sendUiAction(action: GenUiAction): void {
@@ -1735,6 +1857,19 @@ export default function Home() {
   }
 
   function cancelRequestsAfterDisconnect(): void {
+    // The gateway expires pending approvals when the socket closes.
+    setMessages((current) =>
+      current.map((item) =>
+        item.approvals?.some((entry) => entry.status === "pending")
+          ? {
+              ...item,
+              approvals: item.approvals.map((entry) =>
+                entry.status === "pending" ? { ...entry, status: "expired" as const, submitting: false } : entry
+              )
+            }
+          : item
+      )
+    );
     for (const requestId of cancelActiveRequests(requestLifecyclesRef.current)) {
       ignorePlaybackRequest(requestId);
       settleRequestLatency(requestId, "interrupted");
@@ -2139,7 +2274,7 @@ export default function Home() {
                   const pending =
                     isLatest &&
                     Boolean(activeRequestId) &&
-                    !replies.some((reply) => reply.content.trim() || reply.ui);
+                    !replies.some((reply) => reply.content.trim() || reply.ui || reply.tools?.length);
                   const settled =
                     replies.length > 0 &&
                     replies.every((reply) => reply.done) &&
@@ -2195,9 +2330,11 @@ export default function Home() {
                                           ? "Deep work hit a problem"
                                           : message.done
                                             ? "Thought it through"
-                                            : message.ui
-                                              ? "Building the visual…"
-                                              : "Thinking it through…"}
+                                            : message.approvals?.some((entry) => entry.status === "pending")
+                                              ? "Waiting for your approval…"
+                                              : message.ui
+                                                ? "Building the visual…"
+                                                : "Thinking it through…"}
                                       </span>
                                       <span className="stepChip">{modelLabel(message.model)}</span>
                                       <span className="stepChevron" aria-hidden>›</span>
@@ -2205,8 +2342,26 @@ export default function Home() {
                                     {openSources.has(`task:${message.id}`) && message.task ? (
                                       <p className="stepDetail">{message.task}</p>
                                     ) : null}
+                                    <ToolSteps tools={message.tools} settled={Boolean(viewing || message.done)} />
+                                  </div>
+                                ) : message.tools?.length ? (
+                                  <div className="steps">
+                                    <ToolSteps tools={message.tools} settled={Boolean(viewing || message.done)} />
                                   </div>
                                 ) : null}
+                                {message.approvals?.map((entry) => (
+                                  <ApprovalCard
+                                    key={entry.view.id}
+                                    approval={entry.view}
+                                    status={viewing && entry.status === "pending" ? "expired" : entry.status}
+                                    submitting={entry.submitting}
+                                    onDecide={
+                                      viewing
+                                        ? undefined
+                                        : (decision, remember) => decideApproval(entry.view.id, decision, remember)
+                                    }
+                                  />
+                                ))}
                                 {cleanText(message.content) ? (
                                   <SpokenText className="spoken" text={cleanText(message.content)} />
                                 ) : null}
@@ -2374,6 +2529,28 @@ export default function Home() {
       />
     </div>
     </ThemeProvider>
+  );
+}
+
+/** Tool calls as step rows: spinner while running, then check or ×. */
+function ToolSteps({ tools, settled }: { tools?: ToolStep[]; settled: boolean }) {
+  if (!tools?.length) return null;
+  return (
+    <>
+      {tools.map((tool) => (
+        <div className={`step toolStep ${tool.status}`} key={tool.callId}>
+          {tool.status === "running" && !settled ? (
+            <span className="spinner" aria-hidden />
+          ) : tool.status === "ok" ? (
+            <Icon name="check" size={15} className="stepIcon done" />
+          ) : (
+            <Icon name="close" size={15} className="stepIcon fail" />
+          )}
+          <span>{tool.title}</span>
+          {tool.summary && tool.status !== "ok" ? <span className="stepChip">{tool.summary}</span> : null}
+        </div>
+      ))}
+    </>
   );
 }
 
