@@ -22,7 +22,8 @@ import { QueueStack, type QueuedMessage } from "../components/QueueStack";
 import { Sidebar } from "../components/Sidebar";
 import { ApprovalCard, type ApprovalCardStatus } from "../components/ApprovalCard";
 import { Icon, type IconName } from "../components/Icon";
-import { Mark, SilverMark } from "../components/Brand";
+import { SilverMark } from "../components/Brand";
+import { SibylLoader, ThinkingStatus } from "../components/SibylLoader";
 import type { VoiceState } from "../components/voice-state";
 import { sibylDarkTheme, sibylLightTheme } from "../lib/sibyl-theme";
 import { titleFor, toMarkdown, type ConversationMessageView, type ConversationSummary } from "../lib/conversations";
@@ -2185,7 +2186,7 @@ export default function Home() {
           title={connected ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting" : "Offline"}
           aria-label={connected ? "Connected" : "Offline"}
         >
-          <Mark size={16} />
+          <SibylLoader size={16} state={activeRequestId ? "thinking" : "idle"} />
         </span>
       </nav>
 
@@ -2275,6 +2276,14 @@ export default function Home() {
                     isLatest &&
                     Boolean(activeRequestId) &&
                     !replies.some((reply) => reply.content.trim() || reply.ui || reply.tools?.length);
+                  // Tools have run but the answer hasn't started yet.
+                  const composing =
+                    isLatest &&
+                    Boolean(activeRequestId) &&
+                    !pending &&
+                    replies.some((reply) => reply.kind !== "brain" && !reply.done && reply.tools?.length) &&
+                    replies.every((reply) => !reply.tools?.some((tool) => tool.status === "running")) &&
+                    !replies.some((reply) => reply.content.trim() || reply.ui);
                   const settled =
                     replies.length > 0 &&
                     replies.every((reply) => reply.done) &&
@@ -2298,15 +2307,25 @@ export default function Home() {
 
                       {replies.length > 0 || pending ? (
                         <article className="reply">
-                          <span className={`replyAvatar${pending || (isLatest && voiceState === "speaking") ? " live" : ""}`} aria-hidden>
-                            <Mark size={14} />
+                          <span className={`replyAvatar${isLatest && voiceState === "speaking" ? " live" : ""}`} aria-hidden>
+                            <SibylLoader
+                              size={14}
+                              state={
+                                pending
+                                  ? voiceState === "listening"
+                                    ? "listening"
+                                    : "thinking"
+                                  : isLatest && voiceState === "speaking"
+                                    ? "speaking"
+                                    : isLatest && replies.some((reply) => !reply.done)
+                                      ? "working"
+                                      : "idle"
+                              }
+                            />
                           </span>
                           <div className="replyBody">
                             {pending ? (
-                              <p className="thinkingLine">
-                                <span className="typing"><i /><i /><i /></span>
-                                {voiceState === "listening" ? "Listening…" : "Sibyl is thinking…"}
-                              </p>
+                              <ThinkingStatus phase={voiceState === "listening" ? "listening" : "thinking"} />
                             ) : null}
                             {replies.map((message) => (
                               <div className="replyPart" key={message.id}>
@@ -2323,7 +2342,7 @@ export default function Home() {
                                       ) : message.done ? (
                                         <Icon name="check" size={15} className="stepIcon done" />
                                       ) : (
-                                        <span className="spinner" aria-hidden />
+                                        <SibylLoader state="working" size={15} />
                                       )}
                                       <span>
                                         {message.failed
@@ -2373,6 +2392,7 @@ export default function Home() {
                                 ) : null}
                               </div>
                             ))}
+                            {composing ? <ThinkingStatus phase="composing" /> : null}
                             {settled && lastReply ? (
                               <div className="actions">
                                 <button
@@ -2536,7 +2556,7 @@ function ToolSteps({ tools, settled }: { tools?: ToolStep[]; settled: boolean })
       {tools.map((tool) => (
         <div className={`step toolStep ${tool.status}`} key={tool.callId}>
           {tool.status === "running" && !settled ? (
-            <span className="spinner" aria-hidden />
+            <SibylLoader state="working" size={15} />
           ) : tool.status === "ok" ? (
             <Icon name="check" size={15} className="stepIcon done" />
           ) : (
