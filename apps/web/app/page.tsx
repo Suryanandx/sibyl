@@ -36,6 +36,7 @@ import { SecretsPanel, SecretsIcon, type SecretUpdate } from "../components/Secr
 import { Icon, type IconName } from "../components/Icon";
 import { SilverMark } from "../components/Brand";
 import { SibylLoader, ThinkingStatus } from "../components/SibylLoader";
+import { AppRail, type RailItem } from "../components/AppRail";
 import type { VoiceState } from "../components/voice-state";
 import { sibylDarkTheme, sibylLightTheme } from "../lib/sibyl-theme";
 import { titleFor, toMarkdown, type ConversationMessageView, type ConversationSummary } from "../lib/conversations";
@@ -2124,6 +2125,26 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
+  function openRailItem(item: RailItem): void {
+    if (item === "history") setSidebarOpen((open) => !open);
+    else if (item === "routines") setRoutinesOpen(true);
+    else if (item === "inbox") setInboxOpen(true);
+    else if (item === "connections") setConnectionsOpen(true);
+    else if (item === "secrets") openSecrets();
+    else if (item === "settings") setSettingsOpen(true);
+  }
+
+  // Other screens (e.g. the Slides library) link here with ?open=<panel>.
+  useEffect(() => {
+    if (!connected) return;
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get("open") as RailItem | null;
+    if (!open) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (["history", "routines", "inbox", "connections", "secrets", "settings"].includes(open)) openRailItem(open);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
+
   function cycleTheme(): void {
     const next = themeMode === "dark" ? "light" : "dark";
     setThemePref(next);
@@ -2405,43 +2426,24 @@ export default function Home() {
   return (
     <ThemeProvider mode={themeMode} lightTheme={sibylLightTheme} darkTheme={sibylDarkTheme}>
     <div className={`app${sidebarOpen ? " sidebarOpen" : ""}`}>
-      <nav className="rail" aria-label="Sibyl">
-        <button type="button" className="railLogo" onClick={startNewChat} aria-label="Sibyl — new chat" title="Sibyl">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/sibyl-mark.png" alt="" width={24} height={24} />
-        </button>
-        <button type="button" className="railBtn active" aria-label="Chat" title="Chat" onClick={() => setSidebarOpen(false)}>
-          <Icon name="chat" />
-        </button>
-        <button type="button" className="railBtn" aria-label="History" title="History" onClick={() => setSidebarOpen((open) => !open)}>
-          <Icon name="history" />
-        </button>
-        <a className="railBtn" href="/library/slides" aria-label="Slides" title="Slides">
-          <Icon name="layers" />
-        </a>
-        <button type="button" className="railBtn" aria-label="Secrets" title="Secrets" onClick={openSecrets}><SecretsIcon /></button>
-        <button type="button" className="railBtn" aria-label="Models & voice" title="Models & voice" onClick={() => setSettingsOpen(true)}>
-          <Icon name="sliders" />
-        </button>
-        <button type="button" className="railBtn" aria-label="Connections" title="Connections" onClick={() => setConnectionsOpen(true)}>
-          <Icon name="layers" />
-        </button>
-        <button type="button" className={`railBtn${routinesOpen ? " active" : ""}`} aria-label="Routines" title="Routines" onClick={() => setRoutinesOpen(true)}>
-          <RoutinesIcon />
-        </button>
-        <InboxButton className={`railBtn${inboxOpen ? " active" : ""}`} count={routinesInbox.inbox.length} onClick={() => setInboxOpen(true)} />
-        <span className="railSpacer" />
-        <button type="button" className="railBtn" aria-label="Switch theme" title="Switch theme" onClick={cycleTheme}>
-          <Icon name={themeMode === "dark" ? "sun" : "moon"} />
-        </button>
-        <span
-          className={`railStatus ${connectionStatus}`}
-          title={connected ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting" : "Offline"}
-          aria-label={connected ? "Connected" : "Offline"}
-        >
-          <SibylLoader size={16} state="idle" />
-        </span>
-      </nav>
+      <AppRail
+        active="chat"
+        onNewChat={startNewChat}
+        onOpen={openRailItem}
+        onToggleTheme={cycleTheme}
+        themeMode={themeMode}
+        inboxCount={routinesInbox.inbox.length}
+        openItem={routinesOpen ? "routines" : inboxOpen ? "inbox" : null}
+        status={
+          <span
+            className={`railStatus ${connectionStatus}`}
+            title={connected ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting" : "Offline"}
+            aria-label={connected ? "Connected" : "Offline"}
+          >
+            <SibylLoader size={16} state="idle" />
+          </span>
+        }
+      />
 
       <Sidebar
         open={sidebarOpen}

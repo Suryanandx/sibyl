@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="apps/web/public/brand/sibyl-mark.png" alt="Sibyl" width="96" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sibyl-mark-dark.png" />
+    <img src="docs/assets/sibyl-mark-light.png" alt="Sibyl" width="96" />
+  </picture>
 </p>
 
 <h1 align="center">Sibyl</h1>
@@ -20,7 +23,7 @@
 
 Sibyl is an open-source assistant you host yourself. Talk to it or type to it, and it answers with interactive visuals, researches the web, works with your own tools and data through MCP, and asks before it changes anything. One OpenRouter key is all you need to start; there is no other service behind it.
 
-![Sibyl answering a spoken question with a visual](docs/assets/sibyl-hero.png)
+![Sibyl answering with a visual built from real photos](docs/assets/sibyl-hero.png)
 
 ## What Sibyl does
 
@@ -28,19 +31,19 @@ Sibyl is an open-source assistant you host yourself. Talk to it or type to it, a
 
 **Answers you can see and use.** Replies can include charts, tables, step-by-step plans, option cards and forms, built with [OpenUI](https://github.com/thesysdev/openui). Buttons and forms send your choice straight back to Sibyl. Visuals are never read aloud.
 
-![A generated visual next to the conversation](docs/assets/sibyl-visual.png)
+![A comparison table with sources and follow-up suggestions](docs/assets/sibyl-visual.png)
 
 **Real work, with your approval.** The deep brain can call tools: search the web, read a webpage, check the weather, convert currencies, look up world time, calculate and search Wikipedia. Connect your own data sources and tools through any [MCP](https://modelcontextprotocol.io) server. Anything that sends, creates, deletes or spends pauses for an approval card in the chat first.
 
 **A natural voice.** Emotion cues like `[laughs]` are performed by voices that support them. Talk over Sibyl and it stops. Pause mid-thought and it waits for the rest. Slow providers are hedged with a backup request, and audio plays without gaps.
-
-![Live voice mode with captions](docs/assets/sibyl-voice.png)
 
 **Predictable costs.** A built-in *model scout* picks every model from the live OpenRouter catalog by price, Design Arena benchmarks and measured speed. Choose a preset — **Cheapest**, **Balanced**, **Fastest** or **Best quality** — and see the estimated cost per 100 turns before you commit. Every call is metered with the cost OpenRouter reports, and daily and monthly budgets stop spending before it happens.
 
 ![The Models & voice dialog](docs/assets/sibyl-models.png)
 
 **Yours to keep.** Conversations are stored on your server in SQLite and can be picked up again with full context. A single owner token keeps the gateway private. The web app has searchable history, a composer that queues follow-ups while Sibyl is answering, a quick model menu, light and dark themes, and a layout that works on phones.
+
+![Picking up a saved conversation with full context](docs/assets/sibyl-chat.png)
 
 ## Quickstart
 

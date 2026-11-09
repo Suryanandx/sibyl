@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ToolArtifactView } from "@open-gpt-live/protocol";
+import { AppRail } from "../../../components/AppRail";
 import { Icon } from "../../../components/Icon";
 import { SibylLoader } from "../../../components/SibylLoader";
 import { SlidesApiError, slidesApi, streamGenerate, type SlidesProgressEvent } from "../../../components/SlidesApi";
@@ -147,18 +148,7 @@ export default function SlidesLibraryPage() {
 
   return (
     <div className="slidesApp">
-      <nav className="rail" aria-label="Sibyl">
-        <a className="railLogo" href="/" aria-label="Sibyl — chat" title="Sibyl">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/sibyl-mark.png" alt="" width={24} height={24} />
-        </a>
-        <a className="railBtn" href="/" aria-label="Chat" title="Chat">
-          <Icon name="chat" />
-        </a>
-        <a className="railBtn active" href="/library/slides" aria-label="Slides" title="Slides" aria-current="page">
-          <Icon name="layers" />
-        </a>
-      </nav>
+      <AppRail active="slides" />
 
       <aside className="slidesSpaces" aria-label="Spaces">
         <div className="slidesSpacesHead">
