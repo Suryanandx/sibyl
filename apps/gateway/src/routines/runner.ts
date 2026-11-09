@@ -229,7 +229,7 @@ const ROUTINE_PROMPT = [
   "## Scheduled routine",
   "You are running a scheduled routine on your own: nobody is watching live and you cannot ask questions.",
   "Do the task below completely, using tools where needed, then write the result as a concise message for the user's chat.",
-  "Write plain Markdown (no generative UI). Lead with the result; skip greetings and meta commentary."
+  "Write plain text: no Markdown symbols (no **, #, tables) and no generative UI; short paragraphs, simple \"- \" lists, links as plain URLs. Lead with the result; skip greetings and meta commentary."
 ].join("\n");
 
 export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunner {
@@ -314,14 +314,14 @@ export function createRoutineRunner(options: RoutineRunnerOptions): RoutineRunne
       if (signal.aborted) return { status: "interrupted", error: "The run was stopped." };
       if (error instanceof BudgetBlockedError) {
         outcome = { status: "budget_blocked", error: error.message };
-        text = [text.trim(), `_Routine stopped: ${error.message}_`].filter(Boolean).join("\n\n");
+        text = [text.trim(), `Routine stopped: ${error.message}`].filter(Boolean).join("\n\n");
       } else {
         const message = error instanceof Error ? error.message : String(error);
         const transient = isTransientError(error);
         // Transient failures are retried once by the scheduler before posting.
         if (transient && !handle.lastAttempt) return { status: "failed", error: message, transient };
         outcome = { status: "failed", error: message, transient };
-        text = [text.trim(), `_Routine failed: ${message}_`].filter(Boolean).join("\n\n");
+        text = [text.trim(), `Routine failed: ${message}`].filter(Boolean).join("\n\n");
       }
     }
 

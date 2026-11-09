@@ -25,6 +25,9 @@ import { QueueStack, type QueuedMessage } from "../components/QueueStack";
 import { Sidebar } from "../components/Sidebar";
 import { ApprovalCard, type ApprovalCardStatus } from "../components/ApprovalCard";
 import { SlidesCard } from "../components/SlidesCard";
+import { Inbox, InboxButton, countByRoutine, showBrowserNotification, useRoutinesInbox } from "../components/Inbox";
+import { RoutinesIcon, RoutinesPanel } from "../components/RoutinesPanel";
+import type { RoutineNotification } from "@open-gpt-live/protocol";
 import { Icon, type IconName } from "../components/Icon";
 import { SilverMark } from "../components/Brand";
 import { SibylLoader, ThinkingStatus } from "../components/SibylLoader";
@@ -308,6 +311,25 @@ export default function Home() {
   /** Files attached in the composer (uploading or ready). */
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const uploadAbortsRef = useRef<Map<string, () => void>>(new Map());
+  // Routines & inbox
+  const [routinesOpen, setRoutinesOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [routineToast, setRoutineToast] = useState<RoutineNotification | null>(null);
+  const routinesInbox = useRoutinesInbox({
+    send: (message) => Boolean(socketRef.current && sendRaw(socketRef.current, message)),
+    onNotification: (notification) => {
+      setRoutineToast(notification);
+      showBrowserNotification(notification);
+      if (notification.kind !== "needs_approval" && socketRef.current) {
+        sendRaw(socketRef.current, { type: WS_EVENTS.CONVERSATIONS_REQUEST });
+      }
+    }
+  });
+  useEffect(() => {
+    if (!routineToast) return;
+    const timer = window.setTimeout(() => setRoutineToast(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [routineToast]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
   const [speaking, setSpeaking] = useState(false);
@@ -414,6 +436,7 @@ export default function Home() {
         const resumeId = conversationIdRef.current;
         const resume = resumeId && conversationsRef.current.some((item) => item.id === resumeId);
         sendRaw(socket, { type: WS_EVENTS.CONVERSATIONS_REQUEST });
+        routinesInbox.onConnected();
         sendRaw(socket, {
           type: WS_EVENTS.CONVERSATION_OPEN,
           ...(resume ? { conversationId: resumeId } : {})
@@ -502,6 +525,7 @@ export default function Home() {
       return;
     }
 
+    if (routinesInbox.handleMessage(message)) return;
     if (message.type === WS_EVENTS.SESSION_START) {
       setSessionId(message.sessionId);
       return;
@@ -2294,6 +2318,10 @@ export default function Home() {
         <button type="button" className="railBtn" aria-label="Connections" title="Connections" onClick={() => setConnectionsOpen(true)}>
           <Icon name="layers" />
         </button>
+        <button type="button" className={`railBtn${routinesOpen ? " active" : ""}`} aria-label="Routines" title="Routines" onClick={() => setRoutinesOpen(true)}>
+          <RoutinesIcon />
+        </button>
+        <InboxButton className={`railBtn${inboxOpen ? " active" : ""}`} count={routinesInbox.inbox.length} onClick={() => setInboxOpen(true)} />
         <span className="railSpacer" />
         <button type="button" className="railBtn" aria-label="Switch theme" title="Switch theme" onClick={cycleTheme}>
           <Icon name={themeMode === "dark" ? "sun" : "moon"} />
@@ -2327,6 +2355,7 @@ export default function Home() {
           <button type="button" className="iconBtn mobileOnly" aria-label="Open sidebar" onClick={() => setSidebarOpen(true)}>
             <Icon name="menu" />
           </button>
+          <InboxButton className="iconBtn mobileOnly" count={routinesInbox.inbox.length} onClick={() => setInboxOpen(true)} />
           <div className="topTitle">
             <span className="titleText" title={title}>{title}</span>
             <span className={`statusBadge ${connectionStatus}`}>
@@ -2697,6 +2726,58 @@ export default function Home() {
         subscribe={subscribeConnections}
         onClose={() => setConnectionsOpen(false)}
       />
+      <RoutinesPanel
+        open={routinesOpen}
+        routines={routinesInbox.routines}
+        connected={connected}
+        waiting={countByRoutine(routinesInbox.inbox)}
+        onUpdate={routinesInbox.updateRoutine}
+        onRunNow={routinesInbox.runNow}
+        onDelete={routinesInbox.deleteRoutine}
+        onOpenConversation={(id) => {
+          setRoutinesOpen(false);
+          openConversation(id);
+        }}
+        onOpenInbox={() => {
+          setRoutinesOpen(false);
+          setInboxOpen(true);
+        }}
+        onClose={() => setRoutinesOpen(false)}
+      />
+      <Inbox
+        open={inboxOpen}
+        items={routinesInbox.inbox}
+        routines={routinesInbox.routines}
+        submitting={routinesInbox.submitting}
+        connected={connected}
+        onDecide={routinesInbox.decide}
+        onOpenConversation={(id) => {
+          setInboxOpen(false);
+          openConversation(id);
+        }}
+        onOpenRoutines={() => {
+          setInboxOpen(false);
+          setRoutinesOpen(true);
+        }}
+        onClose={() => setInboxOpen(false)}
+      />
+      {routineToast ? (
+        <div className={`routineToast ${routineToast.kind}`} role="status" aria-live="polite">
+          <span className="routineToastText">{routineToast.message}</span>
+          {routineToast.kind === "needs_approval" ? (
+            <button type="button" className="routineLink" onClick={() => { setRoutinesOpen(false); setInboxOpen(true); setRoutineToast(null); }}>
+              Review
+            </button>
+          ) : routineToast.conversationId ? (
+            <button type="button" className="routineLink" onClick={() => { setRoutinesOpen(false); setInboxOpen(false); openConversation(routineToast.conversationId!); setRoutineToast(null); }}>
+              Open
+            </button>
+          ) : null}
+          <button type="button" className="iconBtn routineToastClose" aria-label="Dismiss" onClick={() => setRoutineToast(null)}>
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      ) : null}
     </div>
     </ThemeProvider>
   );
