@@ -30,7 +30,7 @@ export function pcmBytes(samples: Int16Array): Buffer {
   return Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
 }
 
-function floatToInt16(channels: Float32Array[], length: number): Int16Array {
+export function floatToInt16(channels: Float32Array[], length: number): Int16Array {
   const out = new Int16Array(length);
   const count = channels.length || 1;
   for (let index = 0; index < length; index += 1) {

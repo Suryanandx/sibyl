@@ -31,6 +31,7 @@ import {
   type ServerMessage,
   type SessionCapabilities,
   type SessionSettings,
+  type SpeechProviderCapability,
   type VoiceEngineCapability,
   type UsageView,
   type AuthMeResponse
@@ -123,7 +124,8 @@ function storedPatch(
   stored: Partial<SessionSettings>,
   catalog: ModelCatalog,
   current: SessionSettings,
-  engines?: VoiceEngineCapability
+  engines?: VoiceEngineCapability,
+  speech?: SpeechProviderCapability
 ): Partial<SessionSettings> {
   const patch: Partial<SessionSettings> = {};
   if (stored.llmModel && stored.llmModel !== current.llmModel && catalog.llm.some((m) => m.id === stored.llmModel)) {
@@ -147,6 +149,13 @@ function storedPatch(
     if (stored.realtimeModel && engines.realtime.models.some((m) => m.id === stored.realtimeModel)) patch.realtimeModel = stored.realtimeModel;
     if (stored.realtimeVoice && engines.realtime.voices.includes(stored.realtimeVoice)) patch.realtimeVoice = stored.realtimeVoice;
     if (stored.realtimeTurn) patch.realtimeTurn = stored.realtimeTurn;
+  }
+  // Speed (Sibyl voice): LiveKit Inference only while this gateway offers it.
+  if (typeof stored.preemptiveGeneration === "boolean" && stored.preemptiveGeneration !== current.preemptiveGeneration) {
+    patch.preemptiveGeneration = stored.preemptiveGeneration;
+  }
+  if (stored.speechProvider && stored.speechProvider !== current.speechProvider && (stored.speechProvider === "openrouter" || speech?.livekit.available)) {
+    patch.speechProvider = stored.speechProvider;
   }
   return patch;
 }
@@ -277,7 +286,7 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
           setCapabilities(message.capabilities);
           if (!storedSettingsAppliedRef.current) {
             storedSettingsAppliedRef.current = true;
-            const patch = storedPatch(readStoredSettings(), message.catalog, message.settings, message.capabilities.voiceEngines);
+            const patch = storedPatch(readStoredSettings(), message.catalog, message.settings, message.capabilities.voiceEngines, message.capabilities.speech);
             if (Object.keys(patch).length > 0) updateSettings(patch, false);
           }
           return false;

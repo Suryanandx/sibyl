@@ -4,7 +4,9 @@
  * Pure logic (no Web Audio, no Node APIs), so the browser's live mode and the
  * gateway's realtime room agent (LiveKit) detect turns the same way. Feed it
  * one frame at a time (RMS on a 0–1 scale and a timestamp in ms); it reports
- * speech_start / speech_end / speech_cancel.
+ * speech_start / speech_end / speech_cancel, and speech_pause / speech_resume
+ * while it waits to decide whether a silence ends the turn (preemptive
+ * generation starts the reply on a pause; see docs/voice.md).
  */
 
 export interface VadConfig {
@@ -26,6 +28,8 @@ export interface VadConfig {
   preRollMs: number;
   playbackThresholdMultiplier: number;
   playbackSuppressAfterEndMs: number;
+  /** Report speech_pause after this much silence inside a turn (0 or absent: never). */
+  pauseEventMs?: number;
 }
 
 export const DEFAULT_VAD_CONFIG: VadConfig = {
@@ -46,7 +50,8 @@ export const DEFAULT_VAD_CONFIG: VadConfig = {
   maxTurnMs: 30_000,
   preRollMs: 400,
   playbackThresholdMultiplier: 2.5,
-  playbackSuppressAfterEndMs: 300
+  playbackSuppressAfterEndMs: 300,
+  pauseEventMs: 200
 };
 
 export type VadState =
@@ -65,8 +70,12 @@ export interface SpeechDetectorFrame {
 
 export type SpeechDetectorEvent =
   | { type: "speech_start"; startedAt: number }
-  | { type: "speech_end"; endedAt: number; reason: "silence" | "max_duration" }
-  | { type: "speech_cancel"; endedAt: number; reason: "too_short" };
+  | { type: "speech_end"; endedAt: number; reason: "silence" | "max_duration"; silenceMs: number }
+  | { type: "speech_cancel"; endedAt: number; reason: "too_short" }
+  /** Silence inside a turn, before the hangover ends it (the turn may still go on). */
+  | { type: "speech_pause"; silenceMs: number }
+  /** Speech again after a speech_pause. */
+  | { type: "speech_resume"; resumedAt: number };
 
 export interface VadSnapshot {
   state: VadState;
@@ -104,6 +113,7 @@ export class AdaptiveVadEngine implements SpeechDetector {
   private turnStartedAt = 0;
   private silenceStartedAt = 0;
   private voicedDurationMs = 0;
+  private pauseReported = false;
   private lastFrameAt = 0;
   private snapshot: VadSnapshot;
 
@@ -207,7 +217,8 @@ export class AdaptiveVadEngine implements SpeechDetector {
       return this.result(rms, now, false, {
         type: "speech_end",
         endedAt: now,
-        reason: "max_duration"
+        reason: "max_duration",
+        silenceMs: this.state === "pause" ? now - this.silenceStartedAt : 0
       });
     }
 
@@ -227,17 +238,32 @@ export class AdaptiveVadEngine implements SpeechDetector {
       this.state = "speaking";
       this.silenceStartedAt = 0;
       this.voicedDurationMs += frameDurationMs;
+      if (this.pauseReported) {
+        this.pauseReported = false;
+        return this.result(rms, now, false, { type: "speech_resume", resumedAt: now });
+      }
       return this.result(rms, now, false);
     }
 
-    if (now - this.silenceStartedAt < this.config.hangoverMs) {
+    const silenceMs = now - this.silenceStartedAt;
+    if (silenceMs < this.config.hangoverMs) {
+      const pauseAfter = this.config.pauseEventMs ?? 0;
+      if (
+        pauseAfter > 0 &&
+        !this.pauseReported &&
+        silenceMs >= pauseAfter &&
+        this.voicedDurationMs >= this.config.minimumSpeechMs
+      ) {
+        this.pauseReported = true;
+        return this.result(rms, now, false, { type: "speech_pause", silenceMs });
+      }
       return this.result(rms, now, false);
     }
 
     const event: SpeechDetectorEvent =
       this.voicedDurationMs < this.config.minimumSpeechMs
         ? { type: "speech_cancel", endedAt: now, reason: "too_short" }
-        : { type: "speech_end", endedAt: now, reason: "silence" };
+        : { type: "speech_end", endedAt: now, reason: "silence", silenceMs };
     this.resetTurn();
     return this.result(rms, now, false, event);
   }
@@ -352,6 +378,7 @@ export class AdaptiveVadEngine implements SpeechDetector {
     this.turnStartedAt = 0;
     this.silenceStartedAt = 0;
     this.voicedDurationMs = 0;
+    this.pauseReported = false;
   }
 }
 

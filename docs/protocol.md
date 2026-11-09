@@ -36,6 +36,7 @@ approval.decision ─────────────►
 ```text
 vad.speech_start ──────────────►
 audio.chunk × n (PCM) ─────────►
+vad.speech_pause (optional) ───►   (the voice brain may start early)
 vad.speech_end (+ caption) ────►
           ◄───────────────────── transcript.final   (the caption, as a placeholder)
           ◄───────────────────── llm.delta × n      (voice brain's speech)
@@ -138,7 +139,16 @@ The browser's voice activity detector heard the start of a hands-free turn.
 }
 ```
 
-`reason` is `silence`, `manual` or `cancelled`. `cancelled` discards the turn. `caption` is the optional instant on-device caption (up to 4000 characters), used only as a display hint.
+`reason` is `silence`, `manual` or `cancelled`. `cancelled` discards the turn. `caption` is the optional instant on-device caption (up to 4000 characters), used only as a display hint. `silenceMs` (optional) is the silence the detector waited for before ending the turn; it makes the end-of-utterance metric start at your last word.
+
+### `vad.speech_pause` and `vad.speech_resume`
+
+```json
+{ "type": "vad.speech_pause", "requestId": "uuid", "silenceMs": 200 }
+{ "type": "vad.speech_resume", "requestId": "uuid" }
+```
+
+The detector heard a short silence inside the turn but hasn't ended it yet; then, if you carry on, speech again. On a pause the gateway may start the voice brain early ([preemptive generation](voice.md#preemptive-generation)); a resume cancels that start.
 
 ### `interrupt`
 
@@ -207,6 +217,18 @@ The accurate transcript for a turn that has already started; replaces the captio
 
 ```json
 { "type": "transcript.update", "requestId": "uuid", "text": "What's the weather like in Porto?" }
+```
+
+### `turn.metrics`
+
+Timings of one spoken reply, with LiveKit Agents' metric names ([voice.md](voice.md#latency-metrics)), on the WebSocket and the LiveKit path. Durations in ms; any may be missing.
+
+```json
+{
+  "type": "turn.metrics",
+  "requestId": "uuid",
+  "metrics": { "transport": "websocket", "eouDelayMs": 300, "transcriptionDelayMs": 1400, "llmTtftMs": 1350, "ttsTtfbMs": 420, "e2eLatencyMs": 2400, "preemptive": true, "voiceModel": "qwen/qwen3.8-omni-flash", "ttsModel": "assemblyai/assemblyai-tts-1" }
+}
 ```
 
 ### `turn.merged`

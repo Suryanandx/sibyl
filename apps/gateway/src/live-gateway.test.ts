@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import type { LLMMessage, LLMProvider, STTProvider, TTSProvider } from "@open-gpt-live/adapters";
-import { WS_EVENTS, type ModelCatalog, type ServerMessage } from "@open-gpt-live/protocol";
+import { VOICE_LATENCY_EVENTS, WS_EVENTS, type ModelCatalog, type ServerMessage } from "@open-gpt-live/protocol";
 import { test } from "vitest";
 import { WebSocket } from "ws";
 import { createGatewayServer, promisesFollowUp, type GatewayProviders } from "./gateway.js";
+import { liveKitSpeechFromEnv } from "./voice/livekit-inference.js";
 
 const catalog: ModelCatalog = {
   voice: [{ id: "voice/fast", label: "Fast voice" }],
@@ -324,4 +325,111 @@ test("a spoken promise to look into something is kept even without @brain", asyn
   assert.equal(promisesFollowUp("Hang on, checking."), true);
   assert.equal(promisesFollowUp("Paris is the capital of France."), false);
   assert.equal(promisesFollowUp("Let me know if you need anything."), false);
+});
+
+function audioChunk(requestId: string, sequence: number) {
+  return {
+    type: WS_EVENTS.AUDIO_CHUNK,
+    requestId,
+    chunk: Buffer.alloc(4800).toString("base64"),
+    mimeType: "audio/pcm;rate=24000",
+    sequence,
+    turnMode: "live"
+  };
+}
+
+test("preemptive generation: a reply started on a pause is used when the turn ends", async () => {
+  const rec: Recorded = { llm: [], tts: [] };
+  await withLive(providers({ "voice/fast": "Sure, here it is." }, rec), async (client) => {
+    await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
+    client.send({ type: WS_EVENTS.VAD_SPEECH_START, requestId: "pre-1", turnMode: "live", startedAt: 1 });
+    client.send(audioChunk("pre-1", 0));
+    client.send({ type: VOICE_LATENCY_EVENTS.SPEECH_PAUSE, requestId: "pre-1", silenceMs: 200 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(rec.llm.length, 1, "the voice brain starts during the pause");
+    client.send(audioChunk("pre-1", 1));
+    client.send({ type: WS_EVENTS.VAD_SPEECH_END, requestId: "pre-1", endedAt: 2, reason: "silence", caption: "hi", silenceMs: 400 });
+    await client.waitFor((m) => m.type === WS_EVENTS.TTS_END && m.requestId === "pre-1");
+    assert.equal(rec.llm.length, 1, "no second request once the turn ends");
+    assert.equal(deltas(client.messages, WS_EVENTS.LLM_DELTA, "pre-1"), "Sure, here it is.");
+    const parts = rec.llm[0]!.messages.at(-1)!.content as Array<{ type: string }>;
+    assert.equal(parts[0]?.type, "input_audio");
+    const metrics = (await client.waitFor((m) => m.type === VOICE_LATENCY_EVENTS.TURN_METRICS && m.requestId === "pre-1")) as unknown as {
+      metrics: Record<string, unknown>;
+    };
+    assert.equal(metrics.metrics.preemptive, true);
+    assert.equal(metrics.metrics.transport, "websocket");
+    assert.equal(metrics.metrics.voiceModel, "voice/fast");
+    for (const key of ["eouDelayMs", "llmTtftMs", "ttsTtfbMs", "e2eLatencyMs"]) assert.equal(typeof metrics.metrics[key], "number", key);
+    // End of speech is the last voiced audio: the 400 ms the detector waited count toward end-of-utterance delay.
+    assert.ok((metrics.metrics.eouDelayMs as number) >= 400);
+  });
+});
+
+test("preemptive generation: speaking again cancels the early reply; the turn is answered once, in full", async () => {
+  const rec: Recorded = { llm: [], tts: [] };
+  const aborted: boolean[] = [];
+  const base = providers({}, rec);
+  const llm: LLMProvider = {
+    async *streamText(messages, options) {
+      rec.llm.push({ model: options?.model, messages });
+      const index = rec.llm.length;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      aborted[index - 1] = Boolean(options?.signal?.aborted);
+      if (options?.signal?.aborted) return;
+      yield { delta: `Answer ${index}.` };
+    }
+  };
+  await withLive({ ...base, llm }, async (client) => {
+    await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
+    client.send({ type: WS_EVENTS.VAD_SPEECH_START, requestId: "pre-2", turnMode: "live", startedAt: 1 });
+    client.send(audioChunk("pre-2", 0));
+    client.send({ type: VOICE_LATENCY_EVENTS.SPEECH_PAUSE, requestId: "pre-2", silenceMs: 200 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    client.send({ type: VOICE_LATENCY_EVENTS.SPEECH_RESUME, requestId: "pre-2" });
+    client.send(audioChunk("pre-2", 1));
+    client.send({ type: WS_EVENTS.VAD_SPEECH_END, requestId: "pre-2", endedAt: 2, reason: "silence", caption: "hi there" });
+    await client.waitFor((m) => m.type === WS_EVENTS.LLM_DONE && m.requestId === "pre-2");
+    assert.equal(rec.llm.length, 2);
+    assert.equal(aborted[0], true, "the early reply was cancelled");
+    assert.equal(deltas(client.messages, WS_EVENTS.LLM_DELTA, "pre-2"), "Answer 2.");
+    // The final request heard all of the audio and got the caption.
+    const parts = rec.llm[1]!.messages.at(-1)!.content as Array<{ type: string; text?: string }>;
+    assert.match(parts[1]?.text ?? "", /hi there/);
+  });
+});
+
+test("preemptive generation can be turned off per session", async () => {
+  const rec: Recorded = { llm: [], tts: [] };
+  await withLive(providers({ "voice/fast": "Okay." }, rec), async (client) => {
+    await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG);
+    client.send({ type: WS_EVENTS.SESSION_UPDATE, settings: { preemptiveGeneration: false } });
+    await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG && (m as { settings: { preemptiveGeneration?: boolean } }).settings.preemptiveGeneration === false);
+    client.send({ type: WS_EVENTS.VAD_SPEECH_START, requestId: "pre-3", turnMode: "live", startedAt: 1 });
+    client.send(audioChunk("pre-3", 0));
+    client.send({ type: VOICE_LATENCY_EVENTS.SPEECH_PAUSE, requestId: "pre-3", silenceMs: 200 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(rec.llm.length, 0);
+    client.send({ type: WS_EVENTS.VAD_SPEECH_END, requestId: "pre-3", endedAt: 2, reason: "silence" });
+    await client.waitFor((m) => m.type === WS_EVENTS.LLM_DONE && m.requestId === "pre-3");
+    assert.equal(rec.llm.length, 1);
+    const metrics = (await client.waitFor((m) => m.type === VOICE_LATENCY_EVENTS.TURN_METRICS && m.requestId === "pre-3")) as { metrics: { preemptive?: boolean } };
+    assert.equal(metrics.metrics.preemptive, undefined);
+  });
+});
+
+test("LiveKit Inference speech is refused when the server doesn't offer it", async () => {
+  const rec: Recorded = { llm: [], tts: [] };
+  await withLive(
+    providers({}, rec),
+    async (client) => {
+      const config = (await client.waitFor((m) => m.type === WS_EVENTS.SESSION_CONFIG)) as { capabilities: { speech?: { livekit: { available: boolean; unavailableReason?: string } } } };
+      assert.equal(config.capabilities.speech?.livekit.available, false);
+      assert.equal(config.capabilities.speech?.livekit.unavailableReason, "not_cloud");
+      client.send({ type: WS_EVENTS.SESSION_UPDATE, settings: { speechProvider: "livekit" } });
+      const error = (await client.waitFor((m) => m.type === "error")) as { message: string };
+      assert.match(error.message, /LiveKit Cloud/);
+    },
+    { livekitSpeech: liveKitSpeechFromEnv({ LIVEKIT_URL: "ws://localhost:7880", LIVEKIT_API_KEY: "k", LIVEKIT_API_SECRET: "s" }) }
+  );
 });

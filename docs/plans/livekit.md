@@ -197,6 +197,7 @@ Rule throughout: the open-source core never imports `ee/`. Every model call stay
 1. **Editions:** realtime voice (WebRTC), group calls and phone calls (SIP) are in the free, open-source edition. Recording of calls and of agent browser sessions, plus recording-retention policies, are Sibyl Enterprise (`ee/`).
 2. **LiveKit Cloud:** supported as an opt-in alternative (`LIVEKIT_URL` pointing at Cloud). Self-hosted LiveKit stays the documented default.
 3. **LiveKit turn-detector model:** off by default; opt-in only after its licence (LiveKit Model License) has been reviewed. Sibyl's own VAD and turn logic stay the default.
+   *Licence reviewed 2026-11-10 ([voice.md](../voice.md#the-turn-detectors-licence-and-why-sibyl-doesnt-use-it-yet)): it allows use only with the LiveKit Agents framework, which Sibyl's room agent doesn't use, so the model is not wired in. Owner to decide whether that changes.*
 4. **Phone:** Twilio documented first (SIP trunk). Outbound calls always need approval (high-risk action).
 5. **Recordings:** stored in the data volume, or S3-compatible storage when configured, kept 30 days by default (configurable; Enterprise policies can change it).
 6. **Group calls:** agents join as note-takers and speak only when addressed by name, or when the host hands them the floor.

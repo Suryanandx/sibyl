@@ -394,3 +394,17 @@ GPT Realtime is the premium voice engine next to Sibyl voice. See [voice.md](voi
 | `SIBYL_REALTIME_TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | Writes your side of the transcript (metered as voice). |
 | `SIBYL_REALTIME_IDLE_SECONDS` | `300` | Close an idle GPT Realtime session after this long (it reopens with the conversation on your next turn). |
 | `SIBYL_REALTIME_URL` | `wss://api.openai.com/v1/realtime` | Another Realtime-compatible endpoint (and its `/v1/models` for the key check). For tests and compatible proxies. |
+
+## Voice speed (preemptive generation, LiveKit Inference)
+
+How quickly Sibyl voice starts to answer. See [voice.md](voice.md#staying-fast). Both choices can also be changed per session in **Settings → Voice → Speed**.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SIBYL_PREEMPTIVE_GENERATION` | `true` | Start the voice brain when you pause, before the turn is final. `false` makes new sessions wait for the end of the turn. |
+| `SIBYL_LIVEKIT_INFERENCE` | `auto` | `auto` offers LiveKit Inference speech when `LIVEKIT_URL` is a LiveKit Cloud project (`*.livekit.cloud`) and `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` are set. `off` hides it. |
+| `LIVEKIT_INFERENCE_TTS` | `cartesia/sonic-3` | LiveKit Inference speech model, optionally with a voice: `model:voice` (for example `cartesia/sonic-3:<voice id>`). Without a voice, the provider's default voice is used. |
+| `LIVEKIT_INFERENCE_STT` | `deepgram/nova-3` | LiveKit Inference transcription model. |
+| `LIVEKIT_INFERENCE_LANGUAGE` | `en` | Language sent to both. |
+| `LIVEKIT_INFERENCE_URL` | `https://agent-gateway.livekit.cloud/v1` | Another inference gateway address. Setting it also allows a non-Cloud `LIVEKIT_URL` (for tests with a local stand-in). |
+| `SIBYL_LIVEKIT_INFERENCE_PRICES` | LiveKit's published prices | JSON to change or add prices: transcription in USD per minute, speech in USD per 1M characters, for example `{"inworld/inworld-tts-2": 25}`. Used for metering and the price per minute in Settings. |

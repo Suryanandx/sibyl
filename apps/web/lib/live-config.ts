@@ -163,7 +163,9 @@ export function resolveVadConfig(
       DEFAULT_VAD_CONFIG.playbackSuppressAfterEndMs,
       0,
       5_000
-    )
+    ),
+    // Report a pause (preemptive generation) well before the hangover ends the turn.
+    pauseEventMs: Math.min(DEFAULT_VAD_CONFIG.pauseEventMs ?? 200, hangoverMs - 100)
   };
 }
 

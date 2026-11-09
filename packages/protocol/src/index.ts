@@ -256,7 +256,7 @@ export interface ModelCatalog {
   presets?: ModelPreset[];
 }
 
-export interface SessionSettings extends VoiceEngineSettings {
+export interface SessionSettings extends VoiceEngineSettings, VoiceLatencySettings {
   /** Voice brain: hears the user's audio and replies conversationally. */
   voiceModel?: string;
   /** Deep brain (or the only model when no voice brain is configured). */
@@ -279,6 +279,8 @@ export interface SessionCapabilities {
   realtime?: RealtimeCapability;
   /** Voice engines: Sibyl voice, and GPT Realtime when available (see VoiceEngineCapability). */
   voiceEngines?: VoiceEngineCapability;
+  /** Speech providers for Sibyl voice (see SpeechProviderCapability). */
+  speech?: SpeechProviderCapability;
 }
 
 export type WsEvent = (typeof WS_EVENTS)[keyof typeof WS_EVENTS];
@@ -353,6 +355,8 @@ export interface VadSpeechEndMessage {
   reason: "silence" | "manual" | "cancelled";
   /** Instant on-device caption of what was said (display hint, may be inaccurate). */
   caption?: string;
+  /** Silence the detector waited for before ending the turn (ms; for the end-of-utterance metric). */
+  silenceMs?: number;
 }
 
 export interface InterruptMessage {
@@ -492,7 +496,8 @@ export type ClientMessage =
   | NotificationsClientMessage
   | ComputersClientMessage
   | RealtimeClientMessage
-  | MeetingsClientMessage;
+  | MeetingsClientMessage
+  | VoiceLatencyClientMessage;
 
 export type ServerMessage =
   | ServerSessionStartMessage
@@ -530,7 +535,8 @@ export type ServerMessage =
   | NotificationsServerMessage
   | ComputersServerMessage
   | RealtimeServerMessage
-  | MeetingsServerMessage;
+  | MeetingsServerMessage
+  | TurnMetricsMessage;
 
 export type ReservedMessage = never;
 
@@ -685,7 +691,8 @@ export function parseClientMessage(input: unknown): ClientMessageValidationResul
         endedAt: input.endedAt,
         reason: input.reason,
         ...(input.durationMs === undefined ? {} : { durationMs: input.durationMs }),
-        ...(input.caption === undefined ? {} : { caption: input.caption })
+        ...(input.caption === undefined ? {} : { caption: input.caption }),
+        ...(isFiniteNumber(input.silenceMs) && input.silenceMs >= 0 && input.silenceMs <= 60_000 ? { silenceMs: input.silenceMs } : {})
       });
 
     case WS_EVENTS.INTERRUPT:
@@ -761,7 +768,7 @@ export function parseClientMessage(input: unknown): ClientMessageValidationResul
     }
 
     default:
-      return parseConnectionsClientMessage(input) ?? parseRoutinesClientMessage(input) ?? parseSecretsClientMessage(input) ?? parseIdentityClientMessage(input) ?? parseMonitorsClientMessage(input) ?? parseIntegrationsClientMessage(input) ?? parseAgentsClientMessage(input) ?? parseNotificationsClientMessage(input) ?? parseComputersClientMessage(input) ?? parseRealtimeClientMessage(input) ?? parseMeetingsClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
+      return parseConnectionsClientMessage(input) ?? parseRoutinesClientMessage(input) ?? parseSecretsClientMessage(input) ?? parseIdentityClientMessage(input) ?? parseMonitorsClientMessage(input) ?? parseIntegrationsClientMessage(input) ?? parseAgentsClientMessage(input) ?? parseNotificationsClientMessage(input) ?? parseComputersClientMessage(input) ?? parseRealtimeClientMessage(input) ?? parseMeetingsClientMessage(input) ?? parseVoiceLatencyClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
   }
 }
 
@@ -1029,7 +1036,8 @@ export function parseServerMessage(input: unknown): ServerMessageValidationResul
         tts: caps.tts,
         realtimeStt: caps.realtimeStt,
         ...(isRealtimeCapability(caps.realtime) ? { realtime: caps.realtime } : {}),
-        ...(isVoiceEngineCapability(caps.voiceEngines) ? { voiceEngines: caps.voiceEngines } : {})
+        ...(isVoiceEngineCapability(caps.voiceEngines) ? { voiceEngines: caps.voiceEngines } : {}),
+        ...(isSpeechProviderCapability(caps.speech) ? { speech: caps.speech } : {})
       }
     });
   }
@@ -1051,7 +1059,7 @@ export function parseServerMessage(input: unknown): ServerMessageValidationResul
     });
   }
 
-  return parseConnectionsServerMessage(input) ?? parseRoutinesServerMessage(input) ?? parseSecretsServerMessage(input) ?? parseLicenseServerMessage(input) ?? parseIdentityServerMessage(input) ?? parseMonitorsServerMessage(input) ?? parseIntegrationsServerMessage(input) ?? parseAgentsServerMessage(input) ?? parseNotificationsServerMessage(input) ?? parseComputersServerMessage(input) ?? parseRealtimeServerMessage(input) ?? parseMeetingsServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
+  return parseConnectionsServerMessage(input) ?? parseRoutinesServerMessage(input) ?? parseSecretsServerMessage(input) ?? parseLicenseServerMessage(input) ?? parseIdentityServerMessage(input) ?? parseMonitorsServerMessage(input) ?? parseIntegrationsServerMessage(input) ?? parseAgentsServerMessage(input) ?? parseNotificationsServerMessage(input) ?? parseComputersServerMessage(input) ?? parseRealtimeServerMessage(input) ?? parseMeetingsServerMessage(input) ?? parseVoiceLatencyServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
 }
 
 const MAX_MODEL_ID_LENGTH = 200;
@@ -1077,7 +1085,9 @@ function parseSettingsPatch(
   }
   const engine = parseVoiceEngineSettings(input);
   if (!engine.success) return engine;
-  return ok({ ...out, ...engine.data });
+  const latency = parseVoiceLatencySettings(input);
+  if (!latency.success) return latency;
+  return ok({ ...out, ...engine.data, ...latency.data });
 }
 
 function parseModelOptions(input: unknown): ParseResult<TtsModelOption[]> {
@@ -6177,5 +6187,161 @@ export function isVoiceEngineCapability(value: unknown): value is VoiceEngineCap
     realtime.voices.every((voice) => typeof voice === "string") &&
     isNonEmptyString(realtime.defaultModel) &&
     isNonEmptyString(realtime.defaultVoice)
+  );
+}
+
+/* ── Voice latency: LiveKit-style turn metrics, preemptive generation, LiveKit Inference speech ── */
+/*
+ * Turn metrics use LiveKit Agents' names and definitions so Sibyl's numbers can be compared
+ * with LiveKit's published ones (docs/voice.md, "Latency metrics"):
+ *
+ *   end-of-utterance delay  end of speech (last voiced audio) → the turn is committed
+ *   transcription delay     end of speech → final transcript
+ *   LLM TTFT                request to the voice brain → its first token
+ *   TTS TTFB                first speech request → first audio byte from the speech model
+ *   total (e2e) latency     end of speech → first audio sent to the listener
+ *
+ * The gateway sends `turn.metrics` after every spoken reply, on the WebSocket and the LiveKit
+ * path alike. Preemptive generation: the speech detector reports a pause (`vad.speech_pause`)
+ * before it decides the turn is over; the gateway starts the voice brain on the audio so far
+ * and keeps the result if the turn ends without more speech (`vad.speech_resume` drops it).
+ */
+
+export const VOICE_LATENCY_EVENTS = {
+  SPEECH_PAUSE: "vad.speech_pause",
+  SPEECH_RESUME: "vad.speech_resume",
+  TURN_METRICS: "turn.metrics"
+} as const;
+
+/** Where Sibyl voice's speech and transcripts are made: OpenRouter models (default) or LiveKit Inference (LiveKit Cloud). */
+export const SPEECH_PROVIDERS = ["openrouter", "livekit"] as const;
+export type SpeechProviderId = (typeof SPEECH_PROVIDERS)[number];
+
+/** Voice latency fields of SessionSettings (session.update). */
+export interface VoiceLatencySettings {
+  /** Start the voice brain while you pause, before the turn is final (default on). */
+  preemptiveGeneration?: boolean;
+  /** Speech and transcription provider for Sibyl voice (default openrouter). */
+  speechProvider?: SpeechProviderId;
+}
+
+/** The detector has heard silence for a moment but hasn't ended the turn yet. */
+export interface VadSpeechPauseMessage {
+  type: typeof VOICE_LATENCY_EVENTS.SPEECH_PAUSE;
+  requestId: string;
+  /** Silence so far (ms). */
+  silenceMs: number;
+}
+
+/** Speech resumed after a vad.speech_pause (the preemptive reply is dropped). */
+export interface VadSpeechResumeMessage {
+  type: typeof VOICE_LATENCY_EVENTS.SPEECH_RESUME;
+  requestId: string;
+}
+
+/** Durations in ms, named and defined like LiveKit Agents' metrics. */
+export interface TurnMetrics {
+  /** end_of_utterance_delay: end of speech → turn committed (includes the detector's silence wait). */
+  eouDelayMs?: number;
+  /** transcription_delay: end of speech → final transcript. */
+  transcriptionDelayMs?: number;
+  /** LLM ttft: request → first token. */
+  llmTtftMs?: number;
+  /** TTS ttfb: first speech request → first audio byte. */
+  ttsTtfbMs?: number;
+  /** e2e_latency: end of speech → first audio sent to the listener. */
+  e2eLatencyMs?: number;
+  /** The reply was generated preemptively (started before the turn was final). */
+  preemptive?: boolean;
+  transport: "websocket" | "livekit";
+  voiceModel?: string;
+  ttsModel?: string;
+}
+
+export interface TurnMetricsMessage {
+  type: typeof VOICE_LATENCY_EVENTS.TURN_METRICS;
+  requestId: string;
+  metrics: TurnMetrics;
+}
+
+/** session.config capabilities.speech: the speech providers this server offers. */
+export interface SpeechProviderCapability {
+  livekit: {
+    available: boolean;
+    /** Why not: LiveKit isn't configured, isn't LiveKit Cloud, or the server turned it off. */
+    unavailableReason?: "not_configured" | "not_cloud" | "disabled";
+    sttModel: string;
+    ttsModel: string;
+    /** Estimated USD per minute of conversation (published LiveKit Inference prices). */
+    usdPerMinute: number;
+  };
+}
+
+export type VoiceLatencyClientMessage = VadSpeechPauseMessage | VadSpeechResumeMessage;
+
+function isSpeechRequestId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 200;
+}
+
+function parseVoiceLatencyClientMessage(input: Record<string, unknown>): ClientMessageValidationResult | undefined {
+  switch (input.type) {
+    case VOICE_LATENCY_EVENTS.SPEECH_PAUSE:
+      if (!isSpeechRequestId(input.requestId)) return invalid("vad.speech_pause requestId must be a non-empty string");
+      if (typeof input.silenceMs !== "number" || !Number.isFinite(input.silenceMs) || input.silenceMs < 0 || input.silenceMs > 60_000) {
+        return invalid("vad.speech_pause silenceMs must be a number of milliseconds");
+      }
+      return valid({ type: VOICE_LATENCY_EVENTS.SPEECH_PAUSE, requestId: input.requestId, silenceMs: input.silenceMs });
+    case VOICE_LATENCY_EVENTS.SPEECH_RESUME:
+      if (!isSpeechRequestId(input.requestId)) return invalid("vad.speech_resume requestId must be a non-empty string");
+      return valid({ type: VOICE_LATENCY_EVENTS.SPEECH_RESUME, requestId: input.requestId });
+    default:
+      return undefined;
+  }
+}
+
+const TURN_METRIC_FIELDS = ["eouDelayMs", "transcriptionDelayMs", "llmTtftMs", "ttsTtfbMs", "e2eLatencyMs"] as const;
+
+function parseVoiceLatencyServerMessage(input: Record<string, unknown>): ServerMessageValidationResult | undefined {
+  if (input.type !== VOICE_LATENCY_EVENTS.TURN_METRICS) return undefined;
+  const metrics = input.metrics;
+  if (!isSpeechRequestId(input.requestId) || !isRecord(metrics) || !isEnum(metrics.transport, ["websocket", "livekit"] as const)) {
+    return invalidServer("turn.metrics requires requestId and metrics");
+  }
+  const out: TurnMetrics = { transport: metrics.transport };
+  for (const key of TURN_METRIC_FIELDS) {
+    const value = metrics[key];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = value;
+  }
+  if (typeof metrics.preemptive === "boolean") out.preemptive = metrics.preemptive;
+  for (const key of ["voiceModel", "ttsModel"] as const) {
+    const value = metrics[key];
+    if (isNonEmptyString(value)) out[key] = value;
+  }
+  return validServer({ type: VOICE_LATENCY_EVENTS.TURN_METRICS, requestId: input.requestId, metrics: out });
+}
+
+/** Voice latency fields of a session.update (called from parseSettingsPatch). */
+export function parseVoiceLatencySettings(input: Record<string, unknown>): ParseResult<VoiceLatencySettings> {
+  const out: VoiceLatencySettings = {};
+  if (input.preemptiveGeneration !== undefined) {
+    if (typeof input.preemptiveGeneration !== "boolean") return fail("preemptiveGeneration must be a boolean");
+    out.preemptiveGeneration = input.preemptiveGeneration;
+  }
+  if (input.speechProvider !== undefined) {
+    if (!isEnum(input.speechProvider, SPEECH_PROVIDERS)) return fail("speechProvider must be openrouter or livekit");
+    out.speechProvider = input.speechProvider;
+  }
+  return ok(out);
+}
+
+/** session.config capabilities.speech (checked by the browser's parser). */
+export function isSpeechProviderCapability(value: unknown): value is SpeechProviderCapability {
+  if (!isRecord(value) || !isRecord(value.livekit)) return false;
+  const livekit = value.livekit;
+  return (
+    typeof livekit.available === "boolean" &&
+    isNonEmptyString(livekit.sttModel) &&
+    isNonEmptyString(livekit.ttsModel) &&
+    typeof livekit.usdPerMinute === "number"
   );
 }

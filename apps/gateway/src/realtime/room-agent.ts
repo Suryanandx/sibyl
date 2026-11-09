@@ -29,7 +29,7 @@
 import { randomUUID } from "node:crypto";
 import type { AudioFrame, AudioSource, RemoteParticipant, RemoteTrack, Room } from "@livekit/rtc-node";
 import type { LocalTrackPublication } from "@livekit/rtc-node";
-import { AGENT_EVENTS, MEETING_HAND_TOPIC, MEETING_SIGNAL_TOPIC, REALTIME_EVENTS, WS_EVENTS, type ServerMessage } from "@open-gpt-live/protocol";
+import { AGENT_EVENTS, MEETING_HAND_TOPIC, MEETING_SIGNAL_TOPIC, REALTIME_EVENTS, VOICE_LATENCY_EVENTS, WS_EVENTS, type ServerMessage } from "@open-gpt-live/protocol";
 import { AdaptiveVadEngine, DEFAULT_VAD_CONFIG, type AvatarSpec, type MeetingAgentRole, type MeetingParticipantKind, type VadConfig } from "@open-gpt-live/core";
 import type { SpeechSegment, VoiceSessionPort } from "../session-port.js";
 import { LISTEN_MIME_TYPE, LISTEN_SAMPLE_RATE, SpeechDecoder, pcmBytes, resample, rmsOf } from "./audio.js";
@@ -512,7 +512,8 @@ export class RoomAgent {
     const result = listener.vad.processFrame({ rms: rmsOf(samples), now, playbackActive: this.speaking(), suppressStartsUntil: 0 });
     const event = result.event;
     if (event?.type === "speech_start") this.startTurn(listener, event.startedAt);
-    else if (event?.type === "speech_end") void this.endTurn(listener, event.endedAt);
+    else if (event?.type === "speech_end") void this.endTurn(listener, event.endedAt, event.silenceMs);
+    else if (event?.type === "speech_pause" || event?.type === "speech_resume") this.pauseTurn(listener, event);
     else if (event?.type === "speech_cancel") this.cancelTurn(listener);
   }
 
@@ -566,14 +567,25 @@ export class RoomAgent {
     this.notifyTurn(turn.requestId, "cancel", listener.identity);
   }
 
-  private async endTurn(listener: Listener, endedAt: number): Promise<void> {
+  /** A pause inside a 1:1 turn: the session may start its reply early (preemptive generation). */
+  private pauseTurn(listener: Listener, event: { type: "speech_pause"; silenceMs: number } | { type: "speech_resume" }): void {
+    const turn = listener.turn;
+    if (!turn?.streamed) return;
+    this.options.port.deliver(
+      event.type === "speech_pause"
+        ? { type: VOICE_LATENCY_EVENTS.SPEECH_PAUSE, requestId: turn.requestId, silenceMs: event.silenceMs }
+        : { type: VOICE_LATENCY_EVENTS.SPEECH_RESUME, requestId: turn.requestId }
+    );
+  }
+
+  private async endTurn(listener: Listener, endedAt: number, silenceMs?: number): Promise<void> {
     const turn = listener.turn;
     listener.turn = undefined;
     if (!turn) return;
     const { port } = this.options;
     if (turn.streamed) {
       port.deliver({ type: WS_EVENTS.AUDIO_CHUNK, requestId: turn.requestId, mimeType: LISTEN_MIME_TYPE, sequence: turn.sequence, turnMode: "live", isFinal: true });
-      port.deliver({ type: WS_EVENTS.VAD_SPEECH_END, requestId: turn.requestId, endedAt, durationMs: endedAt - turn.startedAt, reason: "silence" });
+      port.deliver({ type: WS_EVENTS.VAD_SPEECH_END, requestId: turn.requestId, endedAt, durationMs: endedAt - turn.startedAt, reason: "silence", ...(silenceMs !== undefined ? { silenceMs } : {}) });
       this.notifyTurn(turn.requestId, "end", listener.identity);
       return;
     }

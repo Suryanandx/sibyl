@@ -28,7 +28,7 @@ Sibyl is an open-source assistant your team hosts itself. Talk to it or type to 
 
 ## What Sibyl does
 
-**Talk or type, in one conversation.** Type and you get a normal chat reply with text and visuals. Turn on the mic for a live voice conversation: a fast *voice brain* answers out loud in a second or two and hands careful work to a *deep brain*. Old chats pick up where they left off. With the optional [LiveKit layer](docs/realtime.md) you get WebRTC voice, group calls where people and agents talk together, and phone calls.
+**Talk or type, in one conversation.** Type and you get a normal chat reply with text and visuals. Turn on the mic for a live voice conversation: a fast *voice brain* starts answering out loud about 2–3 seconds after you stop talking ([measured](docs/voice.md#measured-latency)) and hands careful work to a *deep brain*. Old chats pick up where they left off. With the optional [LiveKit layer](docs/realtime.md) you get WebRTC voice, group calls where people and agents talk together, and phone calls.
 
 **Answers you can see and use.** Replies can include charts, tables, plans, option cards and forms, built with [OpenUI](https://github.com/thesysdev/openui). Buttons and forms send your choice back to Sibyl.
 
@@ -198,6 +198,7 @@ A self-hosted deployment is only as private as the providers you route to; check
 - **Production licence keys** for the enterprise edition, signed with an offline key.
 - **Hosted mode on several servers:** today one gateway process serves every organization; see [Scaling](docs/hosting.md#scaling) for the plan (Postgres, shared limits, routing per organization).
 - **A desktop view for agent computers**, next to the browser.
+- **A faster voice brain:** with streamed speech and preemptive generation, the Balanced preset now starts speaking about 2.4 seconds after your last word (median, 3 s at p90; it was 4–5 s). Most of the rest is the voice brain's first word (1–2 s), so faster audio-native voice brains are next.
 
 **Help wanted: try it with real accounts**
 

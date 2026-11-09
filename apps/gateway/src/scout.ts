@@ -97,31 +97,38 @@ export const USAGE = {
 
 const WEIGHTS: Record<Strategy, { quality: number; cost: number; latency: number }> = {
   cheapest: { quality: 0.5, cost: 2, latency: 0.6 },
-  balanced: { quality: 1, cost: 0.8, latency: 1 },
+  balanced: { quality: 1, cost: 0.8, latency: 1.4 },
   fastest: { quality: 0.5, cost: 0.1, latency: 3 },
   best: { quality: 2.5, cost: 0.15, latency: 0.5 }
 };
-/** How much latency matters per role (voice is the most latency-critical). */
-const ROLE_LATENCY_WEIGHT: Record<Role, number> = { voice: 1.6, llm: 0.5, stt: 0.3, tts: 1.3 };
+/**
+ * How much latency matters per role. The voice brain's first token and the
+ * speech model's first audio are what you wait for after you stop talking
+ * (end of speech → voice ≈ voice TTFT + TTS TTFB), so both weigh the most.
+ */
+const ROLE_LATENCY_WEIGHT: Record<Role, number> = { voice: 1.6, llm: 0.5, stt: 0.3, tts: 1.8 };
 /** How much quality matters per role: the deep brain designs the visuals. */
 const ROLE_QUALITY_WEIGHT: Record<Role, number> = { voice: 1, llm: 2, stt: 1, tts: 1 };
 /**
  * Latency budgets per strategy (voice/llm: first token; tts: slowest of three
- * first-audio probes). Candidates over budget are heavily penalized.
+ * first-audio probes on a first-clause-sized sentence). Candidates over budget
+ * are heavily penalized.
  */
 const LATENCY_BUDGET_MS: Record<Strategy, Partial<Record<Role, number>>> = {
-  cheapest: { voice: 3_000, tts: 3_500, llm: 10_000 },
-  balanced: { voice: 2_000, tts: 1_800, llm: 5_000 },
-  fastest: { voice: 1_600, tts: 1_200, llm: 3_000 },
+  cheapest: { voice: 3_000, tts: 3_000, llm: 10_000 },
+  balanced: { voice: 1_600, tts: 1_300, llm: 5_000 },
+  fastest: { voice: 1_300, tts: 1_000, llm: 3_000 },
   best: { voice: 2_500, tts: 2_500, llm: 8_000 }
 };
+/** What the speech probe says: about the size of a reply's first spoken segment. */
+export const TTS_PROBE_TEXT = "Oh, that's a lovely question. How about Bean There?";
 const UI_CATEGORIES = ["uicomponent", "dataviz", "website"];
 const TTS_CATEGORIES = ["text-to-speech", "audiorealism"];
 const TRUSTED_STT_AUTHORS = ["openai", "deepgram", "elevenlabs", "mistralai", "assemblyai", "google", "nvidia", "microsoft"];
 const PREFERRED_VOICES = ["sarah", "af_heart", "Kore", "aura-2-thalia-en", "en_paul_neutral", "alloy", "jessica"];
 const MAX_AGE_DAYS = 600;
 /** Bump when scoring or probing changes so stale caches are re-scouted. */
-const CACHE_VERSION = 8;
+const CACHE_VERSION = 9;
 
 export async function scoutModels(options: ScoutOptions): Promise<ScoutResult> {
   const now = options.now ?? Date.now;
@@ -390,7 +397,7 @@ async function probeCandidates(
     const picked = new Set<ScoutCandidate>();
     for (const strategy of STRATEGIES) {
       // Voice is the most latency-sensitive role, so look at more candidates.
-      const breadth = role === "voice" ? 10 : role === "tts" ? 6 : 4;
+      const breadth = role === "voice" || role === "tts" ? 10 : 4;
       [...pool].sort((a, b) => b.scores[strategy] - a.scores[strategy]).slice(0, breadth).forEach((c) => picked.add(c));
     }
     toProbe.push(...picked);
@@ -531,7 +538,7 @@ async function probeTts(
       },
       body: JSON.stringify({
         model: candidate.id,
-        input: "Hi there!",
+        input: TTS_PROBE_TEXT,
         voice: candidate.defaultVoice,
         response_format: format
       }),
@@ -550,8 +557,9 @@ async function probeTts(
       await reader.cancel().catch(() => undefined);
     }
   };
-  // Judge voices by their slowest of three starts: a voice that is usually
-  // fast but sometimes takes seconds feels broken in a live conversation.
+  // TTS TTFB (time to the first audio byte; the gateway plays audio as it
+  // streams). Judge voices by their slowest of three starts: a voice that is
+  // usually fast but sometimes takes seconds feels broken in a live conversation.
   const worstOfThree = async (format: string) => {
     const runs: number[] = [];
     for (let i = 0; i < 3; i += 1) runs.push(await attempt(format));

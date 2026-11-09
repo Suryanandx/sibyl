@@ -48,7 +48,7 @@ LIVEKIT_URL=ws://127.0.0.1:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret
 
 ### LiveKit Cloud
 
-Point `LIVEKIT_URL` at your Cloud project (`wss://<project>.livekit.cloud`) with its key and secret. Self-hosted LiveKit stays the documented default.
+Point `LIVEKIT_URL` at your Cloud project (`wss://<project>.livekit.cloud`) with its key and secret. Self-hosted LiveKit stays the documented default. With Cloud, Settings → Voice → Speed also offers [LiveKit Inference](voice.md#livekit-inference-speech-livekit-cloud) for speech and transcription (opt-in, billed to the LiveKit project).
 
 If LiveKit can't be reached, voice falls back to the WebSocket path on its own.
 
@@ -245,6 +245,8 @@ Gateway on macOS, LiveKit in Docker, real OpenRouter models, 2026-11-09:
 | Same over the WebSocket path ([voice.md](voice.md#measured-latency)) | 2.5–3.3 s |
 
 The voice brain's first word still dominates. LiveKit's gains are steadier audio and networks, calls and phones, not a faster brain.
+
+Re-measured on 2026-11-10 with streamed speech, preemptive generation and the speed-weighted Balanced preset: end of speech → Sibyl's voice heard in the room **3.0 s** median (4.2 s p90) over six turns, down from 5.0 s (6.6 s) with the same client before those changes. The room agent's turns report the same `turn.metrics` as the WebSocket path (`transport: "livekit"`; see [voice.md](voice.md#latency-metrics)).
 
 ### Verified (phone line and recordings)
 

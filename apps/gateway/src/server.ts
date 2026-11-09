@@ -25,6 +25,7 @@ import { createMeteredFetch } from "./metering/fetch.js";
 import type { GatewayProviders, GatewayServerHandle, GatewayTenant, ModelUpdate } from "./gateway.js";
 import { loadProjectEnvironment } from "./environment.js";
 import { createGatewayServer } from "./gateway.js";
+import { liveKitSpeechFromEnv } from "./voice/livekit-inference.js";
 import { createJsonLogger } from "./logger.js";
 import { deploymentMode } from "./tenancy/mode.js";
 import { TenantRegistry, tenantIdleMs, type TenantHandle } from "./tenancy/registry.js";
@@ -315,6 +316,8 @@ async function main(): Promise<void> {
     // Small first segments so the voice starts speaking sooner.
     ttsSegmentMinLength: 14,
     hedge: config.hedge,
+    preemptiveGeneration: config.preemptiveGeneration,
+    livekitSpeech: liveKitSpeechFromEnv(process.env),
     logger,
     healthDetails: {
       version: "0.2.0",

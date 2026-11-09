@@ -49,7 +49,7 @@ With `SCOUT_PROBE=true` (the default), the most promising candidates get small, 
 
 - **Voice brains** hear a real four-second spoken question with the real voice prompt. Reasoning is requested off; models that reject that are tried with low, then default reasoning, and are charged for it in the cost estimate. The result is the mean of two runs.
 - **Deep brains** get the real deep-brain prompt.
-- **Voices** start speaking three times; the slowest of the three counts.
+- **Voices** say a sentence about the size of a reply's first spoken segment three times; the time to the first audio byte (TTS TTFB) of the slowest of the three counts. Speech plays as it streams, so this is what you wait for.
 - At most five probes run at once, so they don't slow each other down.
 
 ### 5. Rank
@@ -58,9 +58,9 @@ Four strategies weight quality, cost and latency differently. Each also has late
 
 | Preset | Emphasis | Voice brain budget | Voice budget | Deep brain budget |
 |---|---|---|---|---|
-| **Cheapest** | cost | 3.0 s | 3.5 s | 10 s |
-| **Balanced** | an even mix | 2.0 s | 1.8 s | 5 s |
-| **Fastest** | latency | 1.6 s | 1.2 s | 3 s |
+| **Cheapest** | cost | 3.0 s | 3.0 s | 10 s |
+| **Balanced** | an even mix, with speed weighed more for voice | 1.6 s | 1.3 s | 5 s |
+| **Fastest** | latency | 1.3 s | 1.0 s | 3 s |
 | **Best quality** | benchmark quality | 2.5 s | 2.5 s | 8 s |
 
 The scout keeps the top six models per role in the catalog, and builds one preset per strategy with its estimated cost per 100 turns. `MODEL_STRATEGY` chooses which preset new sessions start with.

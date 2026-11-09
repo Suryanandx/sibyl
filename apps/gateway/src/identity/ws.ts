@@ -85,7 +85,7 @@ export const QUIET_DENIALS = new Set<string>([
 ]);
 
 /** Session settings that pick models (need models.choose); voice/speak/genUi stay personal. */
-export const MODEL_SETTING_KEYS: ReadonlyArray<keyof SessionSettings> = ["voiceModel", "llmModel", "sttModel", "ttsModel", "voiceEngine", "realtimeModel"];
+export const MODEL_SETTING_KEYS: ReadonlyArray<keyof SessionSettings> = ["voiceModel", "llmModel", "sttModel", "ttsModel", "voiceEngine", "realtimeModel", "speechProvider"];
 
 /** Every permission-mapped message type (for docs and tests). */
 export function permissionTable(): Array<[string, Permission | null]> {

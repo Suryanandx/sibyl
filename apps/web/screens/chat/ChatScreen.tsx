@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   IDENTITY_EVENTS,
   SECRET_EVENTS,
+  VOICE_LATENCY_EVENTS,
   WS_EVENTS,
   createRequestId,
   isConnectionsServerMessage,
@@ -408,6 +409,12 @@ export function ChatScreen({ active }: { active: boolean }) {
     // is kept by the gateway provider; the chat handles its own events.
     if (isConnectionsServerMessage(message)) return;
     if (handleSecretsMessage(message)) return;
+
+    // The gateway's turn metrics (LiveKit's names) for Settings → Diagnostics.
+    if (message.type === VOICE_LATENCY_EVENTS.TURN_METRICS) {
+      useVoiceDiagnostics.setState({ turn: { requestId: message.requestId, ...message.metrics } });
+      return;
+    }
 
     if (message.type === WS_EVENTS.BUDGET_BLOCKED) {
       setBudgetNotice({ message: message.message, credits: message.scope === "credits" });
@@ -1522,8 +1529,21 @@ export function ChatScreen({ active }: { active: boolean }) {
       startLiveSpeechTurn(rms, result.event.startedAt);
     } else if (result.event?.type === "speech_end") {
       endLiveSpeechTurn(
-        result.event.reason === "max_duration" ? "manual" : "silence"
+        result.event.reason === "max_duration" ? "manual" : "silence",
+        result.event.silenceMs
       );
+    } else if (result.event?.type === "speech_pause" || result.event?.type === "speech_resume") {
+      // Preemptive generation: the gateway may start the reply during the pause.
+      const turn = livePcmTurnRef.current;
+      const socket = socketRef.current;
+      if (turn && !turn.cancelled && socket) {
+        sendRaw(
+          socket,
+          result.event.type === "speech_pause"
+            ? { type: VOICE_LATENCY_EVENTS.SPEECH_PAUSE, requestId: turn.requestId, silenceMs: result.event.silenceMs }
+            : { type: VOICE_LATENCY_EVENTS.SPEECH_RESUME, requestId: turn.requestId }
+        );
+      }
     } else if (result.event?.type === "speech_cancel") {
       cancelLivePcmTurn(true);
       clearPreRoll();
@@ -1622,7 +1642,7 @@ export function ChatScreen({ active }: { active: boolean }) {
     }
   }
 
-  function endLiveSpeechTurn(reason: "silence" | "manual"): void {
+  function endLiveSpeechTurn(reason: "silence" | "manual", silenceMs?: number): void {
     const turn = livePcmTurnRef.current;
     livePcmTurnRef.current = null;
     clearPreRoll();
@@ -1659,7 +1679,8 @@ export function ChatScreen({ active }: { active: boolean }) {
       endedAt,
       durationMs: endedAt - turn.startedAt,
       reason,
-      ...(caption ? { caption } : {})
+      ...(caption ? { caption } : {}),
+      ...(silenceMs !== undefined ? { silenceMs } : {})
     });
     transitionRequest(
       requestLifecyclesRef.current,

@@ -93,6 +93,7 @@ describe("AdaptiveVadEngine", () => {
     ]);
     expect(harness.engine.isTurnActive()).toBe(true);
 
+    // Too little speech yet for a pause event (preemptive generation needs minimumSpeechMs).
     expect(harness.repeat(0.001, 6)).toEqual([]);
     expect(harness.engine.getSnapshot().state).toBe("pause");
     expect(harness.repeat(0.05, 4)).toEqual([]);
@@ -100,7 +101,8 @@ describe("AdaptiveVadEngine", () => {
 
     const endings = harness.repeat(0.001, 12);
     expect(endings).toEqual([
-      expect.objectContaining({ type: "speech_end", reason: "silence" })
+      expect.objectContaining({ type: "speech_pause" }),
+      expect.objectContaining({ type: "speech_end", reason: "silence", silenceMs: 500 })
     ]);
     expect(harness.engine.getSnapshot().state).toBe("idle");
   });

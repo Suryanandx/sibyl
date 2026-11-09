@@ -9,10 +9,11 @@ import { ModelsSettings, Toggle, UsageSettings, VoiceSettings } from "../../comp
 import { useVisualInspectorSetting, visualInspectorInDevelopment } from "../../components/VisualInspector";
 import { useGateway } from "../../lib/gateway";
 import { paths } from "../../lib/routes";
+import type { TurnMetrics } from "@open-gpt-live/protocol";
 import type { LatencySnapshot } from "../../lib/latency-metrics";
 import type { VadSnapshot } from "../../lib/vad-engine";
 import { useVoiceDiagnostics } from "../chat/diagnostics";
-import { VoiceEngineCard } from "../../features/voice-engine";
+import { SpeedCard, VoiceEngineCard, activeEngine } from "../../features/voice-engine";
 
 /** Settings sections backed by the live gateway connection. */
 
@@ -46,6 +47,14 @@ export function VoiceSection() {
         disabled={!gateway.connected}
         onChange={(patch) => gateway.updateSettings(patch)}
       />
+      {activeEngine(gateway.settings, gateway.capabilities?.voiceEngines) === "sibyl" ? (
+        <SpeedCard
+          settings={gateway.settings}
+          speech={gateway.capabilities?.speech}
+          disabled={!gateway.connected}
+          onChange={(patch) => gateway.updateSettings(patch)}
+        />
+      ) : null}
       <VoiceSettings
         catalog={gateway.catalog}
         settings={gateway.settings}
@@ -83,7 +92,7 @@ export function SecretsSection() {
 
 export function DiagnosticsSection() {
   const { gatewayUrl, sessionId, capabilities, status } = useGateway();
-  const { latency, vad, liveMode, adaptiveEnabled } = useVoiceDiagnostics();
+  const { latency, turn, vad, liveMode, adaptiveEnabled } = useVoiceDiagnostics();
   const inspector = useVisualInspectorSetting();
   return (
     <div className="fieldStack">
@@ -98,6 +107,7 @@ export function DiagnosticsSection() {
         disabled={visualInspectorInDevelopment}
         onChange={inspector.setEnabled}
       />
+      <TurnMetricsPanel turn={turn} />
       <LatencyPanel snapshot={latency} />
       <VadPanel snapshot={vad} liveMode={liveMode} adaptiveEnabled={adaptiveEnabled} />
       <p className="muted small">
@@ -108,19 +118,51 @@ export function DiagnosticsSection() {
   );
 }
 
+/** The gateway's numbers for the latest spoken reply, with LiveKit Agents' metric names. */
+function TurnMetricsPanel({ turn }: { turn: (TurnMetrics & { requestId: string }) | null }) {
+  const metrics = [
+    ["End-of-utterance delay", turn?.eouDelayMs],
+    ["Transcription delay", turn?.transcriptionDelayMs],
+    ["LLM TTFT", turn?.llmTtftMs],
+    ["TTS TTFB", turn?.ttsTtfbMs],
+    ["Total: speech end → first audio", turn?.e2eLatencyMs]
+  ] as const;
+  const path = turn ? `${turn.transport === "livekit" ? "LiveKit" : "WebSocket"}${turn.preemptive ? " · started early" : ""}` : "waiting for a spoken reply";
+  return (
+    <section className="latencyPanel" aria-label="Turn metrics">
+      <div className="latencyHeading">
+        <strong>Turn metrics</strong>
+        <span>{path}</span>
+      </div>
+      <dl>
+        {metrics.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value === undefined ? "—" : `${value} ms`}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="muted small">
+        Measured by Sibyl with the same names and definitions as LiveKit Agents, so the numbers compare with LiveKit&apos;s.
+        {turn?.voiceModel || turn?.ttsModel ? ` ${[turn.voiceModel, turn.ttsModel].filter(Boolean).join(" · ")}` : ""}
+      </p>
+    </section>
+  );
+}
+
 function LatencyPanel({ snapshot }: { snapshot: LatencySnapshot | null }) {
   const metrics = [
     ["STT first partial", snapshot?.sttFirstPartialMs],
     ["Final transcript", snapshot?.sttFinalMs],
     ["LLM first token", snapshot?.llmFirstDeltaMs],
     ["TTS first audio", snapshot?.ttsFirstAudioMs],
-    ["Speech end → audio", snapshot?.speechEndToFirstAudioMs]
+    ["Speech end → audio playing", snapshot?.speechEndToFirstAudioMs]
   ] as const;
 
   return (
     <section className="latencyPanel" aria-label="Voice latency metrics">
       <div className="latencyHeading">
-        <strong>Latency</strong>
+        <strong>In this browser</strong>
         <span>{snapshot ? `${snapshot.kind.toUpperCase()} · ${snapshot.status}` : "waiting for a request"}</span>
       </div>
       <dl>

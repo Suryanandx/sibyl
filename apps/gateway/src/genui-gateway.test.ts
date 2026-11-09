@@ -110,7 +110,9 @@ test("session.config advertises the catalog and default settings", async () => {
       ttsModel: "hexgrad/kokoro-82m",
       ttsVoice: "af_heart",
       genUi: true,
-      speak: true
+      speak: true,
+      preemptiveGeneration: true,
+      speechProvider: "openrouter"
     });
     assert.deepEqual(config.capabilities, {
       provider: "openai-compatible",

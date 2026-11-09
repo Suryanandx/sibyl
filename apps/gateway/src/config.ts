@@ -41,6 +41,8 @@ export interface GatewayRuntimeConfig {
   modelStrategy: "cheapest" | "balanced" | "fastest" | "best";
   scoutProbe: boolean;
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
+  /** Preemptive generation's default for new sessions (SIBYL_PREEMPTIVE_GENERATION). */
+  preemptiveGeneration: boolean;
   scoutCacheFile?: string;
   assistantName: string;
   discoverVoices: boolean;
@@ -192,6 +194,7 @@ export function loadGatewayRuntimeConfig(
           }
         }
       : {}),
+    preemptiveGeneration: parseBoolean(env.SIBYL_PREEMPTIVE_GENERATION, true, "SIBYL_PREEMPTIVE_GENERATION"),
     ...(nonEmpty(env.SCOUT_CACHE_FILE) === "off"
       ? {}
       : { scoutCacheFile: nonEmpty(env.SCOUT_CACHE_FILE) ?? ".model-scout.json" }),

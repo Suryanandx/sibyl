@@ -14,6 +14,7 @@ import {
   AGENT_EVENTS,
   LICENSE_EVENTS,
   IDENTITY_EVENTS,
+  VOICE_LATENCY_EVENTS,
   WS_EVENTS,
   isAgentsClientMessage,
   isConnectionsClientMessage,
@@ -79,6 +80,12 @@ import { ApprovalBroker, approvalWorkspace, canDecideChatApproval, chatApprovalB
 import { identitySecrets, isSecretsClientMessage, loadOrgKey, type SecretsSession } from "./secrets/index.js";
 import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
+import { pcm16MonoToWav, speechPieces, type SpeechPiece } from "./voice/speech-stream.js";
+import { Prefetched } from "./voice/prefetch.js";
+import { takeReadyTtsSegments } from "./voice/segments.js";
+import { turnMetrics } from "./voice/turn-metrics.js";
+import { PreemptiveGeneration, type PreemptiveReply } from "./voice/preemptive.js";
+import { LIVEKIT_SPEECH_PREFIX, LIVEKIT_TTS_SAMPLE_RATE, isLiveKitTranscribable, withLiveKitSpeech, type LiveKitSpeechSetup } from "./voice/livekit-inference.js";
 import { handleRoutinesMessage } from "./routines/ws.js";
 import { handleMonitorsHttp, handleMonitorsMessage } from "./monitors/index.js";
 import { handleComputersMessage } from "./computers/index.js";
@@ -185,6 +192,10 @@ export interface GatewayServerOptions {
    * produced audio after ttsAfterMs, send a duplicate request. First wins.
    */
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
+  /** Preemptive generation's default for new sessions (SIBYL_PREEMPTIVE_GENERATION; default on). */
+  preemptiveGeneration?: boolean;
+  /** LiveKit Inference speech (LiveKit Cloud only; see voice/livekit-inference.ts). */
+  livekitSpeech?: LiveKitSpeechSetup;
   /** Store, tool registry and usage meter (defaults to an in-memory runtime). */
   runtime?: GatewayRuntime;
   /**
@@ -257,6 +268,8 @@ interface GatewayConfig {
   live?: LiveConversationConfig;
   turnMergeWindowMs: number;
   hedge?: { voiceAfterMs: number; ttsAfterMs: number };
+  preemptiveGeneration: boolean;
+  livekitSpeech?: LiveKitSpeechSetup;
   runtime: GatewayRuntime;
   uploads: UploadService;
   identity: IdentityService;
@@ -303,7 +316,15 @@ interface RequestTiming {
   llmStartedAt?: number;
   firstLlmDeltaAt?: number;
   ttsStartedAt?: number;
+  /** First audio byte from the speech model (TTS TTFB). */
+  ttsFirstByteAt?: number;
   firstTtsChunkAt?: number;
+  /** Silence the speech detector waited for before ending the turn. */
+  silenceMs?: number;
+  /** The accurate transcript arrived (live mode transcribes in the background). */
+  transcriptAt?: number;
+  /** The reply was started preemptively, before the turn was final. */
+  preemptive?: boolean;
 }
 
 interface SessionState {
@@ -368,6 +389,8 @@ interface ResponsePlan {
   speakOnly?: string;
   /** Model for a hedged backup request if the primary is slow. */
   backupModel?: string;
+  /** A voice-brain reply already started preemptively (see voice/preemptive.ts). */
+  prestarted?: PreemptiveReply;
   /** Called after the text finished streaming (before TTS completes). */
   onText?: (result: { speech: string; ui: string; brainTask?: string; silent: boolean }) => void;
 }
@@ -410,6 +433,8 @@ export async function createGatewayServer(
     live: options.live,
     turnMergeWindowMs: options.turnMergeWindowMs ?? 3_000,
     hedge: options.hedge,
+    preemptiveGeneration: options.preemptiveGeneration ?? true,
+    ...(options.livekitSpeech ? { livekitSpeech: options.livekitSpeech } : {}),
     // Replaced per organization (createTenantGateway).
     runtime: undefined!,
     uploads: undefined!,
@@ -761,7 +786,7 @@ function createTenantGateway(options: GatewayServerOptions, base: GatewayConfig,
   validateConfig(config);
 
   // Every model call through these providers is recorded on the organization's usage meter.
-  const providers = meterProviders(tenant.providers, {
+  const providers = meterProviders(withLiveKitSpeech(tenant.providers, config.livekitSpeech?.speech), {
     meter: runtime.meter,
     ownerId: runtime.ownerId,
     catalog: () => config.modelCatalog
@@ -909,6 +934,11 @@ class GatewayConnection implements VoiceSessionPort {
   private realtimeVoice: RealtimeVoiceEngine | undefined;
   private realtimeNotice: string | undefined;
   private unsubscribeVoiceEngines: (() => void) | undefined;
+  /** Voice-brain replies started on a pause, before the turn is final. */
+  private readonly preemptive = new PreemptiveGeneration({
+    now: () => this.config.now(),
+    log: (event, fields) => this.config.logger.info(event, { sessionId: this.session.sessionId, ...fields })
+  });
 
   constructor(
     private readonly socket: SessionTransport,
@@ -1221,7 +1251,16 @@ class GatewayConnection implements VoiceSessionPort {
         this.cancelAudioTurn(message.requestId, "client cancelled live turn");
         return;
       }
-      void this.finishLiveAudioTurn(message.requestId, message.caption);
+      void this.finishLiveAudioTurn(message.requestId, message.caption, message.silenceMs);
+      return;
+    }
+
+    if (message.type === VOICE_LATENCY_EVENTS.SPEECH_PAUSE) {
+      return this.startPreemptiveReply(message.requestId);
+    }
+
+    if (message.type === VOICE_LATENCY_EVENTS.SPEECH_RESUME) {
+      this.preemptive.cancel(message.requestId, "speech resumed");
       return;
     }
 
@@ -1613,7 +1652,8 @@ class GatewayConnection implements VoiceSessionPort {
       // GPT Realtime hands work to the deep brain, so it needs live conversation.
       ...(this.config.runtime.voiceEngines && this.config.live
         ? { voiceEngines: this.config.runtime.voiceEngines.capability(this.workspaceId, sibylMinuteFor(this.config.modelCatalog, this.session.settings)) }
-        : {})
+        : {}),
+      ...(this.config.livekitSpeech && this.config.live ? { speech: { livekit: this.config.livekitSpeech.capability } } : {})
     };
   }
 
@@ -1677,6 +1717,13 @@ class GatewayConnection implements VoiceSessionPort {
     }
     const engineRefusal = applyVoiceEngineSettings(patch, next, this.config.runtime.voiceEngines);
     if (engineRefusal) return reject(engineRefusal);
+    if (patch.preemptiveGeneration !== undefined) next.preemptiveGeneration = patch.preemptiveGeneration;
+    if (patch.speechProvider !== undefined) {
+      if (patch.speechProvider === "livekit" && !this.config.livekitSpeech?.speech) {
+        return reject("LiveKit Inference needs LIVEKIT_URL to point at a LiveKit Cloud project.");
+      }
+      next.speechProvider = patch.speechProvider;
+    }
 
     this.session.settings = next;
     const engines = this.config.runtime.voiceEngines;
@@ -1928,6 +1975,7 @@ class GatewayConnection implements VoiceSessionPort {
     };
     this.session.audioTurns.set(requestId, turn);
     this.session.turnCounter += 1;
+    this.preemptive.cancel(undefined, "new turn");
     this.maybeMergeWithPreviousUtterance(turn);
     this.beginStreamingTranscription(turn);
   }
@@ -1977,13 +2025,15 @@ class GatewayConnection implements VoiceSessionPort {
 
   private async finishLiveAudioTurn(
     requestId: string,
-    caption?: string
+    caption?: string,
+    silenceMs?: number
   ): Promise<void> {
     const turn = this.session.audioTurns.get(requestId);
     if (!turn || turn.turnMode !== "live" || turn.state !== "recording") {
       return;
     }
     turn.timing.speechEndedAt ??= this.config.now();
+    if (silenceMs !== undefined) turn.timing.silenceMs = silenceMs;
     turn.caption = caption;
     if (this.isLive()) {
       await this.finishLiveTurnWithVoiceBrain(turn);
@@ -1999,6 +2049,7 @@ class GatewayConnection implements VoiceSessionPort {
         ) {
           turn.state = "done";
           turn.timing.finalTranscriptAt = this.config.now();
+          turn.timing.transcriptAt = turn.timing.finalTranscriptAt;
           this.deleteAudioTurn(turn, "streaming transcription completed");
           this.send({
             type: WS_EVENTS.TRANSCRIPT_FINAL,
@@ -2290,6 +2341,7 @@ class GatewayConnection implements VoiceSessionPort {
 
       turn.state = "done";
       turn.timing.finalTranscriptAt = this.config.now();
+      turn.timing.transcriptAt = turn.timing.finalTranscriptAt;
       this.session.audioTurns.delete(turn.requestId);
       this.logAudioLatency(turn, "completed");
       this.send({
@@ -2427,13 +2479,15 @@ class GatewayConnection implements VoiceSessionPort {
       return "";
     }
     const normalized = normalizeAudioForBatchStt(turn.mimeType, audio);
+    const livekit = this.livekitSpeech();
+    const model = livekit && isLiveKitTranscribable(normalized.mimeType) ? `${LIVEKIT_SPEECH_PREFIX}${livekit.stt.model}` : this.session.settings.sttModel;
     const result = await this.providers.stt.transcribe(
       {
         data: normalized.data,
         mimeType: normalized.mimeType,
         filename: filenameForMimeType(normalized.mimeType)
       },
-      { signal, model: this.session.settings.sttModel, meta: this.usageMeta("stt", turn.requestId) }
+      { signal, model, meta: this.usageMeta("stt", turn.requestId) }
     );
     return result.text.trim();
   }
@@ -2543,10 +2597,7 @@ class GatewayConnection implements VoiceSessionPort {
     turn.streaming = undefined;
     this.session.audioTurns.delete(turn.requestId);
 
-    const isPcm = /pcm/i.test(turn.mimeType);
-    const audio = isPcm && turn.prefix
-      ? Buffer.concat([turn.prefix.audio, ...turn.chunks])
-      : Buffer.concat(turn.chunks);
+    const audio = this.turnAudio(turn);
     const pcm = audio;
     const caption = [turn.prefix?.caption, turn.caption?.trim()].filter(Boolean).join(" ");
     turn.timing.finalTranscriptAt = this.config.now();
@@ -2577,6 +2628,7 @@ class GatewayConnection implements VoiceSessionPort {
     const sttController = new AbortController();
     this.session.transcriptReady = this.transcribeAudio(turn, pcm, sttController.signal)
       .then((text) => {
+        turn.timing.transcriptAt = this.config.now();
         if (!text || this.disposed) return;
         userEntry.content = text;
         this.send({
@@ -2593,10 +2645,7 @@ class GatewayConnection implements VoiceSessionPort {
         });
       });
 
-    const wav = isPcm ? pcm16MonoToWav(pcm, sampleRateFromMime(turn.mimeType)) : audio;
-    const current: LLMContentPart[] = [
-      { type: "input_audio", input_audio: { data: wav.toString("base64"), format: "wav" } }
-    ];
+    const current = this.voiceTurnContent(turn, audio);
     if (caption) {
       current.push({
         type: "text",
@@ -2626,8 +2675,13 @@ class GatewayConnection implements VoiceSessionPort {
       return;
     }
     const voicePrompt = (await this.withMemory(this.config.live!.voicePrompt)) + (this.agentTurn?.voiceBlock ?? "");
+    // Started on a pause with the same history and model: keep it (voice/preemptive.ts).
+    const prestarted = this.agentTurn ? undefined : this.preemptive.take(requestId, { historyLength: previous.length, model: voiceModel });
+    if (this.agentTurn) this.preemptive.cancel(requestId, "agent turn");
+    if (prestarted) timing.preemptive = true;
     await this.streamAssistantResponse(requestId, timing, {
       parser: "voice",
+      ...(prestarted ? { prestarted } : {}),
       model: voiceModel,
       backupModel: this.backupVoiceModel(voiceModel),
       extraBody: this.llmParamsFor(voiceModel),
@@ -2915,7 +2969,13 @@ class GatewayConnection implements VoiceSessionPort {
       model = budget.model;
       agent?.bindRequest(requestId);
     }
-    timing.llmStartedAt = this.config.now();
+    // A preemptive reply is kept only for the model the budget allows now.
+    const prestarted = plan?.prestarted && model === plan.model ? plan.prestarted : undefined;
+    if (plan?.prestarted && !prestarted) {
+      plan.prestarted.abort("budget changed the model");
+      timing.preemptive = false;
+    }
+    timing.llmStartedAt = prestarted?.startedAt ?? this.config.now();
     const run: ActiveRun = {
       speak: !chat.typed,
       requestId,
@@ -2937,34 +2997,34 @@ class GatewayConnection implements VoiceSessionPort {
     };
 
     this.session.current = run;
+    if (prestarted) run.controller.signal.addEventListener("abort", () => prestarted.abort("run ended"), { once: true });
     this.agentGistVoices.delete(requestId);
     let pendingTtsText = "";
+    let firstSegment = true;
     let ttsQueue = Promise.resolve();
     let ttsError: unknown;
 
     const enqueueTtsSegment = (text: string, isFinalSegment: boolean): void => {
-      // Start synthesizing immediately so segments overlap; deliver in order.
-      const synthesis = this.synthesizeTtsSegment(run, text);
-      synthesis.catch(() => undefined);
+      // Start synthesizing immediately so segments overlap; play them in order,
+      // each one as it streams in (voice/speech-stream.ts).
+      const pieces = this.startTtsSegment(run, text);
+      firstSegment = false;
+      const stale = (): boolean => Boolean(ttsError) || run.interrupted || run.controller.signal.aborted || this.session.current !== run;
       ttsQueue = ttsQueue
         .then(async () => {
-          if (
-            ttsError ||
-            run.interrupted ||
-            run.controller.signal.aborted ||
-            this.session.current !== run
-          ) {
-            return;
+          if (!pieces || stale()) return;
+          // The final segment's last piece is marked final (the LiveKit room agent waits for its playout).
+          let held: SpeechPiece | undefined;
+          for await (const piece of pieces.read()) {
+            if (stale()) return;
+            if (!isFinalSegment) {
+              this.deliverTtsPiece(run, piece, false);
+              continue;
+            }
+            if (held) this.deliverTtsPiece(run, held, false);
+            held = piece;
           }
-          const segment = await synthesis;
-          if (
-            segment &&
-            !run.interrupted &&
-            !run.controller.signal.aborted &&
-            this.session.current === run
-          ) {
-            this.deliverTtsSegment(run, segment, isFinalSegment);
-          }
+          if (held && !stale()) this.deliverTtsPiece(run, held, true);
         })
         .catch((error: unknown) => {
           if (ttsError || run.interrupted || run.controller.signal.aborted) {
@@ -3020,9 +3080,12 @@ class GatewayConnection implements VoiceSessionPort {
     const extraBody =
       plan && model === plan.model ? plan.extraBody : this.llmParamsFor(model);
     const messages = plan ? plan.messages : this.session.history;
-    const hedgeAfterMs = this.config.hedge?.voiceAfterMs;
     let winningModel = model;
     const tools = plan ? [] : this.availableTools(agent);
+    const voiceReply =
+      plan?.parser === "voice" && plan.speakOnly === undefined
+        ? prestarted ?? this.voiceBrainStream(requestId, messages, model, plan.backupModel, run.controller.signal)
+        : undefined;
     const source: AsyncIterable<{ delta: string }> =
       !plan && model && this.providers.toolLlm && tools.length > 0
         ? toolLoopStream(
@@ -3040,40 +3103,8 @@ class GatewayConnection implements VoiceSessionPort {
           )
         : plan?.speakOnly !== undefined
         ? singleChunk(plan.speakOnly)
-        : plan?.parser === "voice" && hedgeAfterMs !== undefined
-          ? hedgedStream(
-              (signal, index) => {
-                const attemptModel = index === 0 ? model : plan.backupModel ?? model;
-                const params = this.llmParamsFor(attemptModel);
-                return this.providers.llm.streamText(messages, {
-                  signal,
-                  meta: this.usageMeta(feature, requestId),
-                  ...(attemptModel ? { model: attemptModel } : {}),
-                  ...(params ? { extraBody: params } : {})
-                });
-              },
-              {
-                hedgeAfterMs,
-                signal: run.controller.signal,
-                onHedge: (reason) =>
-                  this.config.logger.info("hedge.voice", {
-                    sessionId: this.session.sessionId,
-                    requestId,
-                    reason,
-                    primary: model,
-                    backup: plan.backupModel ?? model
-                  }),
-                onWinner: (index) => {
-                  winningModel = index === 0 ? model : plan.backupModel ?? model;
-                  if (index > 0) {
-                    this.config.logger.info("hedge.voice_won_by_backup", {
-                      sessionId: this.session.sessionId,
-                      requestId
-                    });
-                  }
-                }
-              }
-            )
+        : voiceReply
+          ? voiceReply.stream
           : this.providers.llm.streamText(messages, {
               signal: run.controller.signal,
               meta: this.usageMeta(feature, requestId),
@@ -3112,14 +3143,15 @@ class GatewayConnection implements VoiceSessionPort {
           emitParts(chunk.delta, "");
         }
 
-        const ready = takeReadyTtsSegments(pendingTtsText, this.config);
+        const ready = takeReadyTtsSegments(pendingTtsText, this.config, firstSegment);
         pendingTtsText = ready.remainder;
         for (const segment of ready.segments) {
           enqueueTtsSegment(segment, false);
         }
       }
 
-      if (voiceParser && run.timing.firstLlmDeltaAt !== undefined && run.timing.llmStartedAt !== undefined) {
+      if (voiceReply) winningModel = voiceReply.winner() ?? model;
+      if (voiceParser && !prestarted && run.timing.firstLlmDeltaAt !== undefined && run.timing.llmStartedAt !== undefined) {
         const firstTokenMs = run.timing.firstLlmDeltaAt - run.timing.llmStartedAt;
         this.recordVoiceLatency(winningModel, firstTokenMs);
         // A primary that lost the hedge was at least this slow (plus margin).
@@ -3196,6 +3228,117 @@ class GatewayConnection implements VoiceSessionPort {
     }
   }
 
+  /** The voice brain's reply stream: hedged against a slow provider when hedging is on. */
+  private voiceBrainStream(
+    requestId: string,
+    messages: LLMMessage[],
+    model: string | undefined,
+    backupModel: string | undefined,
+    signal: AbortSignal
+  ): { stream: AsyncIterable<{ delta: string }>; winner: () => string | undefined } {
+    let winner = model;
+    const attempt = (attemptSignal: AbortSignal, attemptModel: string | undefined) => {
+      const params = this.llmParamsFor(attemptModel);
+      return this.providers.llm.streamText(messages, {
+        signal: attemptSignal,
+        meta: this.usageMeta("voice", requestId),
+        ...(attemptModel ? { model: attemptModel } : {}),
+        ...(params ? { extraBody: params } : {})
+      });
+    };
+    const hedgeAfterMs = this.config.hedge?.voiceAfterMs;
+    if (hedgeAfterMs === undefined) return { stream: attempt(signal, model), winner: () => winner };
+    const stream = hedgedStream((attemptSignal, index) => attempt(attemptSignal, index === 0 ? model : backupModel ?? model), {
+      hedgeAfterMs,
+      signal,
+      onHedge: (reason) =>
+        this.config.logger.info("hedge.voice", { sessionId: this.session.sessionId, requestId, reason, primary: model, backup: backupModel ?? model }),
+      onWinner: (index) => {
+        winner = index === 0 ? model : backupModel ?? model;
+        if (index > 0) this.config.logger.info("hedge.voice_won_by_backup", { sessionId: this.session.sessionId, requestId });
+      }
+    });
+    return { stream, winner: () => winner };
+  }
+
+  /** The turn's audio so far, with an earlier merged fragment in front. */
+  private turnAudio(turn: ActiveAudioTurn): Buffer {
+    return /pcm/i.test(turn.mimeType) && turn.prefix ? Buffer.concat([turn.prefix.audio, ...turn.chunks]) : Buffer.concat(turn.chunks);
+  }
+
+  /** What the voice brain hears: the turn's audio as WAV. */
+  private voiceTurnContent(turn: ActiveAudioTurn, audio: Buffer): LLMContentPart[] {
+    const wav = /pcm/i.test(turn.mimeType) ? pcm16MonoToWav(audio, sampleRateFromMime(turn.mimeType)) : audio;
+    return [{ type: "input_audio", input_audio: { data: wav.toString("base64"), format: "wav" } }];
+  }
+
+  /**
+   * vad.speech_pause: start the voice brain on the audio so far, before the
+   * detector ends the turn (voice/preemptive.ts). Same prompt, history and
+   * model as the committed turn would use; the browser caption isn't known
+   * yet, so the reply is made from the audio alone.
+   */
+  private async startPreemptiveReply(requestId: string): Promise<void> {
+    const turn = this.session.audioTurns.get(requestId);
+    const live = this.config.live;
+    if (
+      !live ||
+      !this.isLive() ||
+      this.session.settings.preemptiveGeneration === false ||
+      !turn ||
+      turn.turnMode !== "live" ||
+      turn.state !== "recording" ||
+      !/pcm/i.test(turn.mimeType) ||
+      turn.byteLength === 0 ||
+      // An agent turn builds its prompt from the agent: answer it once the turn is final.
+      this.selectedAgentId ||
+      this.realtimeVoice?.owns(requestId) ||
+      !this.preemptive.canStart(requestId)
+    ) {
+      return;
+    }
+    const model = this.pickVoiceModel();
+    const budget = checkTurnBudget({
+      meter: this.config.runtime.meter,
+      ownerId: this.config.runtime.ownerId,
+      feature: "voice",
+      model,
+      catalog: this.config.modelCatalog,
+      sessionId: this.session.sessionId,
+      requestId
+    });
+    // Near a cap the committed turn may switch models: don't spend on a guess.
+    if (!budget.allowed || (budget.model ?? model) !== model || (model && this.modelRefusal(model))) return;
+    const previous = this.conversation();
+    const audio = this.turnAudio(turn);
+    const voicePrompt = await this.withMemory(live.voicePrompt);
+    if (this.disposed || this.session.audioTurns.get(requestId) !== turn || turn.state !== "recording") return;
+    const messages: LLMMessage[] = [{ role: "system", content: voicePrompt }, ...previous, { role: "user", content: this.voiceTurnContent(turn, audio) }];
+    this.preemptive.start(requestId, { historyLength: previous.length, model }, (signal) =>
+      this.voiceBrainStream(requestId, messages, model, this.backupVoiceModel(model), signal)
+    );
+  }
+
+  /** LiveKit Inference speech for this session, when chosen and available. */
+  private livekitSpeech() {
+    return this.session.settings.speechProvider === "livekit" ? this.config.livekitSpeech?.speech : undefined;
+  }
+
+  /** turn.metrics (LiveKit's metric names) for a spoken reply, and the same in the log. */
+  private sendTurnMetrics(run: ActiveRun): void {
+    if (!run.speak || run.timing.speechEndedAt === undefined || run.timing.firstTtsChunkAt === undefined) return;
+    const livekit = this.livekitSpeech();
+    const ttsModel = livekit ? `${LIVEKIT_SPEECH_PREFIX}${livekit.tts.model}` : run.voice?.ttsModel ?? this.session.settings.ttsModel;
+    const voiceModel = run.timing.kind === "live" ? this.session.settings.voiceModel : undefined;
+    const metrics = turnMetrics(run.timing, {
+      transport: this.mediaSink ? "livekit" : "websocket",
+      ...(voiceModel ? { voiceModel } : {}),
+      ...(ttsModel ? { ttsModel } : {})
+    });
+    this.config.logger.info("latency.turn", { sessionId: this.session.sessionId, requestId: run.requestId, ...metrics });
+    this.send({ type: VOICE_LATENCY_EVENTS.TURN_METRICS, requestId: run.requestId, metrics });
+  }
+
   private interruptCurrentRun(reason: string, requestId?: string): void {
     const run = this.session.current;
     if (!run || (requestId !== undefined && run.requestId !== requestId)) {
@@ -3208,14 +3351,15 @@ class GatewayConnection implements VoiceSessionPort {
     this.finishRun(run, "interrupted");
   }
 
-  /** Synthesize one segment (may run concurrently with others). */
-  private async synthesizeTtsSegment(
-    run: ActiveRun,
-    text: string
-  ): Promise<{ audio: Uint8Array; mimeType: string; format: string } | undefined> {
-    const ttsModelId = run.voice?.ttsModel ?? this.session.settings.ttsModel;
-    const ttsVoice = run.voice?.ttsVoice ?? this.session.settings.ttsVoice ?? this.config.ttsVoice;
-    const ttsModel = this.config.modelCatalog?.tts.find((model) => model.id === ttsModelId);
+  /**
+   * Start synthesizing one segment (segments run concurrently). Its audio
+   * comes back as small pieces while it streams (voice/speech-stream.ts).
+   */
+  private startTtsSegment(run: ActiveRun, text: string): Prefetched<SpeechPiece> | undefined {
+    const livekit = this.livekitSpeech();
+    const ttsModelId = livekit ? `${LIVEKIT_SPEECH_PREFIX}${livekit.tts.model}` : run.voice?.ttsModel ?? this.session.settings.ttsModel;
+    const ttsVoice = livekit ? livekit.tts.voice : run.voice?.ttsVoice ?? this.session.settings.ttsVoice ?? this.config.ttsVoice;
+    const ttsModel = livekit ? undefined : this.config.modelCatalog?.tts.find((model) => model.id === ttsModelId);
     // Voices that can't perform cues like [laughs] would read them aloud.
     const performable = ttsModel?.emotionTags ? text : stripEmotionTags(text);
     const segmentText = toSpeakableText(performable);
@@ -3230,31 +3374,23 @@ class GatewayConnection implements VoiceSessionPort {
       return undefined;
     }
 
-    // Some voice models only emit raw PCM (e.g. Gemini TTS); browsers cannot
-    // play that directly, so it is wrapped into WAV.
-    const requestFormat = ttsModel?.format ?? this.config.ttsFormat;
-    const wrapPcm = requestFormat === "pcm";
+    // Raw PCM (e.g. Gemini TTS, LiveKit Inference) and MP3 are sent on as WAV pieces.
+    const requestFormat = livekit ? "pcm" : ttsModel?.format ?? this.config.ttsFormat;
     if (!run.ttsStarted) {
       run.ttsStarted = true;
-      const deliveredFormat = wrapPcm ? "wav" : requestFormat;
+      const deliveredFormat = requestFormat === "pcm" || requestFormat === "mp3" ? "wav" : requestFormat;
       this.send({
         type: WS_EVENTS.TTS_START,
         requestId: run.requestId,
-        voice: ttsVoice,
+        ...(ttsVoice ? { voice: ttsVoice } : {}),
         format: deliveredFormat,
         mimeType: mimeTypeForAudioFormat(deliveredFormat)
       });
     }
     run.timing.ttsStartedAt ??= this.config.now();
-    const audioParts: Buffer[] = [];
-    let mimeType = mimeTypeForAudioFormat(requestFormat);
 
     const tts = this.providers.tts;
-    const input = {
-      text: segmentText,
-      voice: ttsVoice,
-      format: requestFormat
-    };
+    const input = { text: segmentText, ...(ttsVoice ? { voice: ttsVoice } : {}), format: requestFormat };
     const ttsHedge = this.config.hedge?.ttsAfterMs;
     const chunks =
       ttsHedge !== undefined
@@ -3278,39 +3414,21 @@ class GatewayConnection implements VoiceSessionPort {
             model: ttsModelId,
             meta: this.usageMeta("tts", run.requestId)
           });
-    for await (const chunk of chunks) {
-      if (run.interrupted || run.controller.signal.aborted) {
-        return undefined;
+    const pieces = speechPieces(chunks, requestFormat, {
+      sampleRate: livekit ? LIVEKIT_TTS_SAMPLE_RATE : ttsModel?.sampleRate ?? 24_000,
+      onFirstByte: () => {
+        run.timing.ttsFirstByteAt ??= this.config.now();
       }
-      mimeType = chunk.mimeType;
-      audioParts.push(Buffer.from(chunk.audio));
-    }
-    if (audioParts.length === 0) return undefined;
-    const audio = Buffer.concat(audioParts);
-    return wrapPcm
-      ? {
-          audio: pcm16MonoToWav(audio, ttsModel?.sampleRate ?? 24_000),
-          mimeType: "audio/wav",
-          format: "wav"
-        }
-      : { audio, mimeType, format: requestFormat };
+    });
+    return new Prefetched(pieces, () => run.interrupted || run.controller.signal.aborted);
   }
 
-  private deliverTtsSegment(
-    run: ActiveRun,
-    segment: { audio: Uint8Array; mimeType: string; format: string },
-    isFinalSegment: boolean
-  ): void {
+  private deliverTtsPiece(run: ActiveRun, piece: SpeechPiece, isFinal: boolean): void {
     run.stage = "tts_streaming";
     if (this.session.lastUtterance?.requestId === run.requestId) {
       this.session.lastUtterance.answered = true;
     }
-    this.sendTtsChunk(
-      run,
-      { audio: segment.audio, mimeType: segment.mimeType },
-      run.ttsSegmentIndex++,
-      isFinalSegment
-    );
+    this.sendTtsChunk(run, piece, run.ttsSegmentIndex++, isFinal);
   }
 
   private sendTtsChunk(
@@ -3389,6 +3507,7 @@ class GatewayConnection implements VoiceSessionPort {
       this.session.pendingSpeech = undefined;
       queueMicrotask(() => this.speakWhenIdle(pending));
     }
+    this.sendTurnMetrics(run);
     this.config.logger.info("request.finished", {
       sessionId: this.session.sessionId,
       requestId: run.requestId,
@@ -3436,6 +3555,7 @@ class GatewayConnection implements VoiceSessionPort {
   }
 
   private cancelAudioTurn(requestId: string, reason: string): void {
+    this.preemptive.cancel(requestId, reason);
     const turn = this.session.audioTurns.get(requestId);
     if (!turn) {
       return;
@@ -3466,6 +3586,7 @@ class GatewayConnection implements VoiceSessionPort {
       reason
     });
     this.interruptCurrentRun(reason);
+    this.preemptive.cancel(undefined, reason);
     for (const turn of this.session.audioTurns.values()) {
       this.abortTurnControllers(turn, reason);
     }
@@ -3870,24 +3991,6 @@ function normalizeAudioForBatchStt(
   };
 }
 
-function pcm16MonoToWav(pcm: Buffer, sampleRate: number): Buffer {
-  const header = Buffer.alloc(44);
-  header.write("RIFF", 0, "ascii");
-  header.writeUInt32LE(36 + pcm.byteLength, 4);
-  header.write("WAVE", 8, "ascii");
-  header.write("fmt ", 12, "ascii");
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(sampleRate * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write("data", 36, "ascii");
-  header.writeUInt32LE(pcm.byteLength, 40);
-  return Buffer.concat([header, pcm]);
-}
-
 function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
@@ -3953,7 +4056,9 @@ function initialSettings(
     ttsModel: ttsModelId,
     ttsVoice: defaults.ttsVoice ?? ttsModel?.defaultVoice ?? ttsModel?.voices?.[0] ?? config.ttsVoice,
     genUi: (defaults.genUi ?? true) && Boolean(config.genUiSystemPrompt),
-    speak: (defaults.speak ?? true) && ttsAvailable
+    speak: (defaults.speak ?? true) && ttsAvailable,
+    preemptiveGeneration: defaults.preemptiveGeneration ?? config.preemptiveGeneration,
+    speechProvider: "openrouter"
   };
 }
 
@@ -3972,50 +4077,6 @@ async function* singleChunk(text: string): AsyncIterable<{ delta: string }> {
 function sampleRateFromMime(mimeType: string): number {
   const match = /rate=(\d+)/.exec(mimeType);
   return match ? Number(match[1]) : 24_000;
-}
-
-function takeReadyTtsSegments(
-  text: string,
-  config: Pick<GatewayConfig, "ttsSegmentMinLength" | "ttsSegmentMaxLength">
-): { segments: string[]; remainder: string } {
-  const segments: string[] = [];
-  let remainder = text;
-
-  while (remainder.length >= config.ttsSegmentMinLength) {
-    const boundary = findSegmentBoundary(remainder, config);
-    const splitAt =
-      boundary >= config.ttsSegmentMinLength
-        ? boundary
-        : remainder.length >= config.ttsSegmentMaxLength
-          ? config.ttsSegmentMaxLength
-          : -1;
-    if (splitAt === -1) {
-      break;
-    }
-    segments.push(remainder.slice(0, splitAt).trim());
-    remainder = remainder.slice(splitAt).trimStart();
-  }
-
-  return { segments: segments.filter(Boolean), remainder };
-}
-
-function findSegmentBoundary(
-  text: string,
-  config: Pick<GatewayConfig, "ttsSegmentMinLength" | "ttsSegmentMaxLength">
-): number {
-  const boundaryPattern = /[.!?。！？；;，,]\s*/g;
-  let match: RegExpExecArray | null;
-  let lastBoundary = -1;
-  while ((match = boundaryPattern.exec(text)) !== null) {
-    const boundary = match.index + match[0].length;
-    if (boundary >= config.ttsSegmentMinLength) {
-      lastBoundary = boundary;
-    }
-    if (boundary >= config.ttsSegmentMaxLength) {
-      break;
-    }
-  }
-  return lastBoundary;
 }
 
 function validateConfig(config: GatewayConfig): void {

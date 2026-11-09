@@ -117,7 +117,7 @@ export function VoiceEngineCard({ settings, capability, disabled, onChange }: Vo
   );
 }
 
-function EngineOption(props: { selected: boolean; disabled?: boolean; title: string; badge?: string; price?: string; text: string; onSelect(): void }) {
+export function EngineOption(props: { selected: boolean; disabled?: boolean; title: string; badge?: string; price?: string; text: string; onSelect(): void }) {
   return (
     <button
       type="button"
