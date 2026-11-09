@@ -28,6 +28,10 @@ interface ComposerProps {
   activePresetId: string | null;
   onChangeSettings: (patch: Partial<SessionSettings>) => void;
   onOpenSettings: () => void;
+  /** Spend in this session (USAGE_UPDATE), shown in the model menu. */
+  sessionUsd?: number;
+  economyMode?: boolean;
+  onOpenUsage?: () => void;
 }
 
 const HOLD_DELAY_MS = 320;
@@ -122,6 +126,9 @@ export function Composer(props: ComposerProps) {
             label={activePreset?.label ?? voiceModel?.label ?? "Models"}
             onChange={props.onChangeSettings}
             onOpenSettings={props.onOpenSettings}
+            sessionUsd={props.sessionUsd}
+            economyMode={props.economyMode}
+            onOpenUsage={props.onOpenUsage}
           />
 
           <div className="composerActions">
@@ -187,6 +194,11 @@ export function Composer(props: ComposerProps) {
   );
 }
 
+function formatSessionSpend(value: number): string {
+  if (value === 0) return "$0.00";
+  return value >= 0.01 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`;
+}
+
 function monogram(id: string): string {
   const vendor = id.split("/")[0] ?? id;
   return vendor.slice(0, 1).toUpperCase();
@@ -204,6 +216,9 @@ function ModelMenu(props: {
   label: string;
   onChange: (patch: Partial<SessionSettings>) => void;
   onOpenSettings: () => void;
+  sessionUsd?: number;
+  economyMode?: boolean;
+  onOpenUsage?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -355,6 +370,21 @@ function ModelMenu(props: {
             <span className="popoverLabel">All models &amp; voice settings</span>
             <span className="popoverChevron" aria-hidden>›</span>
           </button>
+          {props.sessionUsd !== undefined && props.onOpenUsage ? (
+            <button
+              type="button"
+              className="popoverItem usageSpend"
+              title="Usage & budgets"
+              onClick={() => {
+                setOpen(false);
+                props.onOpenUsage?.();
+              }}
+            >
+              <span className="popoverLabel">This session</span>
+              {props.economyMode ? <span className="badge subtle">Economy</span> : null}
+              <span className="usageAmount">{formatSessionSpend(props.sessionUsd)}</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

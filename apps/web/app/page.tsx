@@ -10,11 +10,12 @@ import {
   type ModelCatalog,
   type ServerMessage,
   type SessionCapabilities,
-  type SessionSettings
+  type SessionSettings,
+  type UsageView
 } from "@open-gpt-live/protocol";
 import { ThemeProvider, useSystemThemeMode } from "@openuidev/react-ui";
 import { GenUiView, type GenUiAction } from "../components/GenUiView";
-import { SettingsPanel } from "../components/SettingsPanel";
+import { SettingsPanel, type SettingsTab } from "../components/SettingsPanel";
 import { Composer } from "../components/Composer";
 import { QueueStack, type QueuedMessage } from "../components/QueueStack";
 import { Sidebar } from "../components/Sidebar";
@@ -249,6 +250,9 @@ export default function Home() {
   const [settings, setSettings] = useState<SessionSettings | null>(null);
   const [capabilities, setCapabilities] = useState<SessionCapabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined);
+  const [usage, setUsage] = useState<UsageView | null>(null);
+  const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
   const [conversations, setConversations] = useState<StoredConversation[]>([]);
   const [conversationId, setConversationId] = useState(() => createRequestId());
   const [viewing, setViewing] = useState<StoredConversation | null>(null);
@@ -348,6 +352,7 @@ export default function Home() {
           return;
         }
         storedSettingsAppliedRef.current = false;
+        sendRaw(socket, { type: WS_EVENTS.USAGE_REQUEST });
         const restoredConnection = reconnectAttempt > 0;
         reconnectAttempt = 0;
         setConnected(true);
@@ -434,6 +439,16 @@ export default function Home() {
   function handleServerMessage(message: ServerMessage): void {
     if (message.type === WS_EVENTS.SESSION_START) {
       setSessionId(message.sessionId);
+      return;
+    }
+
+    if (message.type === WS_EVENTS.USAGE_UPDATE) {
+      setUsage(message.usage);
+      return;
+    }
+
+    if (message.type === WS_EVENTS.BUDGET_BLOCKED) {
+      setBudgetNotice(message.message);
       return;
     }
 
@@ -830,6 +845,18 @@ export default function Home() {
         }
       ];
     });
+  }
+
+  function openSettings(tab: SettingsTab): void {
+    setSettingsTab(tab);
+    setSettingsOpen(true);
+  }
+
+  function requestUsage(): void {
+    const socket = socketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      sendRaw(socket, { type: WS_EVENTS.USAGE_REQUEST });
+    }
   }
 
   function updateSettings(patch: Partial<SessionSettings>, persist = true): void {
@@ -2229,6 +2256,22 @@ export default function Home() {
             ) : null}
             {micError ? <p className="notice error">{micError}</p> : null}
             {error ? <p className="notice error">{error}</p> : null}
+            {budgetNotice ? (
+              <div className="notice budgetNotice" role="alert">
+                <span>{budgetNotice}</span>
+                <button type="button" className="ghostBtn" onClick={() => openSettings("usage")}>
+                  View usage
+                </button>
+                <button
+                  type="button"
+                  className="iconBtn"
+                  aria-label="Dismiss budget notice"
+                  onClick={() => setBudgetNotice(null)}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+            ) : null}
             {viewing ? (
               <div className="savedBanner">
                 <span>You&apos;re reading a saved conversation.</span>
@@ -2272,6 +2315,9 @@ export default function Home() {
                 activePresetId={activePresetId}
                 onChangeSettings={(patch) => updateSettings(patch)}
                 onOpenSettings={() => setSettingsOpen(true)}
+                sessionUsd={usage?.sessionUsd}
+                economyMode={usage?.economyMode}
+                onOpenUsage={() => openSettings("usage")}
               />
               </>
             )}
@@ -2286,8 +2332,14 @@ export default function Home() {
         capabilities={capabilities}
         disabled={!connected}
         activePresetId={activePresetId}
+        usage={usage}
+        initialTab={settingsTab}
+        onRequestUsage={requestUsage}
         onChange={(patch) => updateSettings(patch)}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsTab(undefined);
+        }}
         diagnostics={
           <>
             <LatencyPanel snapshot={latencySnapshot} />

@@ -1,16 +1,26 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   ModelCatalog,
   ModelOption,
   ModelPreset,
   SessionCapabilities,
-  SessionSettings
+  SessionSettings,
+  UsageView
 } from "@open-gpt-live/protocol";
 import { Icon } from "./Icon";
 
-type Tab = "presets" | "models" | "voice" | "diagnostics";
+export type SettingsTab = "presets" | "models" | "voice" | "usage" | "diagnostics";
+type Tab = SettingsTab;
+
+const TAB_LABELS: Record<Tab, string> = {
+  presets: "Presets",
+  models: "Models",
+  voice: "Voice",
+  usage: "Usage",
+  diagnostics: "Diagnostics"
+};
 
 interface SettingsPanelProps {
   open: boolean;
@@ -20,6 +30,12 @@ interface SettingsPanelProps {
   disabled?: boolean;
   activePresetId: string | null;
   diagnostics?: ReactNode;
+  /** Spend and budgets from the gateway (USAGE_UPDATE). */
+  usage?: UsageView | null;
+  /** Tab to show when the dialog opens (e.g. "usage" from a budget notice). */
+  initialTab?: SettingsTab;
+  /** Ask the gateway for fresh totals (sent when the Usage tab is shown). */
+  onRequestUsage?: () => void;
   onChange: (patch: Partial<SessionSettings>) => void;
   onClose: () => void;
 }
@@ -27,6 +43,15 @@ interface SettingsPanelProps {
 /** Models & voice: presets as plan-style cards, then fine-grained choices. */
 export function SettingsPanel(props: SettingsPanelProps) {
   const [tab, setTab] = useState<Tab>("presets");
+  const { open, initialTab } = props;
+  const requestUsage = useRef(props.onRequestUsage);
+  requestUsage.current = props.onRequestUsage;
+  useEffect(() => {
+    if (open && initialTab) setTab(initialTab);
+  }, [open, initialTab]);
+  useEffect(() => {
+    if (open && tab === "usage") requestUsage.current?.();
+  }, [open, tab]);
   if (!props.open) return null;
   const { catalog, settings, capabilities } = props;
 
@@ -51,7 +76,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </header>
 
         <div className="segmented" role="tablist" aria-label="Settings sections">
-          {(["presets", "models", "voice", "diagnostics"] as Tab[]).map((id) => (
+          {(["presets", "models", "voice", "usage", "diagnostics"] as Tab[]).map((id) => (
             <button
               key={id}
               type="button"
@@ -60,12 +85,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
               className={tab === id ? "active" : ""}
               onClick={() => setTab(id)}
             >
-              {id === "presets" ? "Presets" : id === "models" ? "Models" : id === "voice" ? "Voice" : "Diagnostics"}
+              {TAB_LABELS[id]}
             </button>
           ))}
         </div>
 
-        {!catalog || !settings ? (
+        {tab === "usage" ? (
+          <UsageTab usage={props.usage ?? null} />
+        ) : !catalog || !settings ? (
           <p className="muted center">Waiting for Sibyl to connect…</p>
         ) : tab === "presets" ? (
           catalog.presets?.length ? (
@@ -158,6 +185,120 @@ export function SettingsPanel(props: SettingsPanelProps) {
       </section>
     </div>
   );
+}
+
+const FEATURE_LABELS: Record<string, string> = {
+  voice: "Voice conversation",
+  brain: "Deep work",
+  stt: "Transcription",
+  tts: "Speech",
+  warmup: "Warm-up",
+  scout: "Model scout",
+  slides: "Slides",
+  routine: "Routines",
+  tool: "Tools"
+};
+
+/** Today, this month, this session, budget bars and spend by feature. */
+function UsageTab(props: { usage: UsageView | null }) {
+  const { usage } = props;
+  if (!usage) return <p className="muted center">Loading usage…</p>;
+  const features = Object.entries(usage.byFeature)
+    .filter(([, usd]) => usd > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const featureTotal = features.reduce((sum, [, usd]) => sum + usd, 0);
+  return (
+    <div className="fieldStack usagePanel">
+      {usage.economyMode ? (
+        <p className="usageEconomy" role="status">
+          Economy mode is on: spending is close to a budget, so Sibyl is using the Cheapest preset&apos;s models.
+        </p>
+      ) : null}
+      <div className="usageStats">
+        <UsageStat label="Today" value={usage.todayUsd} />
+        <UsageStat label="This month" value={usage.monthUsd} />
+        <UsageStat label="This session" value={usage.sessionUsd} />
+      </div>
+      <BudgetBar label="Daily budget" spent={usage.todayUsd} cap={usage.dailyBudgetUsd} env="SIBYL_BUDGET_DAILY_USD" />
+      <BudgetBar
+        label="Monthly budget"
+        spent={usage.monthUsd}
+        cap={usage.monthlyBudgetUsd}
+        env="SIBYL_BUDGET_MONTHLY_USD"
+      />
+      <div className="field">
+        <span className="fieldLabel">This month by feature</span>
+        {features.length ? (
+          <ul className="usageFeatures">
+            {features.map(([feature, usd]) => (
+              <li key={feature}>
+                <span>{FEATURE_LABELS[feature] ?? feature}</span>
+                <span className="usageFeatureBar" aria-hidden>
+                  <i style={{ width: `${featureTotal > 0 ? Math.max(2, (usd / featureTotal) * 100) : 0}%` }} />
+                </span>
+                <span className="usageAmount">{formatSpend(usd)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <span className="fieldHint">No spend recorded yet this month.</span>
+        )}
+      </div>
+      <p className="muted small">
+        Costs come from OpenRouter where it reports them; speech and some transcription are estimated from model
+        pricing.
+      </p>
+    </div>
+  );
+}
+
+function UsageStat(props: { label: string; value: number }) {
+  return (
+    <div className="usageStat">
+      <span className="fieldHint">{props.label}</span>
+      <strong>{formatSpend(props.value)}</strong>
+    </div>
+  );
+}
+
+function BudgetBar(props: { label: string; spent: number; cap?: number; env: string }) {
+  if (props.cap === undefined) {
+    return (
+      <div className="field">
+        <span className="fieldLabel">{props.label}</span>
+        <span className="fieldHint">
+          No cap set · add <code>{props.env}</code> to the gateway&apos;s .env
+        </span>
+      </div>
+    );
+  }
+  const ratio = props.cap > 0 ? Math.min(1, props.spent / props.cap) : 1;
+  const level = ratio >= 1 ? " over" : ratio >= 0.85 ? " near" : "";
+  return (
+    <div className="field">
+      <span className="fieldLabel">{props.label}</span>
+      <div
+        className={`usageBar${level}`}
+        role="progressbar"
+        aria-label={props.label}
+        aria-valuemin={0}
+        aria-valuemax={props.cap}
+        aria-valuenow={Math.min(props.spent, props.cap)}
+      >
+        <i style={{ width: `${ratio * 100}%` }} />
+      </div>
+      <span className="fieldHint">
+        {formatSpend(props.spent)} of {formatSpend(props.cap)} · {Math.round(ratio * 100)}%
+      </span>
+    </div>
+  );
+}
+
+/** Dollar amounts: cents for normal spend, more digits for tiny amounts. */
+export function formatSpend(value: number): string {
+  if (value === 0) return "$0.00";
+  if (value >= 0.01) return "$" + value.toFixed(2);
+  return "$" + value.toFixed(4);
 }
 
 function PlanCard(props: {

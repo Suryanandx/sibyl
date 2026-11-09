@@ -2255,3 +2255,125 @@ code {
   from { opacity: 0.7; transform: scale(0.92); }
   to { opacity: 0; transform: scale(1.18); }
 }
+
+/* ── Usage & budgets ── */
+.budgetNotice {
+  align-items: center;
+  background: var(--tint-amber);
+  color: var(--text);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.budgetNotice > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.budgetNotice .ghostBtn,
+.budgetNotice .iconBtn {
+  flex-shrink: 0;
+}
+
+.usagePanel {
+  gap: 16px;
+}
+
+.usageEconomy {
+  background: var(--tint-amber);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 13px;
+  margin: 0;
+  padding: 9px 14px;
+}
+
+.usageStats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.usageStat {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.usageStat strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.usageBar {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.usageBar > i,
+.usageFeatureBar > i {
+  background: var(--accent);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 240ms ease;
+}
+
+.usageBar.near > i {
+  background: var(--warning);
+}
+
+.usageBar.over > i {
+  background: var(--danger);
+}
+
+.usageFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.usageFeatures li {
+  align-items: center;
+  display: grid;
+  font-size: 13px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto;
+}
+
+.usageFeatureBar {
+  background: var(--subtle);
+  border-radius: 999px;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+}
+
+.usageAmount {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.popoverItem.usageSpend .popoverLabel {
+  color: var(--text-2);
+}
+
+@media (max-width: 520px) {
+  .usageStats {
+    grid-template-columns: 1fr;
+  }
+}
