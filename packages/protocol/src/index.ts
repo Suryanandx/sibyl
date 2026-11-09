@@ -445,7 +445,8 @@ export type ClientMessage =
   | UsageRequestMessage
   | ConversationsRequestMessage
   | ConversationOpenMessage
-  | ConversationDeleteMessage;
+  | ConversationDeleteMessage
+  | ConnectionsClientMessage;
 
 export type ServerMessage =
   | ServerSessionStartMessage
@@ -471,6 +472,7 @@ export type ServerMessage =
   | BudgetBlockedMessage
   | ConversationsListMessage
   | ConversationStateMessage
+  | ConnectionsServerMessage
   | ErrorMessage;
 
 export type ReservedMessage = never;
@@ -671,7 +673,7 @@ export function parseClientMessage(input: unknown): ClientMessageValidationResul
     }
 
     default:
-      return invalid(`unsupported message type: ${input.type}`);
+      return parseConnectionsClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
   }
 }
 
@@ -958,7 +960,7 @@ export function parseServerMessage(input: unknown): ServerMessageValidationResul
     });
   }
 
-  return invalidServer(`unsupported message type: ${input.type}`);
+  return parseConnectionsServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
 }
 
 const MAX_MODEL_ID_LENGTH = 200;
@@ -1104,4 +1106,430 @@ function isOptionalEnum<const T extends readonly string[]>(
 
 export function createRequestId(): string {
   return globalThis.crypto.randomUUID();
+}
+
+/* ── Connections (wave 2) ── */
+/*
+ * The Connections screen: tools grouped by source (built-in / each MCP
+ * server), per-tool and per-server switches, and UI-managed MCP servers.
+ * Secret env/header values never travel back to the browser in full: views
+ * carry masked values ("••••last4"); a `null` value in a save means "keep
+ * the stored value".
+ */
+
+export const CONNECTIONS_EVENTS = {
+  REQUEST: "connections.request",
+  STATE: "connections.state",
+  TOOL_TOGGLE: "connections.tool_toggle",
+  SERVER_TOGGLE: "connections.server_toggle",
+  SERVER_SAVE: "connections.server_save",
+  SERVER_REMOVE: "connections.server_remove",
+  SERVER_RECONNECT: "connections.server_reconnect",
+  SERVER_TEST: "connections.server_test",
+  RESULT: "connections.result",
+  TEST_RESULT: "connections.test_result"
+} as const;
+
+export const CONNECTION_SERVER_NAME = /^[a-zA-Z0-9_-]{1,32}$/;
+const CONNECTION_ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+const CONNECTION_HEADER_KEY = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,128}$/;
+const CONNECTION_TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
+const MAX_CONNECTION_VALUE = 8_000;
+const MAX_CONNECTION_ENTRIES = 64;
+
+export type ConnectionServerStatus = "connected" | "connecting" | "failed" | "disabled";
+
+export interface ConnectionToolView {
+  name: string;
+  title: string;
+  description: string;
+  /** "write" tools need the user's approval before they run. */
+  effect: "read" | "write";
+  enabled: boolean;
+}
+
+export interface ConnectionServerView {
+  name: string;
+  /** "file": from mcp.config.json (read-only here); "ui": added in the app. */
+  origin: "file" | "ui";
+  transport: "stdio" | "http";
+  status: ConnectionServerStatus;
+  error?: string;
+  enabled: boolean;
+  toolCount: number;
+  tools: ConnectionToolView[];
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  url?: string;
+  /** Values are masked, except ${secret:NAME} references (not secrets). */
+  env?: Record<string, string>;
+  /** Values are masked, except ${secret:NAME} references (not secrets). */
+  headers?: Record<string, string>;
+  catalogId?: string;
+}
+
+export interface ConnectionCatalogField {
+  key: string;
+  label: string;
+  secret?: boolean;
+  required?: boolean;
+  placeholder?: string;
+  help?: string;
+  /** Header values: text put before what the user types (e.g. "Bearer "). */
+  valuePrefix?: string;
+}
+
+export interface ConnectionCatalogEntry {
+  id: string;
+  /** Suggested server name. */
+  name: string;
+  title: string;
+  description: string;
+  category: string;
+  transport: "stdio" | "http";
+  command?: string;
+  args?: string[];
+  argsHint?: string;
+  url?: string;
+  env?: ConnectionCatalogField[];
+  headers?: ConnectionCatalogField[];
+  docsUrl: string;
+  maintainer: string;
+  status: "official" | "archived" | "community";
+  note?: string;
+}
+
+export interface ConnectionsState {
+  builtin: ConnectionToolView[];
+  servers: ConnectionServerView[];
+  catalog: ConnectionCatalogEntry[];
+  /** SIBYL_ALLOW_STDIO_MCP: local (stdio) servers may be added from the app. */
+  allowStdio: boolean;
+  configPath?: string;
+  configError?: string;
+}
+
+/** A server as the form sends it; env/header values of `null` keep the stored value. */
+export type ConnectionServerInput =
+  | {
+      name: string;
+      transport: "stdio";
+      command: string;
+      args: string[];
+      env: Record<string, string | null>;
+      cwd?: string;
+      catalogId?: string;
+    }
+  | {
+      name: string;
+      transport: "http";
+      url: string;
+      headers: Record<string, string | null>;
+      catalogId?: string;
+    };
+
+export interface ConnectionsRequestMessage {
+  type: typeof CONNECTIONS_EVENTS.REQUEST;
+}
+export interface ConnectionsToolToggleMessage {
+  type: typeof CONNECTIONS_EVENTS.TOOL_TOGGLE;
+  name: string;
+  enabled: boolean;
+}
+export interface ConnectionsServerToggleMessage {
+  type: typeof CONNECTIONS_EVENTS.SERVER_TOGGLE;
+  /** "builtin" flips every built-in tool; "server" one MCP server. */
+  scope: "builtin" | "server";
+  name?: string;
+  enabled: boolean;
+}
+export interface ConnectionsServerSaveMessage {
+  type: typeof CONNECTIONS_EVENTS.SERVER_SAVE;
+  requestId: string;
+  /** Name of the server being edited (absent when adding). */
+  original?: string;
+  server: ConnectionServerInput;
+}
+export interface ConnectionsServerRemoveMessage {
+  type: typeof CONNECTIONS_EVENTS.SERVER_REMOVE;
+  requestId: string;
+  name: string;
+}
+export interface ConnectionsServerReconnectMessage {
+  type: typeof CONNECTIONS_EVENTS.SERVER_RECONNECT;
+  requestId: string;
+  name: string;
+}
+export interface ConnectionsServerTestMessage {
+  type: typeof CONNECTIONS_EVENTS.SERVER_TEST;
+  requestId: string;
+  /** Test a saved server by name, or a draft from the form. */
+  name?: string;
+  server?: ConnectionServerInput;
+  /** For drafts that edit a saved server: whose stored secrets `null` refers to. */
+  original?: string;
+}
+
+export type ConnectionsClientMessage =
+  | ConnectionsRequestMessage
+  | ConnectionsToolToggleMessage
+  | ConnectionsServerToggleMessage
+  | ConnectionsServerSaveMessage
+  | ConnectionsServerRemoveMessage
+  | ConnectionsServerReconnectMessage
+  | ConnectionsServerTestMessage;
+
+export interface ConnectionsStateMessage extends ConnectionsState {
+  type: typeof CONNECTIONS_EVENTS.STATE;
+}
+export interface ConnectionsResultMessage {
+  type: typeof CONNECTIONS_EVENTS.RESULT;
+  requestId: string;
+  ok: boolean;
+  error?: string;
+}
+export interface ConnectionsTestResultMessage {
+  type: typeof CONNECTIONS_EVENTS.TEST_RESULT;
+  requestId: string;
+  ok: boolean;
+  toolCount?: number;
+  tools?: string[];
+  error?: string;
+  ms?: number;
+}
+
+export type ConnectionsServerMessage =
+  | ConnectionsStateMessage
+  | ConnectionsResultMessage
+  | ConnectionsTestResultMessage;
+
+const CONNECTIONS_CLIENT_TYPES: ReadonlySet<string> = new Set([
+  CONNECTIONS_EVENTS.REQUEST,
+  CONNECTIONS_EVENTS.TOOL_TOGGLE,
+  CONNECTIONS_EVENTS.SERVER_TOGGLE,
+  CONNECTIONS_EVENTS.SERVER_SAVE,
+  CONNECTIONS_EVENTS.SERVER_REMOVE,
+  CONNECTIONS_EVENTS.SERVER_RECONNECT,
+  CONNECTIONS_EVENTS.SERVER_TEST
+]);
+
+export function isConnectionsClientMessage(message: { type: string }): message is ConnectionsClientMessage {
+  return CONNECTIONS_CLIENT_TYPES.has(message.type);
+}
+
+export function isConnectionsServerMessage(message: { type: string }): message is ConnectionsServerMessage {
+  return (
+    message.type === CONNECTIONS_EVENTS.STATE ||
+    message.type === CONNECTIONS_EVENTS.RESULT ||
+    message.type === CONNECTIONS_EVENTS.TEST_RESULT
+  );
+}
+
+/** Strict parser for Connections client messages; undefined when the type isn't ours. */
+export function parseConnectionsClientMessage(input: Record<string, unknown>): ClientMessageValidationResult | undefined {
+  const type = input.type;
+  if (typeof type !== "string" || !CONNECTIONS_CLIENT_TYPES.has(type)) return undefined;
+  const requestId = (): string | undefined =>
+    isNonEmptyString(input.requestId) && input.requestId.length <= 100 ? input.requestId : undefined;
+  const serverName = (value: unknown): value is string => typeof value === "string" && CONNECTION_SERVER_NAME.test(value);
+
+  switch (type) {
+    case CONNECTIONS_EVENTS.REQUEST:
+      return valid({ type: CONNECTIONS_EVENTS.REQUEST });
+    case CONNECTIONS_EVENTS.TOOL_TOGGLE:
+      if (typeof input.name !== "string" || !CONNECTION_TOOL_NAME.test(input.name)) return invalid(`${type} name must be a tool name`);
+      if (typeof input.enabled !== "boolean") return invalid(`${type} enabled must be a boolean`);
+      return valid({ type: CONNECTIONS_EVENTS.TOOL_TOGGLE, name: input.name, enabled: input.enabled });
+    case CONNECTIONS_EVENTS.SERVER_TOGGLE:
+      if (!isEnum(input.scope, ["builtin", "server"] as const)) return invalid(`${type} scope must be "builtin" or "server"`);
+      if (typeof input.enabled !== "boolean") return invalid(`${type} enabled must be a boolean`);
+      if (input.scope === "server" && !serverName(input.name)) return invalid(`${type} name must be a server name`);
+      return valid({
+        type: CONNECTIONS_EVENTS.SERVER_TOGGLE,
+        scope: input.scope,
+        enabled: input.enabled,
+        ...(input.scope === "server" ? { name: input.name as string } : {})
+      });
+    case CONNECTIONS_EVENTS.SERVER_SAVE: {
+      const id = requestId();
+      if (!id) return invalid(`${type} requestId is required`);
+      if (input.original !== undefined && !serverName(input.original)) return invalid(`${type} original must be a server name`);
+      const server = parseConnectionServerInput(input.server);
+      if (typeof server === "string") return invalid(`${type} ${server}`);
+      return valid({
+        type: CONNECTIONS_EVENTS.SERVER_SAVE,
+        requestId: id,
+        server,
+        ...(input.original !== undefined ? { original: input.original as string } : {})
+      });
+    }
+    case CONNECTIONS_EVENTS.SERVER_REMOVE:
+    case CONNECTIONS_EVENTS.SERVER_RECONNECT: {
+      const id = requestId();
+      if (!id) return invalid(`${type} requestId is required`);
+      if (!serverName(input.name)) return invalid(`${type} name must be a server name`);
+      return valid({ type, requestId: id, name: input.name });
+    }
+    case CONNECTIONS_EVENTS.SERVER_TEST: {
+      const id = requestId();
+      if (!id) return invalid(`${type} requestId is required`);
+      if (input.name !== undefined && !serverName(input.name)) return invalid(`${type} name must be a server name`);
+      if (input.original !== undefined && !serverName(input.original)) return invalid(`${type} original must be a server name`);
+      let server: ConnectionServerInput | undefined;
+      if (input.server !== undefined) {
+        const parsed = parseConnectionServerInput(input.server);
+        if (typeof parsed === "string") return invalid(`${type} ${parsed}`);
+        server = parsed;
+      }
+      if (!server && input.name === undefined) return invalid(`${type} needs a name or a server`);
+      return valid({
+        type: CONNECTIONS_EVENTS.SERVER_TEST,
+        requestId: id,
+        ...(input.name !== undefined ? { name: input.name as string } : {}),
+        ...(input.original !== undefined ? { original: input.original as string } : {}),
+        ...(server ? { server } : {})
+      });
+    }
+  }
+  return undefined;
+}
+
+/** Validate a server from the form; returns an error string when invalid. */
+export function parseConnectionServerInput(input: unknown): ConnectionServerInput | string {
+  if (!isRecord(input)) return "server must be an object";
+  if (typeof input.name !== "string" || !CONNECTION_SERVER_NAME.test(input.name)) {
+    return "server name must be 1-32 letters, digits, _ or -";
+  }
+  const catalogId =
+    typeof input.catalogId === "string" && /^[a-z0-9-]{1,64}$/.test(input.catalogId) ? { catalogId: input.catalogId } : {};
+  if (input.transport === "stdio") {
+    if (!isNonEmptyString(input.command) || input.command.trim().length === 0 || input.command.length > 500) {
+      return "command is required (≤ 500 characters)";
+    }
+    if (!Array.isArray(input.args) || input.args.length > MAX_CONNECTION_ENTRIES) return "args must be a list of up to 64 strings";
+    if (!input.args.every((arg) => typeof arg === "string" && arg.length <= 2_000)) return "args must be strings (≤ 2000 characters)";
+    const env = parseSecretRecord(input.env, CONNECTION_ENV_KEY, "env");
+    if (typeof env === "string") return env;
+    if (input.cwd !== undefined && (typeof input.cwd !== "string" || input.cwd.length > 1_000)) return "cwd must be a string";
+    return {
+      name: input.name,
+      transport: "stdio",
+      command: input.command.trim(),
+      args: input.args as string[],
+      env,
+      ...(typeof input.cwd === "string" && input.cwd.trim() ? { cwd: input.cwd.trim() } : {}),
+      ...catalogId
+    };
+  }
+  if (input.transport === "http") {
+    if (!isNonEmptyString(input.url) || input.url.length > 2_000) return "url is required";
+    let url: URL;
+    try {
+      url = new URL(input.url.trim());
+    } catch {
+      return "url is not a valid URL";
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") return "url must start with http:// or https://";
+    const headers = parseSecretRecord(input.headers, CONNECTION_HEADER_KEY, "headers");
+    if (typeof headers === "string") return headers;
+    return { name: input.name, transport: "http", url: input.url.trim(), headers, ...catalogId };
+  }
+  return 'transport must be "stdio" or "http"';
+}
+
+function parseSecretRecord(value: unknown, keyPattern: RegExp, label: string): Record<string, string | null> | string {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return `${label} must be an object`;
+  const entries = Object.entries(value);
+  if (entries.length > MAX_CONNECTION_ENTRIES) return `${label} has too many entries`;
+  const out: Record<string, string | null> = {};
+  for (const [key, item] of entries) {
+    if (!keyPattern.test(key)) return `${label} key "${key.slice(0, 40)}" is not allowed`;
+    if (item !== null && (typeof item !== "string" || item.length > MAX_CONNECTION_VALUE)) {
+      return `${label}.${key} must be a string or null`;
+    }
+    out[key] = item;
+  }
+  return out;
+}
+
+function isToolViewList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (tool) =>
+        isRecord(tool) &&
+        isNonEmptyString(tool.name) &&
+        typeof tool.title === "string" &&
+        typeof tool.description === "string" &&
+        isEnum(tool.effect, ["read", "write"] as const) &&
+        typeof tool.enabled === "boolean"
+    )
+  );
+}
+
+function isStringRecord(value: unknown): boolean {
+  return value === undefined || (isRecord(value) && Object.values(value).every((item) => typeof item === "string"));
+}
+
+/** Strict parser for Connections server messages; undefined when the type isn't ours. */
+export function parseConnectionsServerMessage(input: Record<string, unknown>): ServerMessageValidationResult | undefined {
+  switch (input.type) {
+    case CONNECTIONS_EVENTS.STATE: {
+      const serversOk =
+        Array.isArray(input.servers) &&
+        input.servers.every(
+          (server) =>
+            isRecord(server) &&
+            isNonEmptyString(server.name) &&
+            isEnum(server.origin, ["file", "ui"] as const) &&
+            isEnum(server.transport, ["stdio", "http"] as const) &&
+            isEnum(server.status, ["connected", "connecting", "failed", "disabled"] as const) &&
+            typeof server.enabled === "boolean" &&
+            isNonNegativeInteger(server.toolCount) &&
+            isToolViewList(server.tools) &&
+            isOptionalString(server.error) &&
+            isStringRecord(server.env) &&
+            isStringRecord(server.headers) &&
+            (server.args === undefined || (Array.isArray(server.args) && server.args.every((arg) => typeof arg === "string")))
+        );
+      const catalogOk =
+        Array.isArray(input.catalog) &&
+        input.catalog.every(
+          (entry) =>
+            isRecord(entry) &&
+            isNonEmptyString(entry.id) &&
+            isNonEmptyString(entry.title) &&
+            isEnum(entry.transport, ["stdio", "http"] as const)
+        );
+      if (!isToolViewList(input.builtin) || !serversOk || !catalogOk || typeof input.allowStdio !== "boolean") {
+        return invalidServer(`invalid ${input.type} message`);
+      }
+      return validServer(input as unknown as ConnectionsStateMessage);
+    }
+    case CONNECTIONS_EVENTS.RESULT:
+      if (!isNonEmptyString(input.requestId) || typeof input.ok !== "boolean" || !isOptionalString(input.error)) {
+        return invalidServer(`invalid ${input.type} message`);
+      }
+      return validServer({
+        type: CONNECTIONS_EVENTS.RESULT,
+        requestId: input.requestId,
+        ok: input.ok,
+        ...(typeof input.error === "string" ? { error: input.error } : {})
+      });
+    case CONNECTIONS_EVENTS.TEST_RESULT:
+      if (
+        !isNonEmptyString(input.requestId) ||
+        typeof input.ok !== "boolean" ||
+        !isOptionalString(input.error) ||
+        !(input.toolCount === undefined || isNonNegativeInteger(input.toolCount)) ||
+        !(input.tools === undefined || (Array.isArray(input.tools) && input.tools.every((tool) => typeof tool === "string"))) ||
+        !isOptionalFiniteNumber(input.ms)
+      ) {
+        return invalidServer(`invalid ${input.type} message`);
+      }
+      return validServer(input as unknown as ConnectionsTestResultMessage);
+  }
+  return undefined;
 }

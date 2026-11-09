@@ -1,0 +1,203 @@
+{
+  "_comment": "Curated MCP servers shown under Connections → Add a connection. Only official or vendor-maintained servers (or archived MCP reference servers, marked as such). Each entry was checked against its source repository. One-click Add only prefills the form; nothing runs until the owner saves it.",
+  "entries": [
+    {
+      "id": "filesystem",
+      "name": "files",
+      "title": "Filesystem",
+      "description": "Read, write and search files inside one folder you choose on the gateway host.",
+      "category": "Files",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"],
+      "argsHint": "Replace the last argument with the folder Sibyl may use. Add more folders as extra arguments.",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+      "maintainer": "MCP reference servers",
+      "status": "official"
+    },
+    {
+      "id": "fetch",
+      "name": "fetch",
+      "title": "Fetch",
+      "description": "Fetch a web page and convert it to markdown. Needs uv (uvx) on the gateway host.",
+      "category": "Web",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+      "maintainer": "MCP reference servers",
+      "status": "official"
+    },
+    {
+      "id": "git",
+      "name": "git",
+      "title": "Git",
+      "description": "Read and work with a local Git repository: status, diffs, log, commits. Needs uv (uvx).",
+      "category": "Developer",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "/path/to/repo"],
+      "argsHint": "Replace the last argument with the repository path.",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
+      "maintainer": "MCP reference servers",
+      "status": "official"
+    },
+    {
+      "id": "github-remote",
+      "name": "github",
+      "title": "GitHub (remote)",
+      "description": "Issues, pull requests, code and repositories through GitHub's hosted MCP server. Uses a personal access token; nothing runs on your host.",
+      "category": "Developer",
+      "transport": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": [
+        {
+          "key": "Authorization",
+          "label": "Personal access token",
+          "secret": true,
+          "required": true,
+          "valuePrefix": "Bearer ",
+          "placeholder": "ghp_… or github_pat_…",
+          "help": "Create a fine-grained token at github.com/settings/tokens with only the repositories and scopes you want Sibyl to use."
+        }
+      ],
+      "docsUrl": "https://github.com/github/github-mcp-server",
+      "maintainer": "GitHub",
+      "status": "official"
+    },
+    {
+      "id": "github-docker",
+      "name": "github-local",
+      "title": "GitHub (local, Docker)",
+      "description": "GitHub's MCP server run locally in Docker with your personal access token.",
+      "category": "Developer",
+      "transport": "stdio",
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
+      "env": [
+        {
+          "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+          "label": "Personal access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "github_pat_…"
+        }
+      ],
+      "docsUrl": "https://github.com/github/github-mcp-server",
+      "maintainer": "GitHub",
+      "status": "official"
+    },
+    {
+      "id": "postgres",
+      "name": "postgres",
+      "title": "PostgreSQL",
+      "description": "Read-only SQL queries and schema inspection for a Postgres database.",
+      "category": "Databases",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://user:password@localhost:5432/mydb"],
+      "argsHint": "Replace the last argument with your connection string. Use a read-only database user.",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers-archived/tree/main/src/postgres",
+      "maintainer": "MCP reference servers (archived)",
+      "status": "archived",
+      "note": "Archived reference server: it works, but no longer receives updates."
+    },
+    {
+      "id": "sqlite",
+      "name": "sqlite",
+      "title": "SQLite",
+      "description": "Query and analyse a local SQLite database file. Needs uv (uvx).",
+      "category": "Databases",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "/path/to/database.db"],
+      "argsHint": "Replace the last argument with the path to your database file.",
+      "docsUrl": "https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite",
+      "maintainer": "MCP reference servers (archived)",
+      "status": "archived",
+      "note": "Archived reference server: it works, but no longer receives updates."
+    },
+    {
+      "id": "gdrive",
+      "name": "gdrive",
+      "title": "Google Drive",
+      "description": "Search and read files in Google Drive (read-only). Needs a one-time OAuth setup on the host.",
+      "category": "Files",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+      "env": [
+        {
+          "key": "GDRIVE_CREDENTIALS_PATH",
+          "label": "Credentials file",
+          "secret": false,
+          "required": true,
+          "placeholder": "/path/to/.gdrive-server-credentials.json",
+          "help": "Created by the server's one-time auth step; see the docs."
+        }
+      ],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive",
+      "maintainer": "MCP reference servers (archived)",
+      "status": "archived",
+      "note": "Archived reference server. Requires a Google Cloud OAuth client and a one-time sign-in on the host."
+    },
+    {
+      "id": "slack",
+      "name": "slack",
+      "title": "Slack",
+      "description": "Read channels and threads and post messages in your Slack workspace with a bot token.",
+      "category": "Communication",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@zencoderai/slack-mcp-server"],
+      "env": [
+        { "key": "SLACK_BOT_TOKEN", "label": "Bot token", "secret": true, "required": true, "placeholder": "xoxb-…" },
+        { "key": "SLACK_TEAM_ID", "label": "Team ID", "secret": false, "required": true, "placeholder": "T01234567" },
+        { "key": "SLACK_CHANNEL_IDS", "label": "Channel IDs (optional)", "secret": false, "required": false, "placeholder": "C01234567,C76543210" }
+      ],
+      "docsUrl": "https://github.com/zencoderai/slack-mcp-server",
+      "maintainer": "Zencoder (continues the MCP reference Slack server)",
+      "status": "community"
+    },
+    {
+      "id": "notion",
+      "name": "notion",
+      "title": "Notion",
+      "description": "Search, read and edit pages and databases your Notion integration can access.",
+      "category": "Docs & notes",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": [
+        {
+          "key": "NOTION_TOKEN",
+          "label": "Integration secret",
+          "secret": true,
+          "required": true,
+          "placeholder": "ntn_…",
+          "help": "Create an internal integration at notion.so/profile/integrations and share the pages it may use."
+        }
+      ],
+      "docsUrl": "https://github.com/makenotion/notion-mcp-server",
+      "maintainer": "Notion",
+      "status": "official",
+      "note": "Notion now favours its hosted MCP, which needs an OAuth sign-in Sibyl doesn't support yet; this local server uses an integration token."
+    },
+    {
+      "id": "brave-search",
+      "name": "brave",
+      "title": "Brave Search",
+      "description": "Web, news, image and local search through the Brave Search API.",
+      "category": "Web",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@brave/brave-search-mcp-server", "--transport", "stdio"],
+      "env": [
+        { "key": "BRAVE_API_KEY", "label": "API key", "secret": true, "required": true, "placeholder": "BSA…" }
+      ],
+      "docsUrl": "https://github.com/brave/brave-search-mcp-server",
+      "maintainer": "Brave",
+      "status": "official"
+    }
+  ]
+}

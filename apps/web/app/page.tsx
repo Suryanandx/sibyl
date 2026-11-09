@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import {
   WS_EVENTS,
   createRequestId,
+  isConnectionsServerMessage,
   parseServerMessage,
   type ApprovalView,
   type ClientMessage,
@@ -18,6 +19,7 @@ import {
 import { ThemeProvider, useSystemThemeMode } from "@openuidev/react-ui";
 import { GenUiView, type GenUiAction } from "../components/GenUiView";
 import { SettingsPanel, type SettingsTab } from "../components/SettingsPanel";
+import { ConnectionsPanel, type ConnectionsListener } from "../components/ConnectionsPanel";
 import { Composer } from "../components/Composer";
 import { QueueStack, type QueuedMessage } from "../components/QueueStack";
 import { Sidebar } from "../components/Sidebar";
@@ -269,6 +271,8 @@ export default function Home() {
   const [capabilities, setCapabilities] = useState<SessionCapabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const connectionsListenersRef = useRef(new Set<ConnectionsListener>());
   const [usage, setUsage] = useState<UsageView | null>(null);
   const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
   /** Conversations stored on the Gateway (newest first). */
@@ -471,6 +475,11 @@ export default function Home() {
   }, []);
 
   function handleServerMessage(message: ServerMessage): void {
+    if (isConnectionsServerMessage(message)) {
+      for (const listener of connectionsListenersRef.current) listener(message);
+      return;
+    }
+
     if (message.type === WS_EVENTS.SESSION_START) {
       setSessionId(message.sessionId);
       return;
@@ -992,6 +1001,13 @@ export default function Home() {
   function openSettings(tab: SettingsTab): void {
     setSettingsTab(tab);
     setSettingsOpen(true);
+  }
+
+  function subscribeConnections(listener: ConnectionsListener): () => void {
+    connectionsListenersRef.current.add(listener);
+    return () => {
+      connectionsListenersRef.current.delete(listener);
+    };
   }
 
   function requestUsage(): void {
@@ -2184,6 +2200,9 @@ export default function Home() {
         <button type="button" className="railBtn" aria-label="Models & voice" title="Models & voice" onClick={() => setSettingsOpen(true)}>
           <Icon name="sliders" />
         </button>
+        <button type="button" className="railBtn" aria-label="Connections" title="Connections" onClick={() => setConnectionsOpen(true)}>
+          <Icon name="layers" />
+        </button>
         <span className="railSpacer" />
         <button type="button" className="railBtn" aria-label="Switch theme" title="Switch theme" onClick={cycleTheme}>
           <Icon name={themeMode === "dark" ? "sun" : "moon"} />
@@ -2546,6 +2565,10 @@ export default function Home() {
           setSettingsOpen(false);
           setSettingsTab(undefined);
         }}
+        onOpenConnections={() => {
+          setSettingsOpen(false);
+          setConnectionsOpen(true);
+        }}
         diagnostics={
           <>
             <LatencyPanel snapshot={latencySnapshot} />
@@ -2556,6 +2579,17 @@ export default function Home() {
             </p>
           </>
         }
+      />
+
+      <ConnectionsPanel
+        open={connectionsOpen}
+        connected={connected}
+        send={(message) => {
+          const socket = socketRef.current;
+          return socket ? sendRaw(socket, message) : false;
+        }}
+        subscribe={subscribeConnections}
+        onClose={() => setConnectionsOpen(false)}
       />
     </div>
     </ThemeProvider>

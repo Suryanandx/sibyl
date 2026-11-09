@@ -12,6 +12,7 @@ import type {
 } from "@open-gpt-live/adapters";
 import {
   WS_EVENTS,
+  isConnectionsClientMessage,
   parseClientMessage,
   type AudioChunkMessage,
   type ClientMessage,
@@ -35,6 +36,7 @@ import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } fro
 import { hedgedStream } from "./hedge.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { routeSlidesRequest, takeSlidesArtifact } from "./slides/index.js";
+import { handleConnectionsMessage } from "./tools/ws.js";
 import { buildUsageView, checkTurnBudget, meterProviders } from "./metering/index.js";
 
 export const DEFAULT_MAX_AUDIO_TURN_BYTES = 25 * 1024 * 1024;
@@ -604,6 +606,15 @@ class GatewayConnection {
   private async handleV03Message(
     message: Exclude<ClientMessage, AudioChunkMessage | { type: "session.start" | "session.update" | "interrupt" | "playback.ack" | "vad.speech_start" | "vad.speech_end" | "user.text" }>
   ): Promise<void> {
+    // ── connections (MCP servers, tool switches); not awaited: connecting can take a while ──
+    if (isConnectionsClientMessage(message)) {
+      void handleConnectionsMessage(message, {
+        runtime: this.config.runtime,
+        send: (reply) => this.send(reply),
+        log: (event, fields) => this.config.logger.warn(event, { sessionId: this.session.sessionId, ...fields })
+      });
+      return;
+    }
     switch (message.type) {
       // ── approvals (brain tool loop) ──
       case WS_EVENTS.APPROVAL_DECISION:

@@ -1,13 +1,15 @@
 /**
  * Installs Sibyl's tools into the runtime's registry: built-ins (unless
  * SIBYL_BUILTIN_TOOLS=false), MCP servers from mcp.config.json, then the
- * persisted per-tool switches. Returns a close() for clean shutdown.
+ * persisted per-tool switches. MCP servers are owned by the ConnectionsManager
+ * (also servers added in the app). Returns a close() for clean shutdown.
  */
 import type { Store, ToolRegistry, UsageMeter } from "@open-gpt-live/core";
 import { loadGatewayRuntimeConfig, OPENROUTER_DEFAULTS } from "../config.js";
 import { createBuiltinTools, type BuiltinToolsOptions } from "./builtin/index.js";
-import { connectMcpServers, type McpConnectionOptions } from "./mcp/client.js";
-import { loadMcpConfig } from "./mcp/config.js";
+import { ConnectionsManager, type ResolveSecrets } from "./connections.js";
+import type { McpConnectionOptions } from "./mcp/client.js";
+import { loadMcpConfig, type McpServerConfig } from "./mcp/config.js";
 import { applyToolSwitches } from "./switches.js";
 
 export interface InstallToolsInput {
@@ -21,9 +23,13 @@ export interface InstallToolsInput {
   /** Test seams. */
   builtin?: BuiltinToolsOptions;
   mcp?: Partial<McpConnectionOptions>;
+  /** Resolves `${secret:NAME}` references in MCP env/header values at connect time. */
+  resolveSecrets?: ResolveSecrets;
 }
 
 export interface InstalledTools {
+  /** Runtime management of MCP servers and tool switches (Connections screen). */
+  connections: ConnectionsManager;
   close(): Promise<void>;
 }
 
@@ -37,29 +43,39 @@ export async function installSibylTools(input: InstallToolsInput): Promise<Insta
     log("tools.builtin_installed", { tools: builtins.map((tool) => tool.name) });
   }
 
+  // MCP servers: mcp.config.json plus servers added in the app (Connections).
+  let fileServers: McpServerConfig[] = [];
+  let configPath: string | undefined;
+  let configError: string | undefined;
   try {
     const config = loadMcpConfig(env, input.cwd);
-    if (config && config.servers.length > 0) {
-      const set = await connectMcpServers(config.servers, {
-        log,
-        connectTimeoutMs: positiveInt(env.SIBYL_MCP_CONNECT_TIMEOUT_MS),
-        callTimeoutMs: positiveInt(env.SIBYL_MCP_CALL_TIMEOUT_MS),
-        ...input.mcp
-      });
-      closers.push(set.close);
-      for (const tool of set.tools) {
-        try {
-          tools.register(tool);
-        } catch (error) {
-          log("mcp.tool_skipped", { tool: tool.name, error: (error as Error).message });
-        }
-      }
-      log("tools.mcp_installed", { config: config.path, servers: config.servers.length, tools: set.tools.length });
-    }
+    fileServers = config?.servers ?? [];
+    configPath = config?.path;
   } catch (error) {
     // A broken config must not stop the gateway.
-    log("tools.mcp_config_failed", { error: (error as Error).message });
+    configError = (error as Error).message;
+    log("tools.mcp_config_failed", { error: configError });
   }
+  const connections = new ConnectionsManager({
+    tools,
+    store: input.store,
+    ownerId: input.ownerId,
+    env,
+    log,
+    fileServers,
+    configPath,
+    configError,
+    mcp: input.mcp,
+    resolveSecrets: input.resolveSecrets
+  });
+  try {
+    await connections.start();
+    const mcpTools = tools.list({ source: "mcp" }).length;
+    if (mcpTools || fileServers.length) log("tools.mcp_installed", { config: configPath, tools: mcpTools });
+  } catch (error) {
+    log("tools.mcp_failed", { error: (error as Error).message });
+  }
+  closers.push(() => connections.close());
 
   try {
     const disabled = await applyToolSwitches(tools, input.store, input.ownerId);
@@ -69,6 +85,7 @@ export async function installSibylTools(input: InstallToolsInput): Promise<Insta
   }
 
   return {
+    connections,
     close: async () => {
       await Promise.all(closers.map((close) => close().catch(() => undefined)));
     }
@@ -99,9 +116,6 @@ function isFalse(value: string | undefined): boolean {
   return /^(false|0|no|off)$/i.test(value?.trim() ?? "");
 }
 
-function positiveInt(value: string | undefined): number | undefined {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
 
 export { setToolEnabled, loadDisabledTools, applyToolSwitches, DISABLED_TOOLS_KEY } from "./switches.js";
+export { ConnectionsManager } from "./connections.js";

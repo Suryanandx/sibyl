@@ -17,6 +17,7 @@ import {
 } from "@open-gpt-live/core";
 import { createUsageMeter } from "./metering/meter.js";
 import { installSibylTools, type InstalledTools } from "./tools/index.js";
+import type { ConnectionsManager } from "./tools/connections.js";
 import { openStore } from "@open-gpt-live/store";
 import { installSlides, type SlidesService } from "./slides/index.js";
 
@@ -27,6 +28,8 @@ export interface GatewayRuntime {
   meter: UsageMeter;
   /** Sibyl Slides (engine client + decks), when the engine is configured. */
   slides?: SlidesService;
+  /** MCP servers and tool switches managed from the app (absent in bare test runtimes). */
+  connections?: ConnectionsManager;
   close(): Promise<void>;
 }
 
@@ -48,6 +51,7 @@ export async function createRuntime(options: RuntimeOptions): Promise<GatewayRun
     tools,
     meter,
     ...(installed.slides ? { slides: installed.slides } : {}),
+    connections: installed.connections,
     close: async () => {
       await installed.close();
       await store.close();

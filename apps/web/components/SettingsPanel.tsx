@@ -38,6 +38,8 @@ interface SettingsPanelProps {
   onRequestUsage?: () => void;
   onChange: (patch: Partial<SessionSettings>) => void;
   onClose: () => void;
+  /** Open the Connections screen (tools and MCP servers). */
+  onOpenConnections?: () => void;
 }
 
 /** Models & voice: presets as plan-style cards, then fine-grained choices. */
@@ -73,6 +75,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
             Sibyl picks models from OpenRouter by cost, measured speed and benchmarks.
             Choose a preset, or tune each part yourself.
           </p>
+          {props.onOpenConnections ? (
+            <button type="button" className="linkBtn connLink" onClick={props.onOpenConnections}>
+              Tools &amp; data sources → Connections
+            </button>
+          ) : null}
         </header>
 
         <div className="segmented" role="tablist" aria-label="Settings sections">
