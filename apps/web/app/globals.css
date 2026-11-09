@@ -5264,3 +5264,49 @@ button.attachmentChip.sent:hover {
     height: 40px;
   }
 }
+
+/* ── Not found ── */
+
+.notFound {
+  align-items: center;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.notFoundMark {
+  filter: var(--mark-filter, none);
+  margin-bottom: 8px;
+}
+
+:root[data-theme="light"] .notFoundMark {
+  filter: invert(1);
+}
+
+.notFound h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.notFound p {
+  color: var(--text-2);
+  margin: 0 0 10px;
+}
+
+.notFoundActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.notFoundActions a {
+  text-decoration: none;
+}

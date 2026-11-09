@@ -54,6 +54,21 @@ export default function SlidesLibraryPage() {
   const [loadError, setLoadError] = useState<string>();
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [selected, setSelected] = useState<string>(ALL);
+
+  // The address names the open space (/library/slides?space=<id>), so
+  // refresh, shared links and Back/Forward land on the same space.
+  useEffect(() => {
+    const fromUrl = () => new URLSearchParams(window.location.search).get("space") ?? ALL;
+    setSelected(fromUrl());
+    const onPop = () => setSelected(fromUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  useEffect(() => {
+    const current = new URLSearchParams(window.location.search).get("space") ?? ALL;
+    if (current === selected) return;
+    window.history.pushState(null, "", selected === ALL ? "/library/slides" : `/library/slides?space=${encodeURIComponent(selected)}`);
+  }, [selected]);
   const [decks, setDecks] = useState<DeckGroup[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [templates, setTemplates] = useState<Template[]>([{ id: "general", name: "General" }]);

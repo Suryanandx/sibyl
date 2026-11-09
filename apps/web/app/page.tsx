@@ -37,6 +37,7 @@ import { Icon, type IconName } from "../components/Icon";
 import { SilverMark } from "../components/Brand";
 import { SibylLoader, ThinkingStatus } from "../components/SibylLoader";
 import { AppRail, type RailItem } from "../components/AppRail";
+import { buildRoute, currentPath, parseRoute, type AppRoute, type RoutePanel } from "../lib/routes";
 import type { VoiceState } from "../components/voice-state";
 import { sibylDarkTheme, sibylLightTheme } from "../lib/sibyl-theme";
 import { titleFor, toMarkdown, type ConversationMessageView, type ConversationSummary } from "../lib/conversations";
@@ -452,13 +453,19 @@ export default function Home() {
         setError(restoredConnection ? "Gateway reconnected." : null);
         // History lives on the Gateway: list it, and resume the live
         // conversation (with its full context) if it was saved.
-        const resumeId = conversationIdRef.current;
-        const resume = resumeId && conversationsRef.current.some((item) => item.id === resumeId);
+        // The address wins on first load (/c/<id>), then the live conversation.
+        const urlId = conversationIdRef.current ? null : parseRoute(window.location).conversationId;
+        const resumeId = conversationIdRef.current ?? urlId;
+        const resume = Boolean(resumeId) && (resumeId === urlId || conversationsRef.current.some((item) => item.id === resumeId));
+        if (urlId) {
+          pendingRouteRef.current = buildRoute({ conversationId: urlId, panel: null, tab: null });
+          routeSettledRef.current = false;
+        }
         sendRaw(socket, { type: WS_EVENTS.CONVERSATIONS_REQUEST });
         routinesInbox.onConnected();
         sendRaw(socket, {
           type: WS_EVENTS.CONVERSATION_OPEN,
-          ...(resume ? { conversationId: resumeId } : {})
+          ...(resume && resumeId ? { conversationId: resumeId } : {})
         });
       });
 
@@ -579,6 +586,21 @@ export default function Home() {
       activeRequestIdRef.current = null;
       setActiveRequestId(null);
       conversationIdRef.current = message.conversationId;
+      routeSettledRef.current = true;
+      if (pendingRouteRef.current) {
+        // Settle the address on what the gateway actually opened (a deleted
+        // chat falls back to a new one), keeping any open panel.
+        pendingRouteRef.current = null;
+        routeSettledRef.current = false;
+        lastRoutedChatRef.current = message.conversationId;
+        const here = parseRoute(window.location);
+        const settled = buildRoute({
+          conversationId: message.messages.length > 0 ? message.conversationId : null,
+          panel: here.panel,
+          tab: here.tab
+        });
+        if (settled !== currentPath()) window.history.replaceState(window.history.state, "", settled);
+      }
       setConversationId(message.conversationId);
       setMessages(message.messages.map(fromStoredMessage));
       atBottomRef.current = true;
@@ -1014,6 +1036,13 @@ export default function Home() {
         setError("That conversation no longer exists.");
         const socket = socketRef.current;
         if (socket) sendRaw(socket, { type: WS_EVENTS.CONVERSATIONS_REQUEST });
+        // A link to a deleted chat: drop it from the address and start fresh.
+        const here = parseRoute(window.location);
+        if (here.conversationId) {
+          pendingRouteRef.current = buildRoute({ conversationId: null, panel: null, tab: null });
+          routeSettledRef.current = false;
+          if (socket) sendRaw(socket, { type: WS_EVENTS.CONVERSATION_OPEN });
+        }
         return;
       }
       if (
@@ -2134,16 +2163,110 @@ export default function Home() {
     else if (item === "settings") setSettingsOpen(true);
   }
 
-  // Other screens (e.g. the Slides library) link here with ?open=<panel>.
+  // ── Routing: the address reflects the chat and the open panel ──
+  const openPanel: RoutePanel | null = settingsOpen
+    ? "settings"
+    : connectionsOpen
+      ? "connections"
+      : secretsOpen
+        ? "secrets"
+        : routinesOpen
+          ? "routines"
+          : inboxOpen
+            ? "inbox"
+            : null;
+  const routedConversationId = conversationId && messages.length > 0 ? conversationId : null;
+  /** Set while the app catches up with a Back/Forward or a deep link. */
+  const pendingRouteRef = useRef<string | null>(null);
+  /** A conversation.state arrived since the pending route was set. */
+  const routeSettledRef = useRef(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  /** The live chat when the address was last updated (first message vs. switching chats). */
+  const lastRoutedChatRef = useRef<string | null>(null);
+  const routeReadyRef = useRef(false);
+
+  function applyPanel(panel: RoutePanel | null, tab: string | null): void {
+    setSettingsOpen(panel === "settings");
+    if (panel === "settings" && tab) setSettingsTab(tab as SettingsTab);
+    setConnectionsOpen(panel === "connections");
+    setRoutinesOpen(panel === "routines");
+    setInboxOpen(panel === "inbox");
+    if (panel === "secrets") openSecrets();
+    else setSecretsOpen(false);
+  }
+
+  // First load: open the panel named in the address (chat id is handled on connect).
   useEffect(() => {
-    if (!connected) return;
+    if (!connected || routeReadyRef.current) return;
+    routeReadyRef.current = true;
     const params = new URLSearchParams(window.location.search);
-    const open = params.get("open") as RailItem | null;
-    if (!open) return;
-    window.history.replaceState(null, "", window.location.pathname);
-    if (["history", "routines", "inbox", "connections", "secrets", "settings"].includes(open)) openRailItem(open);
+    if ((params.get("panel") ?? params.get("open")) === "history") {
+      setSidebarOpen(true);
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+      return;
+    }
+    const route = parseRoute(window.location);
+    if (route.panel) applyPanel(route.panel, route.tab);
+    if (params.has("open")) window.history.replaceState(window.history.state, "", buildRoute(route));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
+
+  // State → address. Opening a chat or a panel adds a history entry; the
+  // first message of a new chat only names the current one.
+  useEffect(() => {
+    if (!routeReadyRef.current) return;
+    const desired = buildRoute({
+      conversationId: routedConversationId,
+      panel: openPanel,
+      tab: openPanel === "settings" ? settingsTab ?? null : null
+    });
+    if (pendingRouteRef.current) {
+      // Wait for the gateway to open the chat, then settle on what it opened
+      // (a deleted chat falls back to a new one) without adding history.
+      if (!routeSettledRef.current) return;
+      pendingRouteRef.current = null;
+      routeSettledRef.current = false;
+      lastRoutedChatRef.current = conversationId;
+      if (desired !== currentPath()) window.history.replaceState(window.history.state, "", desired);
+      return;
+    }
+    const here = currentPath();
+    if (desired === here) {
+      lastRoutedChatRef.current = conversationId;
+      return;
+    }
+    const current = parseRoute(window.location);
+    const state = window.history.state as { sibylPanel?: boolean } | null;
+    const sameChat = lastRoutedChatRef.current === conversationId;
+    lastRoutedChatRef.current = conversationId;
+    if (!current.conversationId && routedConversationId && current.panel === openPanel && sameChat) {
+      window.history.replaceState(state, "", desired);
+    } else if (current.panel && !openPanel && state?.sibylPanel && current.conversationId === routedConversationId) {
+      // Closing a panel we opened: step back instead of piling up entries.
+      window.history.back();
+    } else {
+      window.history.pushState({ sibylPanel: Boolean(openPanel) }, "", desired);
+    }
+  }, [conversationId, routedConversationId, openPanel, settingsTab]);
+
+  // Address → state (Back / Forward).
+  useEffect(() => {
+    const onPop = () => {
+      const route: AppRoute = parseRoute(window.location);
+      applyPanel(route.panel, route.tab);
+      const live = conversationIdRef.current;
+      const shownId = messagesRef.current.length > 0 ? live : null;
+      if (route.conversationId !== shownId) {
+        pendingRouteRef.current = buildRoute({ conversationId: route.conversationId, panel: null, tab: null });
+        routeSettledRef.current = false;
+        switchConversation(route.conversationId ?? undefined);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function cycleTheme(): void {
     const next = themeMode === "dark" ? "light" : "dark";

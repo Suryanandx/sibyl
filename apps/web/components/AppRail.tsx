@@ -70,7 +70,7 @@ export function AppRail({
         {content}
       </button>
     ) : (
-      <a className={className} href={`/?open=${key}`} aria-label={label} title={label}>
+      <a className={className} href={`/?panel=${key}`} aria-label={label} title={label}>
         {content}
       </a>
     );
