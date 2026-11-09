@@ -4798,3 +4798,469 @@ button.attachmentChip.sent:hover {
     padding: 14px;
   }
 }
+
+/* ── Secrets ── */
+
+.secretPrompt {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 10px 0 4px;
+  max-width: 560px;
+  padding: 18px 18px 16px;
+}
+
+.secretPrompt.pending {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.secretHead {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.secretBadge {
+  align-items: center;
+  background: var(--accent-soft);
+  border-radius: 12px;
+  color: var(--accent);
+  display: inline-flex;
+  flex: none;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.secretEyebrow {
+  color: var(--accent);
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.secretPrompt:not(.pending) .secretEyebrow {
+  color: var(--text-3);
+}
+
+.secretTitle {
+  color: var(--text);
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.secretWhy {
+  color: var(--text);
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.secretHow {
+  background: var(--subtle);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.secretHow p {
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.secretHow a {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  width: fit-content;
+}
+
+.secretForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.secretField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.secretLabel {
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 0;
+}
+
+.secretInputRow {
+  display: flex;
+  gap: 8px;
+}
+
+.secretInput {
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  flex: 1;
+  font: inherit;
+  font-size: 14.5px;
+  height: 42px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.secretInput[type="password"],
+.secretInput.mono {
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+}
+
+.secretInput.small {
+  font-size: 13.5px;
+  height: 38px;
+}
+
+.secretInput:focus-visible {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.secretInput:disabled {
+  opacity: 0.6;
+}
+
+.secretReveal {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 64px;
+  padding: 0 12px;
+}
+
+.secretReveal:hover:not(:disabled) {
+  background: var(--subtle);
+  color: var(--text);
+}
+
+.secretReveal:focus-visible,
+.secretHostRemove:focus-visible,
+.secretHow a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.secretHosts {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.secretHostList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.secretHost {
+  align-items: center;
+  background: var(--tint-sage);
+  border-radius: 999px;
+  color: var(--text);
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 10px;
+}
+
+.secretHost span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secretHostRemove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  margin-right: -6px;
+  padding: 0;
+  width: 20px;
+}
+
+.secretHostRemove:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.secretHostRemove:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.secretHostAdd {
+  display: flex;
+  gap: 8px;
+}
+
+.secretHostAdd .approvalBtn {
+  height: 38px;
+  min-width: 72px;
+}
+
+.secretHostsLine {
+  color: var(--text);
+  font-size: 13.5px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.secretSrOnly {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.secretError {
+  background: var(--danger-soft);
+  border-radius: 10px;
+  color: var(--danger);
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.secretNote {
+  color: var(--text-3);
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.secretButtons {
+  justify-content: flex-end;
+}
+
+.approvalBtn.danger {
+  color: var(--danger);
+}
+
+.approvalBtn.danger.primary {
+  background: var(--danger);
+  color: var(--bg);
+}
+
+.approvalBtn.danger.primary:hover:not(:disabled) {
+  background: var(--danger);
+  opacity: 0.9;
+}
+
+/* Secrets panel */
+
+.secretsDialog {
+  width: min(720px, 100%);
+}
+
+.secretsDialog:focus {
+  outline: none;
+}
+
+.secretsPanelError {
+  margin: 18px 0 0;
+}
+
+.secretsToolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 22px 0 12px;
+}
+
+.secretsEmpty {
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+.secretsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.secretRow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.secretRowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.secretRowTitle {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secretName {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.secretService {
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+
+.secretWarn {
+  background: var(--tint-amber);
+  border-radius: 999px;
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
+
+.secretDesc,
+.secretMeta {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.secretMeta {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.secretRowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secretRowActions .approvalBtn {
+  height: 34px;
+  min-width: 0;
+  padding: 0 14px;
+}
+
+.secretConfirm {
+  background: var(--danger-soft);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.secretConfirm p {
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.secretPanelForm {
+  background: var(--subtle);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.secretPanelForm .secretInput {
+  background: var(--surface);
+}
+
+.secretFormGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+@media (max-width: 760px) {
+  .secretPrompt {
+    border-radius: 18px;
+    padding: 16px 14px 14px;
+  }
+
+  .secretButtons .approvalBtn {
+    flex: 1;
+    height: 44px;
+  }
+
+  .secretInput {
+    font-size: 16px; /* no zoom-on-focus on iOS */
+  }
+
+  .secretFormGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .secretRowActions .approvalBtn {
+    flex: 1 1 auto;
+    height: 40px;
+  }
+}

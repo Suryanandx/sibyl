@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
+  SECRET_EVENTS,
   WS_EVENTS,
   createRequestId,
   isConnectionsServerMessage,
@@ -14,7 +15,9 @@ import {
   type SessionCapabilities,
   type SessionSettings,
   type ToolArtifactView,
-  type UsageView
+  type UsageView,
+  type SecretMetaView,
+  type SecretRequestView
 } from "@open-gpt-live/protocol";
 import { ThemeProvider, useSystemThemeMode } from "@openuidev/react-ui";
 import { GenUiView, type GenUiAction } from "../components/GenUiView";
@@ -28,6 +31,8 @@ import { SlidesCard } from "../components/SlidesCard";
 import { Inbox, InboxButton, countByRoutine, showBrowserNotification, useRoutinesInbox } from "../components/Inbox";
 import { RoutinesIcon, RoutinesPanel } from "../components/RoutinesPanel";
 import type { RoutineNotification } from "@open-gpt-live/protocol";
+import { SecretPrompt, type SecretPromptStatus } from "../components/SecretPrompt";
+import { SecretsPanel, SecretsIcon, type SecretUpdate } from "../components/SecretsPanel";
 import { Icon, type IconName } from "../components/Icon";
 import { SilverMark } from "../components/Brand";
 import { SibylLoader, ThinkingStatus } from "../components/SibylLoader";
@@ -100,6 +105,16 @@ interface ChatMessage {
   approvals?: ApprovalEntry[];
   /** Files sent with a user message. */
   attachments?: AttachmentRef[];
+  /** Secure key prompts (request_secret) in this run. */
+  secretPrompts?: SecretPromptEntry[];
+}
+
+interface SecretPromptEntry {
+  view: SecretRequestView;
+  status: SecretPromptStatus;
+  submitting?: boolean;
+  error?: string;
+  savedHosts?: string[];
 }
 
 /** A queued message keeps the files it was sent with. */
@@ -293,6 +308,9 @@ export default function Home() {
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const connectionsListenersRef = useRef(new Set<ConnectionsListener>());
   const [usage, setUsage] = useState<UsageView | null>(null);
+  const [secretsOpen, setSecretsOpen] = useState(false);
+  const [secretsList, setSecretsList] = useState<SecretMetaView[] | null>(null);
+  const [secretsError, setSecretsError] = useState<string | null>(null);
   const [budgetNotice, setBudgetNotice] = useState<string | null>(null);
   /** Conversations stored on the Gateway (newest first). */
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -526,6 +544,8 @@ export default function Home() {
     }
 
     if (routinesInbox.handleMessage(message)) return;
+    if (handleSecretsMessage(message)) return;
+
     if (message.type === WS_EVENTS.SESSION_START) {
       setSessionId(message.sessionId);
       return;
@@ -1070,6 +1090,93 @@ export default function Home() {
     }
     if (!socket) return;
     sendRaw(socket, { type: WS_EVENTS.SESSION_UPDATE, settings: patch });
+  }
+
+  /** Secure key prompts and the Secrets panel. Values are only ever sent, never received. */
+  function handleSecretsMessage(message: ServerMessage): boolean {
+    if (message.type === SECRET_EVENTS.STATE) {
+      setSecretsList(message.secrets);
+      setSecretsError(message.error ?? null);
+      return true;
+    }
+    if (message.type === SECRET_EVENTS.REQUEST) {
+      const view = message.request;
+      setMessages((current) => {
+        const newestFirst = [...current].reverse();
+        const owner =
+          newestFirst.find((item) => item.role === "assistant" && item.requestId === view.runId) ??
+          newestFirst.find((item) => item.role === "assistant");
+        if (!owner) return current;
+        return current.map((item) =>
+          item === owner
+            ? { ...item, secretPrompts: [...(item.secretPrompts ?? []).filter((entry) => entry.view.id !== view.id), { view, status: "pending" as const }] }
+            : item
+        );
+      });
+      return true;
+    }
+    if (message.type === SECRET_EVENTS.RESOLVED) {
+      setMessages((current) =>
+        current.map((item) =>
+          item.secretPrompts?.some((entry) => entry.view.id === message.id)
+            ? {
+                ...item,
+                secretPrompts: item.secretPrompts.map((entry) =>
+                  entry.view.id !== message.id
+                    ? entry
+                    : message.status === "invalid"
+                      ? { ...entry, submitting: false, error: message.message ?? "That key could not be saved." }
+                      : { ...entry, status: message.status, submitting: false, error: undefined, ...(message.allowedHosts ? { savedHosts: message.allowedHosts } : {}) }
+                )
+              }
+            : item
+        )
+      );
+      return true;
+    }
+    return false;
+  }
+
+  function updateSecretPrompt(id: string, patch: Partial<SecretPromptEntry>): void {
+    setMessages((current) =>
+      current.map((item) =>
+        item.secretPrompts?.some((entry) => entry.view.id === id)
+          ? { ...item, secretPrompts: item.secretPrompts.map((entry) => (entry.view.id === id ? { ...entry, ...patch } : entry)) }
+          : item
+      )
+    );
+  }
+
+  function provideSecret(id: string, value: string, allowedHosts: string[]): void {
+    const socket = socketRef.current;
+    if (!socket || !sendRaw(socket, { type: SECRET_EVENTS.PROVIDE, id, value, allowedHosts })) {
+      updateSecretPrompt(id, { error: "Not connected — try again in a moment." });
+      return;
+    }
+    updateSecretPrompt(id, { submitting: true, error: undefined });
+  }
+
+  function cancelSecret(id: string): void {
+    const socket = socketRef.current;
+    if (socket) sendRaw(socket, { type: SECRET_EVENTS.CANCEL, id });
+    updateSecretPrompt(id, { status: "cancelled", submitting: false });
+  }
+
+  function openSecrets(): void {
+    setSecretsOpen(true);
+    setSecretsError(null);
+    const socket = socketRef.current;
+    if (socket) sendRaw(socket, { type: SECRET_EVENTS.LIST });
+  }
+
+  function saveSecret(update: SecretUpdate): void {
+    const socket = socketRef.current;
+    if (!socket || !sendRaw(socket, { type: SECRET_EVENTS.UPDATE, ...update })) setSecretsError("Not connected — try again in a moment.");
+  }
+
+  function deleteSecret(name: string): void {
+    const socket = socketRef.current;
+    if (!socket || !sendRaw(socket, { type: SECRET_EVENTS.DELETE, name })) setSecretsError("Not connected — try again in a moment.");
   }
 
   function decideApproval(id: string, decision: "approve" | "decline", remember: boolean): void {
@@ -2312,6 +2419,7 @@ export default function Home() {
         <a className="railBtn" href="/library/slides" aria-label="Slides" title="Slides">
           <Icon name="layers" />
         </a>
+        <button type="button" className="railBtn" aria-label="Secrets" title="Secrets" onClick={openSecrets}><SecretsIcon /></button>
         <button type="button" className="railBtn" aria-label="Models & voice" title="Models & voice" onClick={() => setSettingsOpen(true)}>
           <Icon name="sliders" />
         </button>
@@ -2535,6 +2643,18 @@ export default function Home() {
                                     status={entry.status}
                                     submitting={entry.submitting}
                                     onDecide={(decision, remember) => decideApproval(entry.view.id, decision, remember)}
+                                  />
+                                ))}
+                                {message.secretPrompts?.map((entry) => (
+                                  <SecretPrompt
+                                    key={entry.view.id}
+                                    request={entry.view}
+                                    status={entry.status}
+                                    submitting={entry.submitting}
+                                    error={entry.error}
+                                    savedHosts={entry.savedHosts}
+                                    onSave={(value, hosts) => provideSecret(entry.view.id, value, hosts)}
+                                    onCancel={() => cancelSecret(entry.view.id)}
                                   />
                                 ))}
                                 {cleanText(message.content) ? (
@@ -2778,6 +2898,15 @@ export default function Home() {
           </button>
         </div>
       ) : null}
+      <SecretsPanel
+        open={secretsOpen}
+        secrets={secretsList}
+        error={secretsError}
+        disabled={!connected}
+        onClose={() => setSecretsOpen(false)}
+        onSave={saveSecret}
+        onDelete={deleteSecret}
+      />
     </div>
     </ThemeProvider>
   );
