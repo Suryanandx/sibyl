@@ -1,114 +1,94 @@
-# Contributing to OpenGPT Live
+# Contributing to Sibyl
 
-Thank you for helping make open voice AI easier to inspect, run, and improve.
-Bug fixes, voice-quality measurements, provider adapters, tests, and focused
-documentation improvements are all welcome.
+Thanks for helping make Sibyl better. Bug fixes, latency measurements, new tools, tests and clear documentation are all welcome.
 
 ## Before you start
 
-- Search existing issues and pull requests before opening a duplicate.
-- Open an issue before a large protocol, architecture, or provider change so the
-  compatibility and testing approach can be agreed first.
-- Keep pull requests focused. Unrelated cleanup makes realtime regressions harder
-  to review.
-- Report vulnerabilities privately by following [SECURITY.md](SECURITY.md).
+- Search existing issues and pull requests first.
+- For a large change — the protocol, the architecture, a new provider or a new kind of tool — open an issue first so we can agree on the approach and how to test it.
+- Keep pull requests focused. Unrelated clean-up makes voice regressions harder to review.
+- Report security problems privately; see [SECURITY.md](SECURITY.md).
 
-## Local setup
+## Set up
 
-Requirements:
-
-- Node.js 22.13 or newer
-- pnpm 11
+You need Node.js 22.13 or newer. pnpm comes through corepack.
 
 ```bash
-pnpm install
-cp .env.example .env
-pnpm dev
+corepack enable
+corepack pnpm install
+cp .env.example .env        # set OPENROUTER_API_KEY to try it for real
+corepack pnpm dev
 ```
 
-The Web app runs at `http://localhost:3000` and the Gateway health endpoint is
-`http://localhost:8787/healthz`. Automated tests use fakes and do not require a
-paid provider key.
+The web app runs at <http://localhost:3000> and the gateway health check at <http://localhost:8787/healthz>. The automated tests use fakes and need no API key.
 
-Run the complete quality gate before opening a pull request:
+## Checks
+
+Run these before opening a pull request:
 
 ```bash
-pnpm check
+npx vitest run
+corepack pnpm -r typecheck
+corepack pnpm --filter @open-gpt-live/gateway build
+cd apps/web && corepack pnpm build
 ```
 
-You can also run its parts independently:
+`corepack pnpm check` runs typecheck, tests and both builds in one go.
 
-```bash
-pnpm typecheck
-pnpm test
-pnpm build
-```
+## Where things live
 
-## Repository map
+| Path | What it does |
+|---|---|
+| `apps/web` | The web app: audio capture, voice activity detection, playback, conversation view, visuals, approval cards |
+| `apps/gateway` | Sessions, turn-taking, the voice and deep brains, tool loop, model scout, storage and metering wiring |
+| `packages/protocol` | Browser ↔ gateway message types and runtime validation |
+| `packages/core` | Shared contracts: tools, approvals, storage, usage |
+| `packages/adapters` | LLM, transcription and speech provider interfaces |
+| `packages/genui` | Prompts and the speech/visual splitter |
+| `packages/store` | SQLite storage |
+| `docs` | User and contributor documentation |
 
-| Path | Responsibility |
-| --- | --- |
-| `apps/web` | Browser audio capture, VAD, request lifecycle, playback, and reconnect behavior |
-| `apps/gateway` | WebSocket sessions, validation, turn orchestration, cancellation, and provider wiring |
-| `packages/protocol` | Shared client/server message types and runtime validation |
-| `packages/adapters` | Replaceable LLM, batch STT, streaming STT, and TTS provider interfaces |
-| `docs` | Protocol, configuration, browser support, and deployment references |
+The design rule is *one of everything*: each capability exists once, and new features build on it. Read [docs/architecture.md](docs/architecture.md) before adding something that looks like it needs a parallel version.
+
+Package names keep the `@open-gpt-live/*` scope for now; use them as they are in filters and imports.
 
 ## Making a change
 
-1. Create a short branch from the current default branch.
-2. Add or update tests with the implementation.
-3. Update user-facing documentation when behavior or configuration changes.
-4. Run `pnpm check` and record any additional manual verification in the pull
-   request.
-5. Open a pull request that explains the user problem, the chosen boundary, and
-   any known tradeoffs.
+1. Branch from `main`.
+2. Add or update tests with the change.
+3. Update the docs when behaviour or configuration changes. Every environment variable belongs in [docs/configuration.md](docs/configuration.md) with its real default.
+4. Run the checks above, and note any manual testing (browser, device, voice) in the pull request.
+5. Explain the problem, the approach and any trade-offs in the pull request.
 
-### Change expectations
+### What reviewers look for
 
-| Area | Expected evidence |
-| --- | --- |
-| Protocol | Shared types, runtime validation, event-order documentation, and a Gateway regression test |
-| Gateway | Request-scoped behavior, abort/close cleanup, late-event handling, and integration tests |
-| Web voice flow | Lifecycle cleanup, reconnect/interrupt behavior, and the verified browser or device |
-| VAD or latency | Before/after measurements, test audio or reproducible conditions, and safe defaults |
-| Provider adapter | Interface compliance, cancellation support, normalized errors, fake-transport tests, and configuration docs |
+| Area | Evidence |
+|---|---|
+| Protocol | Types and validation in `packages/protocol`, a gateway test, and an update to [docs/protocol.md](docs/protocol.md) |
+| Gateway | Cancellation and cleanup on interrupt and disconnect, handling of late events, integration tests |
+| Voice and latency | Before and after measurements, reproducible conditions, safe defaults |
+| Tools | A `ToolDefinition` with the right `effect` (`read` or `write`), tests without network access, and an entry in [docs/tools.md](docs/tools.md) |
+| Provider adapters | Honour `AbortSignal`, normalise errors, never log secrets, tests with a fake transport |
+| Web app | Works on a phone-sized screen and in light and dark themes; a screenshot helps |
 
-Do not weaken validation or silently change an existing event's meaning. Prefer a
-small explicit protocol extension when the browser and Gateway need new data.
+Don't weaken validation or change the meaning of an existing event. Prefer a small, explicit protocol addition.
 
-## Adding a provider integration
+## Adding a tool
 
-Provider-specific behavior belongs behind the interfaces in
-`packages/adapters`:
+Built-in tools live in `apps/gateway/src/tools/builtin`. A tool:
 
-- `LLMProvider` for streamed text generation
-- `STTProvider` for complete-turn transcription
-- `StreamingSTTProvider` for bidirectional realtime transcription
-- `TTSProvider` for speech synthesis
-
-A provider contribution should:
-
-1. Keep vendor branching out of the core session lifecycle.
-2. Honor `AbortSignal` and close network or stream resources on cancellation.
-3. Document accepted audio formats, sample rates, and streaming semantics.
-4. Read credentials from environment variables and never log secrets.
-5. Include deterministic tests that run without network access or paid keys.
-6. Map provider output to the existing protocol semantics instead of exposing
-   vendor events directly to the browser.
-7. Document setup, licensing, data-flow, and any cloud-only or local-only limits.
-
-Use the **Provider integration** issue form before starting a substantial adapter.
+- is a single `ToolDefinition` registered in the one tool registry;
+- declares `effect: "write"` if it sends, creates, deletes or spends anything, so it goes through an approval card;
+- validates its input and keeps its output short;
+- fetches model-chosen URLs only through the SSRF guard;
+- has tests that don't touch the network.
 
 ## Pull request checklist
 
-- The change has a focused purpose and no unrelated generated files.
-- New behavior has automated coverage or a documented reason why it cannot.
-- `pnpm check` passes locally.
-- Configuration and protocol docs match the implementation.
-- Logs and fixtures contain no API keys, tokens, recordings, or personal data.
-- Browser-facing changes include a screenshot or a short manual test note when
-  useful.
+- Focused change, no unrelated generated files.
+- New behaviour is tested, or the pull request says why it can't be.
+- All checks pass.
+- Docs match the code.
+- No API keys, tokens, recordings or personal data in code, logs or fixtures.
 
-By participating, you agree to follow the
-[Code of Conduct](CODE_OF_CONDUCT.md).
+By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

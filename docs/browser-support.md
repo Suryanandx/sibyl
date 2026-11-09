@@ -1,32 +1,29 @@
-# Browser Support
+# Browser support
 
-## Verified baseline
+Typing works in any current browser. Voice depends on browser audio APIs, so support varies.
 
-The current local browser smoke test targets Chromium. The production build, WebSocket connection, text input, reconnect UI, and responsive layout were manually exercised there; the repository does not yet include a committed end-to-end browser test suite.
+| Browser | Status |
+|---|---|
+| **Chrome** (desktop and Android) | Recommended. Used for development and the latency measurements. |
+| **Edge** | Expected to behave like Chrome (same engine). |
+| **Safari** (macOS and iOS) | Should work; check microphone permission, autoplay and push-to-talk recording on your devices before relying on it. |
+| **Firefox** | Typing and playback work. Voice should work but is less tested; Firefox has no built-in speech recognition, so there are no instant captions while you speak. |
 
-The audio paths depend on browser APIs:
+## What voice uses
 
-| Capability | Primary path | Fallback |
-| --- | --- | --- |
-| Live PCM capture | `AudioWorklet` | `ScriptProcessorNode` |
-| Push-to-talk | `MediaRecorder` with WebM/Opus | Browser-selected MediaRecorder MIME type |
-| Playback | `HTMLAudioElement` and Object URLs | Manual play button when autoplay is blocked |
-| Microphone | `navigator.mediaDevices.getUserMedia` | Text input remains available |
+| Capability | Browser API | If it's missing |
+|---|---|---|
+| Microphone | `navigator.mediaDevices.getUserMedia` | Voice controls are unavailable; typing still works. |
+| Hands-free capture | `AudioWorklet` (24 kHz mono PCM) | Falls back to `ScriptProcessorNode`. |
+| Push-to-talk recording | `MediaRecorder` (WebM/Opus preferred) | Uses whatever format the browser offers. |
+| Playback | Web Audio (`AudioContext`) | Required for spoken replies. |
+| Instant captions | `SpeechRecognition` / `webkitSpeechRecognition` | No captions while you speak; the accurate transcript still appears after each turn. |
 
-## Browser expectations
+## Things to expect
 
-- Chrome: recommended and used for the current local verification.
-- Edge: expected to follow the Chromium path, but should be included in release smoke testing.
-- Safari: requires manual verification of MediaRecorder MIME support, AudioWorklet behavior, autoplay, and microphone permissions before claiming support.
-- Firefox: requires manual verification of PCM worklet timing and WebM/Opus transcription compatibility before claiming support.
-
-The UI automatically falls back to text input when microphone capture is unavailable. Unsupported or unverified browsers are not advertised as fully supported.
-
-## Known audio limitations
-
-- Adaptive RMS VAD calibrates and follows gradual room-noise changes, but it cannot classify human voice as accurately as a model-backed detector.
-- A 400 ms PCM pre-roll reduces clipped first syllables but does not replace acoustic echo cancellation.
-- TTS playback raises the VAD threshold and briefly suppresses new starts after playback; loud speakers can still cause false barge-in.
-- Browser autoplay rules may require one explicit click before spoken replies can play.
-
-Wait for the one-second calibration state to finish before speaking. Use headphones when evaluating turn detection separately from echo behavior.
+- **Secure pages only.** Browsers allow the microphone only on HTTPS pages or `localhost`.
+- **Autoplay.** Browsers may block audio until you interact with the page. Tapping the mic button or sending a message counts.
+- **Echo.** The mic is opened with echo cancellation, and the detector raises its threshold while Sibyl is speaking. With loud speakers, Sibyl can still occasionally hear itself and stop. Headphones avoid this completely.
+- **Noisy rooms.** The voice activity detector is a volume-based detector that calibrates to the room for one second when you start. Stay quiet during that moment. A steady fan is fine; sudden loud noise can start a turn, and the voice brain then usually ignores it (`@silence`).
+- **Captions in Chrome** are produced by the browser vendor's speech service, not on your device. Turn them off with `NEXT_PUBLIC_LIVE_CAPTIONS=false` if that matters to you.
+- **Storage.** Model choices, the theme and the owner token are kept in the browser's local storage. In private windows they last only for the session.

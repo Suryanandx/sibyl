@@ -1,230 +1,177 @@
 <p align="center">
-  English · <a href="README.zh-CN.md">简体中文</a>
+  <img src="apps/web/public/brand/sibyl-mark.png" alt="Sibyl" width="96" />
+</p>
+
+<h1 align="center">Sibyl</h1>
+
+<p align="center">
+  <strong>Talk naturally. Sibyl listens, thinks, and shows you.</strong>
 </p>
 
 <p align="center">
-  <img src="assets/brand/logo.svg" alt="OpenGPT Live" width="132" />
-</p>
-
-<h1 align="center">OpenGPT Live</h1>
-
-<p align="center">
-  <strong>An open voice-AI session layer that can listen, speak, and be interrupted.</strong>
-</p>
-
-<p align="center">
-  Browser VAD, live transcripts, streamed LLM responses, and TTS playback—connected by a typed WebSocket protocol you can inspect and replace.
-</p>
-
-<p align="center">
-  <a href="#5-minute-quickstart">Quickstart</a> ·
-  <a href="docs/protocol.md">Protocol</a> ·
+  <a href="docs/getting-started.md">Get started</a> ·
+  <a href="docs/voice.md">Voice</a> ·
+  <a href="docs/tools.md">Tools &amp; MCP</a> ·
+  <a href="docs/models-and-costs.md">Models &amp; costs</a> ·
   <a href="docs/configuration.md">Configuration</a> ·
   <a href="docs/deployment.md">Deployment</a> ·
-  <a href="TODO.md">Roadmap</a> ·
-  <a href="https://github.com/study8677/open-gpt-live/discussions">Discussions</a> ·
-  <a href="CONTRIBUTING.md">Contribute</a>
+  <a href="#roadmap">Roadmap</a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/study8677/open-gpt-live/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/study8677/open-gpt-live/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-22.13%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-191919?style=flat-square" />
-</p>
+Sibyl is an open-source assistant you host yourself. Talk to it or type to it, and it answers with interactive visuals, researches the web, works with your own tools and data through MCP, and asks before it changes anything. One OpenRouter key is all you need to start; there is no other service behind it.
 
-![OpenGPT Live browser interface](output/playwright/live-voice.png)
+![Sibyl answering a spoken question with a visual](docs/assets/sibyl-hero.png)
 
-> **This fork:** a live, emotional voice conversation built from swappable OpenRouter models. A voice brain *hears* your audio (tone, hesitation) and talks back in about 2 s with expressive TTS. A deep brain reasons in the background and puts OpenUI visuals on screen. See [docs/openrouter-openui.md](docs/openrouter-openui.md#live-conversation-our-own-gpt-live).
->
-> Every model call goes through **OpenRouter** (chat, speech-to-text, text-to-speech, one key). Answers can include **[OpenUI](https://github.com/thesysdev/openui) generative UI** (charts, tables, cards, forms) next to the spoken reply. Chat, transcription, and voice models are **configurable from the UI**. See [docs/openrouter-openui.md](docs/openrouter-openui.md).
->
-> ```bash
-> pnpm install && cp .env.example .env   # set OPENROUTER_API_KEY
-> cp models.config.example.json models.config.json
-> pnpm dev                               # http://localhost:3000
-> ```
+## What Sibyl does
 
-## Speak. See it. Hear it. Interrupt it.
+**Talk or type, in one conversation.** Type and you get a normal chat reply: text and visuals, nothing read aloud. Turn on the mic and you get a live voice conversation: an audio-native *voice brain* hears your tone and pauses, answers out loud in a second or two, and hands harder work to a *deep brain*. Switch between typing and talking whenever you like; it is the same conversation.
 
-```text
-open your mic
-  → see a live transcript
-  → receive the answer as it is generated
-  → hear the spoken response
-  → start speaking to interrupt it
-```
+**Answers you can see and use.** Replies can include charts, tables, step-by-step plans, option cards and forms, built with [OpenUI](https://github.com/thesysdev/openui). Buttons and forms send your choice straight back to Sibyl. Visuals are never read aloud.
 
-OpenGPT Live is a self-hostable realtime voice AI reference implementation for the session layer between browser audio and GPT-style model infrastructure. It keeps streaming STT, browser VAD, interruptible TTS, and WebSocket turn orchestration visible instead of hiding them behind a vendor-only client SDK.
+![A generated visual next to the conversation](docs/assets/sibyl-visual.png)
 
-## What works today
+**Real work, with your approval.** The deep brain can call tools: search the web, read a webpage, check the weather, convert currencies, look up world time, calculate and search Wikipedia. Connect your own data sources and tools through any [MCP](https://modelcontextprotocol.io) server. Anything that sends, creates, deletes or spends pauses for an approval card in the chat first.
 
-| Capability | Maturity | Implementation |
-| --- | --- | --- |
-| Text chat | Stable | Typed WebSocket messages and streamed Chat Completions output. |
-| Push-to-talk | Stable | MediaRecorder chunks, full-turn STT, and a 25 MB guard. |
-| Spoken replies | Stable | Sentence-segmented TTS and ordered browser playback. |
-| Stop / interrupt | Stable | Abort propagation across LLM, TTS, playback, and late events. |
-| Live Mode | Experimental | Adaptive browser RMS VAD with noise calibration, turn guards, and reconnect cleanup. |
-| First-syllable protection | Experimental | A 400 ms PCM pre-roll is sent when VAD confirms speech. |
-| Streaming STT | Experimental | OpenAI Realtime transcription with incremental deltas and batch WAV fallback. |
-| Voice diagnostics | Stable | Per-turn latency and VAD panels expose first transcript, first token, first audio, noise floor, and thresholds. |
-| Quality baseline | Stable | Runtime protocol validation, automated integration tests, CI, and production builds. |
+**A natural voice.** Emotion cues like `[laughs]` are performed by voices that support them. Talk over Sibyl and it stops. Pause mid-thought and it waits for the rest. Slow providers are hedged with a backup request, and audio plays without gaps.
 
-## Provider compatibility
+![Live voice mode with captions](docs/assets/sibyl-voice.png)
 
-| Layer | Current verified path | Maturity |
-| --- | --- | --- |
-| LLM | OpenAI-compatible Chat Completions | Stable |
-| Batch STT | OpenAI-compatible transcription API | Stable |
-| Streaming STT | OpenAI Realtime transcription | Experimental |
-| TTS | OpenAI-compatible speech API | Stable |
-| Local AI | Pinned Ollama + Speaches/faster-whisper/Kokoro profile | Experimental; contract-tested, real-model acceptance pending |
+**Predictable costs.** A built-in *model scout* picks every model from the live OpenRouter catalog by price, Design Arena benchmarks and measured speed. Choose a preset — **Cheapest**, **Balanced**, **Fastest** or **Best quality** — and see the estimated cost per 100 turns before you commit. Every call is metered with the cost OpenRouter reports, and daily and monthly budgets stop spending before it happens.
 
-## Why this project
+![The Models & voice dialog](docs/assets/sibyl-models.png)
 
-- **Open protocol** — browser and Gateway behavior is described by shared TypeScript events, not an opaque transport.
-- **Replaceable models** — LLM, batch STT, streaming STT, and TTS live behind provider interfaces.
-- **Observable turns** — partial transcript, final transcript, text delta, audio chunk, completion, interruption, and error are explicit events.
-- **Honest boundaries** — this repository is a voice-session reference implementation, not a hosted assistant or billing platform.
+**Yours to keep.** Conversations are stored on your server in SQLite and can be picked up again with full context. A single owner token keeps the gateway private. The web app has searchable history, a composer that queues follow-ups while Sibyl is answering, a quick model menu, light and dark themes, and a layout that works on phones.
 
-| | OpenGPT Live | Typical managed voice API |
-| --- | --- | --- |
-| Session protocol | Inspectable TypeScript events | Provider-defined |
-| Model routing | Replaceable LLM/STT/TTS adapters | Usually tied to one platform |
-| Local inference | Experimental Ollama + open-source speech profile | Usually cloud-first |
-| Operations | You own deployment and tuning | Provider owns infrastructure |
+## Quickstart
 
-## 5-minute quickstart
-
-Requirements: Node.js 22.13+ and pnpm 11+.
+You need Node.js 22.13 or newer and an [OpenRouter](https://openrouter.ai/keys) API key. pnpm comes through corepack, which ships with Node.
 
 ```bash
-pnpm install
-cp .env.example .env
+git clone https://github.com/Suryanandx/sibyl.git
+cd sibyl
+corepack enable
+corepack pnpm install
+cp .env.example .env        # then set OPENROUTER_API_KEY
+corepack pnpm dev
 ```
 
-Set at least the LLM key in `.env`:
+Open <http://localhost:3000>. Type a message, or tap the mic button and start talking (hold it instead for push-to-talk).
 
-```dotenv
-OPENAI_API_KEY=sk-your-key
-```
+On the first start the model scout probes the catalog in the background, which takes about a minute. Sibyl is usable right away on the models in `models.config.example.json` and switches to the scout's picks when they are ready. The full walkthrough is in [docs/getting-started.md](docs/getting-started.md).
 
-Then start the Web app and Gateway:
+### With Docker
 
 ```bash
-pnpm dev
+cp .env.example .env        # set OPENROUTER_API_KEY and SIBYL_OWNER_TOKEN
+docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Gateway health is available at [http://localhost:8787/healthz](http://localhost:8787/healthz).
-
-### Local AI without a cloud key
-
-The experimental Docker profile uses Ollama for the LLM and Speaches for open-source faster-whisper STT plus Kokoro TTS:
-
-```bash
-cp .env.local-ai.example .env
-docker compose --profile local-ai up --build
-```
-
-The first start downloads about 1.8 GB of model weights plus container images. It requires no OpenAI key, but real microphone and local-model acceptance is still pending. See the [local AI guide](docs/local-ai.md) for health checks, the provider smoke script, resource notes, and the exact browser checklist.
-
-### Useful profiles
-
-Text replies without TTS:
-
-```dotenv
-TTS_ENABLED=false
-```
-
-Native streaming transcription for Live Mode:
-
-```dotenv
-STT_REALTIME_ENABLED=true
-STT_REALTIME_MODEL=gpt-realtime-whisper
-STT_REALTIME_DELAY=low
-```
-
-Realtime STT is opt-in because a generic OpenAI-compatible HTTP provider may not implement OpenAI's Realtime WebSocket protocol. See [configuration.md](docs/configuration.md) for separate keys, provider URLs, VAD tuning, and all environment variables.
+This starts the web app on port 3000 and the gateway on port 8787. For a public deployment behind TLS, see [docs/deployment.md](docs/deployment.md).
 
 ## How it works
 
+Sibyl has two processes: a Next.js **web app** for the microphone, playback and interface, and a Node **gateway** that owns every credential, runs the models and tools, and stores your conversations. They talk over one WebSocket with a small, validated JSON protocol.
+
 ```mermaid
 flowchart LR
-  Browser["Browser\ntext · PTT · VAD · PCM pre-roll"]
-  Gateway["Voice Session Gateway\nvalidation · turns · interrupt"]
-  BatchSTT["Batch STT\nPTT + fallback"]
-  RealtimeSTT["Streaming STT\nPCM transcript deltas"]
-  LLM["LLM\nstreamed text"]
-  TTS["TTS\nordered audio"]
+  subgraph Browser["Web app (browser)"]
+    Mic["Mic + voice activity detection"]
+    UI["Chat, visuals, approval cards"]
+    Player["Gapless audio player"]
+  end
 
-  Browser -->|typed WebSocket events| Gateway
-  Gateway --> RealtimeSTT
-  Gateway --> BatchSTT
-  Gateway --> LLM
-  LLM --> Gateway
-  Gateway --> TTS
-  Gateway -->|partial/final text + audio| Browser
+  subgraph Gateway["Gateway (your server)"]
+    Turns["Turn-taking: merge, barge-in, hedging"]
+    Voice["Voice brain"]
+    Deep["Deep brain + tool loop"]
+    Tools["Built-in tools + MCP servers"]
+    Store[("SQLite")]
+    Meter["Metering + budgets"]
+    Scout["Model scout"]
+  end
+
+  OR["OpenRouter: chat · transcription · speech"]
+
+  Mic -- "voice" --> Turns --> Voice
+  UI -- "typed message" --> Deep
+  Voice -- "@brain task" --> Deep
+  Deep <--> Tools
+  Voice & Deep --> OR
+  Scout -.-> OR
+  Deep & Voice --> Store
+  Deep & Voice --> Meter
+  Turns -- "text, visuals, audio" --> UI & Player
 ```
 
-```text
-apps/web             browser capture, VAD, pre-roll, playback, reconnect
-apps/gateway         session state, protocol validation, STT/LLM/TTS orchestration
-packages/protocol    shared client/server message contracts
-packages/adapters    batch and streaming model-provider interfaces
-```
+- **Typed messages** go to the deep brain, which can use tools and replies in text and visuals.
+- **Spoken turns** go to the voice brain. It hears your audio and answers out loud; when a request needs careful work, it says something like "let me pull that up" and hands the task to the deep brain, whose visual streams in followed by a short spoken summary.
+- A transcription model writes an accurate transcript of what you said in the background, and both brains share the whole conversation.
 
-The default Streaming STT adapter follows OpenAI's official [Realtime transcription protocol](https://developers.openai.com/api/docs/guides/realtime-transcription): 24 kHz mono PCM16 input, `input_audio_buffer.append`, manual commit, transcript deltas, and completed transcripts. Provider item IDs remain available inside the adapter for diagnostics; the Gateway maps each transcription session to one request ID.
+Typical timings, measured end to end in the browser on the Balanced preset: about **2.5–3.3 s** from the end of your speech to Sibyl's voice, and about **0.5 s** from talking over Sibyl to silence. See [docs/voice.md](docs/voice.md).
 
-## Quality and production commands
+More detail: [architecture](docs/architecture.md) · [voice and turn-taking](docs/voice.md) · [generative UI](docs/generative-ui.md) · [tools, MCP and approvals](docs/tools.md) · [WebSocket protocol](docs/protocol.md).
 
-```bash
-pnpm typecheck   # all workspaces
-pnpm test        # protocol, Gateway, adapter, and browser-state tests
-pnpm build       # bundled Gateway + optimized Next.js build
-pnpm check       # all of the above
-pnpm start       # start previously built processes with NODE_ENV=production
-```
+## Models and costs
 
-GitHub Actions runs type checking, tests, and production builds for every push and pull request. Docker and reverse-proxy instructions are in [deployment.md](docs/deployment.md).
+Every model call goes through OpenRouter: the voice brain, the deep brain, transcription, speech and web search. With `MODEL_SELECTION=auto` (the default with OpenRouter) the model scout chooses them; with `manual` Sibyl uses only the models you list in `models.config.json`.
 
-## Current limits
+An example run of the scout (2026-11-09):
 
-- Conversation history lives only for the current WebSocket connection.
-- Supplying an old `sessionId` does not restore previous messages.
-- Adaptive RMS VAD cannot distinguish speech from every non-speech sound and does not replace acoustic echo cancellation.
-- The Realtime STT adapter is currently OpenAI-specific; batch STT remains OpenAI-compatible.
-- Authentication, billing, multi-tenant isolation, tools, and long-term memory are not included.
-- Chromium is the verified browser baseline; see [browser-support.md](docs/browser-support.md) before claiming broader support.
+| Preset | Voice brain | Deep brain | Voice | Approx. per 100 turns |
+|---|---|---|---|---|
+| Cheapest | Gemini 2.5 Flash Lite | GLM 5.3 Flash | Kokoro | $0.07 |
+| Balanced | MiMo v2.6 Pro | GLM 5.3 Flash | Kokoro | $0.13 |
+| Fastest | Gemini 3.1 Flash Lite | GLM 5.3 | Kokoro | $0.19 |
+| Best quality | MiMo v2.6 Pro | GLM 5.3 Flash | Gemini 3.8 Flash TTS | $0.36 |
 
-These constraints are intentional. The next product layer should be built on a voice loop that is measurable and reliable.
+Picks change as prices, benchmarks and provider speed change. Set `SIBYL_BUDGET_DAILY_USD` and `SIBYL_BUDGET_MONTHLY_USD` to cap spending, and check the **Usage** tab for what you have spent. See [docs/models-and-costs.md](docs/models-and-costs.md).
 
-## FAQ
+## Configuration
 
-**Can it run without an OpenAI key?** Yes. The experimental local profile uses Ollama, faster-whisper, and Kokoro; its real-device acceptance checklist is still open.
+Sibyl reads one `.env` file at the project root. Only `OPENROUTER_API_KEY` is required. The settings you are most likely to change:
 
-**Does local Live Mode produce partial transcripts?** Not yet. It uses batch STT after the turn ends. OpenAI Realtime remains the currently implemented partial-transcript path.
+| Setting | What it does |
+|---|---|
+| `SIBYL_OWNER_TOKEN` | Require this token to use the gateway. Set it for anything beyond your own laptop. |
+| `SIBYL_DATA_DIR` | Where the SQLite database lives |
+| `SIBYL_BUDGET_DAILY_USD`, `SIBYL_BUDGET_MONTHLY_USD` | Spending caps |
+| `SIBYL_MCP_CONFIG` | Path to your `mcp.config.json` |
+| `MODEL_STRATEGY` | Default preset: `cheapest`, `balanced`, `fastest` or `best` |
+| `ALLOWED_ORIGINS` | Browser origins allowed to connect to the gateway |
+| `NEXT_PUBLIC_GATEWAY_WS_URL` | Where the browser finds the gateway (build time) |
 
-**Which browser should I use?** Chromium is the verified baseline. Firefox and Safari need the checks documented in [browser-support.md](docs/browser-support.md).
+Every variable, with its default, is in [docs/configuration.md](docs/configuration.md).
 
-**Does adaptive VAD solve echo?** No. It calibrates ambient noise and improves turn timing, but it is not acoustic echo cancellation or a speech-classification model.
+## Privacy
 
-**Where is conversation data stored?** Session history stays in Gateway memory for the active WebSocket connection. The local profile routes inference through local containers; initial image and model downloads still contact external registries.
+Sibyl has no hosted service of its own. Here is where your data goes:
 
-## Documentation
+- **Your voice** goes from the browser to your gateway, which forwards it to OpenRouter for the voice brain and for transcription. OpenRouter routes it to the provider behind the model you are using.
+- **Text and conversation history** go to OpenRouter for the voice brain and deep brain. Reply text goes to the speech model you selected.
+- **Tool calls** reach the services they are built on: web search through OpenRouter, weather from Open-Meteo, exchange rates from Frankfurter, and Wikipedia. Reading a webpage fetches that page from your server. MCP servers receive whatever the deep brain sends them.
+- **Instant captions** while you speak come from the browser's own speech recognition. In Chrome this is processed by the browser vendor's service. They are only a display hint; turn them off with `NEXT_PUBLIC_LIVE_CAPTIONS=false`.
+- **Conversations, approvals and usage records** are stored in SQLite on your server (`SIBYL_DATA_DIR`). Nothing is stored anywhere else.
+- **API keys** stay on the gateway. The browser never sees them.
+- **Gateway logs** are structured JSON and redact fields that look like credentials, audio, transcripts or message content.
 
-- [WebSocket protocol](docs/protocol.md)
-- [Configuration reference](docs/configuration.md)
-- [Local AI profile](docs/local-ai.md)
-- [Live Mode smoke test](docs/live-mode-smoke-test.md)
-- [Browser support](docs/browser-support.md)
-- [Production deployment](docs/deployment.md)
-- [Prioritized TODO](TODO.md)
+Check each provider's data policy on OpenRouter if this matters for your use. A self-hosted deployment is only as private as the providers you route to.
+
+## Roadmap
+
+Next:
+
+- **Slides.** Make presentations through a self-hosted Presenton service, inside slides-only Spaces with a library, preview, PPTX and PDF export, and revisions.
+- **Routines.** Scheduled jobs that run on their own, with an approval inbox for anything they want to change and per-routine budgets.
+- **Memory** that carries across conversations.
+- **File uploads** in chat.
+- **A Connections screen** to add and manage MCP servers from the web app.
+
+Ideas and feedback are welcome in [GitHub issues](https://github.com/Suryanandx/sibyl/issues).
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), then run `pnpm check` before opening a pull request. Protocol or turn-lifecycle changes should include a regression test and keep the documentation aligned with the actual event order. Provider requests and device compatibility reports are welcome in [Discussions](https://github.com/study8677/open-gpt-live/discussions).
+Bug reports, fixes, latency measurements and documentation improvements are all welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the checks to run, and [SECURITY.md](SECURITY.md) for reporting vulnerabilities privately. Everyone taking part agrees to the [Code of Conduct](CODE_OF_CONDUCT.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-[MIT](LICENSE)
+Sibyl is released under the [MIT License](LICENSE).

@@ -2,7 +2,7 @@
 
 ## Our commitment
 
-We want OpenGPT Live to be a welcoming place for people with different
+We want Sibyl to be a welcoming place for people with different
 backgrounds, identities, experience levels, languages, and perspectives. Every
 participant is expected to help keep collaboration respectful, technically
 honest, and focused on improving the project.
@@ -36,9 +36,10 @@ project.
 
 ## Reporting and enforcement
 
-Report conduct concerns privately to the repository maintainers. If no private
-contact route is available, open an issue requesting private contact without
-including incident details or personal information.
+Report conduct concerns privately to the repository maintainers at
+<https://github.com/Suryanandx/sibyl>. If no private contact route is
+available, open an issue requesting private contact without including incident
+details or personal information.
 
 Maintainers may remove content, issue a warning, limit participation, or ban an
 account when needed to protect the community. Reports will be reviewed as
@@ -49,4 +50,5 @@ not acceptable.
 
 This policy is informed by widely used open-source community standards,
 including the Contributor Covenant, and is adapted to this project's focus on
-voice data, provider integrations, and reproducible technical claims.
+voice data, personal conversations, tool integrations, and reproducible
+technical claims.

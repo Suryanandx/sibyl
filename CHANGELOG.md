@@ -1,52 +1,45 @@
 # Changelog
 
-Notable user-facing and contributor-facing changes to OpenGPT Live are recorded
-here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the project uses semantic versioning while it remains pre-1.0.
+Notable changes to Sibyl are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and Sibyl uses semantic versioning while it is pre-1.0.
 
-## Unreleased
+## 0.3.0 — Unreleased
 
-### Added
+The first release of Sibyl.
 
-- Contribution, security, conduct, issue, and pull request guidance for the
-  community.
-- Request-scoped browser and Gateway latency telemetry for STT, LLM, TTS, and
-  actual first-audio playback, including request mode and STT path context.
-- Adaptive browser RMS VAD with initial noise calibration, idle-only noise-floor
-  tracking, dynamic dual thresholds, turn guards, fixed-threshold fallback, and
-  a live diagnostics panel.
-- An opt-in, pinned `local-ai` Compose profile for Ollama, faster-whisper STT,
-  and Kokoro TTS, including automatic model initialization, provider health
-  checks, bilingual setup guides, and a host-side contract smoke script.
+### Conversation
 
-### Changed
+- Live voice conversation: an audio-native voice brain hears your tone and replies out loud, and hands careful work to a deep brain with `@brain`.
+- Typed messages get a normal chat reply with text and visuals and are never spoken. Typing and talking share one conversation.
+- Emotion cues performed by voices that support them, and removed for the rest.
+- Turn merging, barge-in, hedged requests against slow providers, gapless playback and instant on-device captions.
+- Hands-free mode, push-to-talk, and a composer that queues messages while Sibyl is answering.
 
-- OpenAI-compatible HTTP adapters now support explicit keyless self-hosted base
-  URLs without sending an `Authorization` header. Hosted `api.openai.com`
-  endpoints retain strict credential validation.
+### Visuals
 
-## 0.2.0 - 2026-07-10
+- Generative UI with OpenUI: charts, tables, plans, option cards and forms next to the reply, guided by visual design rules. Buttons and forms continue the conversation.
 
-### Added
+### Tools
 
-- Typed WebSocket protocol with runtime validation for text, push-to-talk, Live
-  Mode, streaming model output, speech playback, and interruption.
-- Experimental OpenAI Realtime transcription with incremental transcript events
-  and complete-turn STT fallback.
-- Browser PCM capture, VAD, 400 ms pre-roll, reconnect cleanup, and request
-  lifecycle handling.
-- Replaceable LLM, batch STT, streaming STT, and TTS provider interfaces.
-- Gateway health endpoint, structured logs, origin controls, graceful shutdown,
-  Docker images, and deployment documentation.
-- Automated protocol, Gateway, adapter, and browser-state tests plus CI production
-  builds.
+- Tool-calling deep brain with approval cards for any action that changes something.
+- Built-in tools: web search, read webpage, weather, currency conversion, world time, calculator and Wikipedia.
+- MCP client: connect stdio and Streamable HTTP servers through `mcp.config.json`.
 
-### Changed
+### Models and costs
 
-- TTS output is sentence-segmented and emitted as complete playable chunks.
-- Production images run application processes as a non-root user.
+- Everything runs on one OpenRouter key: chat, transcription and speech.
+- Model scout that picks models from the live OpenRouter catalog by cost, Design Arena benchmarks and measured latency, with Cheapest, Balanced, Fastest and Best quality presets.
+- `models.config.json` to pin models or choose them by hand (`MODEL_SELECTION=manual`).
+- Cost metering with the cost OpenRouter reports, daily and monthly budgets (`SIBYL_BUDGET_*`), and a Usage tab.
 
-### Security
+### Storage and access
 
-- Malformed WebSocket frames are isolated to their connection instead of
-  terminating the Gateway process.
+- Conversations stored on the server in SQLite (`SIBYL_DATA_DIR`) and continued in place with full context.
+- Single-owner sign-in with `SIBYL_OWNER_TOKEN`.
+
+### Web app
+
+- A redesigned interface: rail, searchable conversation history, model menu, Models & voice dialog with presets, usage and diagnostics, light and dark themes, and a responsive layout.
+
+### Deployment
+
+- Docker images for the web app and gateway, and a Compose file.
