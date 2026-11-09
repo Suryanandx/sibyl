@@ -1174,13 +1174,96 @@ code {
   font-weight: 600;
 }
 
+/* Follow-ups ("related queries"): a row of tappable chips at the very end of
+   the card, after sources, under a quiet "Ask next" label. */
+.genui .openui-follow-up-block {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  order: 99;
+  padding-top: 14px;
+}
+
+.genui .openui-follow-up-block__header {
+  flex-basis: 100%;
+  font-size: 0;
+  line-height: 0;
+  margin-bottom: 2px;
+}
+
+.genui .openui-follow-up-block__header::before {
+  color: var(--text-3);
+  content: "Ask next";
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 18px;
+}
+
 .genui .openui-follow-up-item {
-  border-radius: 12px;
-  transition: background 120ms;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border) !important;
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13.5px;
+  gap: 8px;
+  line-height: 1.35;
+  max-width: 100%;
+  padding: 7px 14px !important;
+  text-align: left;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    transform 120ms;
+  width: auto !important;
+}
+
+.genui .openui-follow-up-item::after {
+  color: var(--text-3);
+  content: "→";
+  transition:
+    color 120ms,
+    transform 120ms;
 }
 
 .genui .openui-follow-up-item:hover {
   background: var(--subtle);
+  border-color: var(--border-strong) !important;
+}
+
+.genui .openui-follow-up-item:hover::after {
+  color: var(--text);
+  transform: translateX(2px);
+}
+
+.genui .openui-follow-up-item:active {
+  transform: scale(0.98);
+}
+
+.genui .openui-follow-up-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.genui .openui-follow-up-item-icon {
+  display: none;
+}
+
+.genui .openui-follow-up-item-text {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .genui .openui-follow-up-item {
+    justify-content: space-between;
+    width: 100% !important;
+  }
 }
 
 .genui .openui-step-number-inner {

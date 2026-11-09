@@ -2193,7 +2193,7 @@ export default function Home() {
           title={connected ? "Connected" : connectionStatus === "reconnecting" ? "Reconnecting" : "Offline"}
           aria-label={connected ? "Connected" : "Offline"}
         >
-          <SibylLoader size={16} state={activeRequestId ? "thinking" : "idle"} />
+          <SibylLoader size={16} state="idle" />
         </span>
       </nav>
 
@@ -2322,10 +2322,12 @@ export default function Home() {
                                   ? voiceState === "listening"
                                     ? "listening"
                                     : "thinking"
-                                  : isLatest && voiceState === "speaking"
-                                    ? "speaking"
-                                    : isLatest && replies.some((reply) => !reply.done)
-                                      ? "working"
+                                  : composing
+                                    ? "working"
+                                    : isLatest &&
+                                        voiceState === "speaking" &&
+                                        !replies.some((reply) => !reply.done && (reply.kind === "brain" || reply.tools?.some((tool) => tool.status === "running")))
+                                      ? "speaking"
                                       : "idle"
                               }
                             />
