@@ -17,8 +17,9 @@ describe("rail groups", () => {
       ["/c/abc", "chat", null],
       ["/agents", "agents", null],
       ["/agents/a1/computer", "agents", null],
-      ["/meetings", "meetings", null],
-      ["/meetings/m1", "meetings", null],
+      ["/meetings", "meetings", "meetings"],
+      ["/meetings/m1", "meetings", "meetings"],
+      ["/meetings/recordings", "meetings", "recordings"],
       ["/call/m1", "meetings", null],
       ["/library/slides", "spaces", "slides"],
       ["/media", "spaces", "media"],
@@ -54,7 +55,7 @@ describe("rail groups", () => {
     expect(summary(roleCan("owner"))).toEqual([
       ["chat", "/", []],
       ["agents", "/agents", []],
-      ["meetings", "/meetings", []],
+      ["meetings", "/meetings", ["meetings"]],
       ["spaces", "/library/slides", ["slides", "media"]],
       ["library", "/knowledge", ["knowledge", "skills", "plugins", "integrations"]],
       ["automations", "/routines", ["routines", "monitors"]],
@@ -66,7 +67,7 @@ describe("rail groups", () => {
     expect(summary(roleCan("viewer"))).toEqual([
       ["chat", "/", []],
       ["agents", "/agents", []],
-      ["meetings", "/meetings", []],
+      ["meetings", "/meetings", ["meetings"]],
       ["spaces", "/library/slides", ["slides", "media"]],
       ["library", "/knowledge", ["knowledge", "skills", "plugins"]],
       ["automations", "/routines", ["routines", "monitors"]],
@@ -83,5 +84,18 @@ describe("rail groups", () => {
       ["settings", "/settings", []]
     ]);
     expect(summary(() => false).map(([place]) => place)).toEqual(["chat", "settings"]);
+  });
+});
+
+describe("enterprise tabs", () => {
+  it("shows Recordings only with the recordings licence and calls.record", () => {
+    const owner = roleCan("owner");
+    const tabsOf = (hasFeature?: (feature: string) => boolean) =>
+      visibleNavGroups(owner, hasFeature).find((group) => group.place === "meetings")!.tabs.map((tab) => tab.id);
+    expect(tabsOf()).toEqual(["meetings"]);
+    expect(tabsOf(() => false)).toEqual(["meetings"]);
+    expect(tabsOf((feature) => feature === "recordings")).toEqual(["meetings", "recordings"]);
+    const member = visibleNavGroups(roleCan("member"), () => true).find((group) => group.place === "meetings")!;
+    expect(member.tabs.map((tab) => tab.id)).toEqual(["meetings"]);
   });
 });

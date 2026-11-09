@@ -62,7 +62,9 @@ export const NOTIFICATION_SOURCE_PERMISSION: Readonly<Record<NotificationKind, P
   agent_action: PERMISSIONS.AGENTS_USE,
   deck_ready: PERMISSIONS.SLIDES_USE,
   invite_accepted: PERMISSIONS.MEMBERS_INVITE,
-  meeting_notes: PERMISSIONS.CHAT_USE
+  meeting_notes: PERMISSIONS.CHAT_USE,
+  // A message left on the phone line: the people who see the line's calls (owners and admins).
+  voicemail: PERMISSIONS.CHAT_VIEW_ALL
 };
 
 export const DEFAULT_PAGE_SIZE = 30;

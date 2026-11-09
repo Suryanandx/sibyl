@@ -22,6 +22,7 @@ export * from "./audit";
 export * from "./jobs";
 export * from "./vad";
 export * from "./meetings";
+export * from "./calls";
 export * from "./tenancy";
 
 /** Single-owner deployments use this owner id. */

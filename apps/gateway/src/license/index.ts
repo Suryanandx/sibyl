@@ -14,6 +14,7 @@
 import {
   createEnterpriseRegistry,
   registerPolicy,
+  type CallRecordingHost,
   type EnterpriseMailer,
   type EnterpriseNotice,
   type EnterpriseRegistry,
@@ -62,6 +63,8 @@ export interface InstallLicenseOptions {
   notify?(notice: EnterpriseNotice): void;
   /** Run a job type on the gateway's one scheduler (retention, alerts). */
   addJobType?(type: ScheduledJobType<any>): void;
+  /** Calls of the realtime layer (call recordings plug in here). */
+  calls?: CallRecordingHost;
   /** Tests: override the embedded public keys. */
   publicKeys?: readonly string[];
   /** Tests: replace the `ee/gateway` lookup (return undefined to simulate no `ee/`). */
@@ -116,7 +119,8 @@ export async function installLicense(options: InstallLicenseOptions): Promise<Li
     ...(options.notify ? { notify: options.notify } : {}),
     ...(options.addJobType ? { addJobType: options.addJobType } : {}),
     ...(options.mailer ? { mailer: options.mailer } : {}),
-    ...(options.secrets ? { secrets: options.secrets } : {})
+    ...(options.secrets ? { secrets: options.secrets } : {}),
+    ...(options.calls ? { calls: options.calls } : {})
   });
   // authorize() consults the modules' permission rules (custom roles, grants) while they are installed.
   const unregister = result.permissionPolicies.map((policy) => registerPolicy(policy));

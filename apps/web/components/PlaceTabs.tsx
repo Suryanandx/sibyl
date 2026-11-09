@@ -25,7 +25,7 @@ export function usePlaceTabs(): PlaceTabsView | null {
   const pathname = usePathname() ?? "/";
   const session = useAppSession();
   const place = placeOf(pathname);
-  const group = visibleNavGroups(session.can).find((candidate) => candidate.place === place);
+  const group = visibleNavGroups(session.can, session.hasFeature).find((candidate) => candidate.place === place);
   if (!group || group.tabs.length < 2) return null;
   return { label: group.name, tabs: group.tabs, current: tabOf(pathname)?.href };
 }

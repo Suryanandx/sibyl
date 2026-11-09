@@ -45,3 +45,6 @@ export const PoliciesIcon: SectionIcon = ({ size }) => (
   <Line size={size} d="M7 3.5h7l4 4v13H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z M14 3.5v4h4 M9 12h6 M9 15.5h6" />
 );
 export const AuditIcon: SectionIcon = named("history");
+export const PhoneIcon: SectionIcon = ({ size }) => (
+  <Line size={size} d="M6.5 3.5h3l1.5 4-2 1.3a10 10 0 0 0 6.2 6.2l1.3-2 4 1.5v3a2 2 0 0 1-2 2A16.5 16.5 0 0 1 4.5 5.5a2 2 0 0 1 2-2Z" />
+);

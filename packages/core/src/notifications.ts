@@ -27,7 +27,8 @@ export const NOTIFICATION_KINDS = [
   "agent_action",
   "deck_ready",
   "invite_accepted",
-  "meeting_notes"
+  "meeting_notes",
+  "voicemail"
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

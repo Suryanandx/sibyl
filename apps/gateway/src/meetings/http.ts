@@ -23,11 +23,15 @@
  *   POST   /api/meetings/:id/comments {text, parentId?, atMs?}
  *   PATCH  /api/meetings/:id/comments/:cid {text}   DELETE …                 author (delete: or host)
  *   POST   /api/meetings/:id/comments/:cid/reactions {emoji}
+ *   POST   /api/meetings/:id/shares {days?, transcript?} → { share, path }  host / admin
+ *   GET    /api/meetings/:id/shares                 → { items }              host / admin
+ *   DELETE /api/meetings/:id/shares/:shareId        → { ok }                 host / admin
  *
  * Guests (no account):
  *   POST   /api/meetings/:id/preview {key}          → { title, hostName, status }
  *   POST   /api/meetings/:id/lobby {key, name}      → { ticket }
  *   GET    /api/meetings/:id/lobby/:ticket          → { status, grant? }
+ *   POST   /api/meetings/:id/shared {token}         → the shared notes (read-only)
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { PERMISSIONS, authorize, isMeetingAgentRole } from "@open-gpt-live/core";
@@ -85,6 +89,10 @@ async function serve(options: MeetingsHttpOptions, request: IncomingMessage, res
       if (parts[1] === "lobby" && parts.length === 2) {
         const input = await readJsonObject(request, 2 * 1024);
         return reply(201, await meetings.knock(id!, input.key, input.name));
+      }
+      if (parts[1] === "shared") {
+        const input = await readJsonObject(request, 2 * 1024);
+        return reply(200, await meetings.shared(id!, input.token));
       }
       return reply(200, await meetings.lobbyStatus(id!, parts[2]!));
     }
@@ -157,6 +165,15 @@ async function serve(options: MeetingsHttpOptions, request: IncomingMessage, res
         const input = await readJsonObject(request, 1024);
         const ok = await meetings.decideKnock(caller, id, sub, input.admit === true);
         return ok ? reply(200, { ok: true }) : reply(404, { error: "not_found", message: "That person is no longer waiting." });
+      }
+    }
+
+    if (section === "shares") {
+      if (parts.length === 2 && method === "GET") return reply(200, { items: await meetings.shares(caller, id) });
+      if (parts.length === 2 && method === "POST") return reply(201, await meetings.share(caller, id, await readJsonObject(request, 1024)));
+      if (parts.length === 3 && method === "DELETE" && sub && SEGMENT.test(sub)) {
+        request.resume();
+        return (await meetings.revokeShare(caller, id, sub)) ? reply(200, { ok: true }) : reply(404, { error: "not_found", message: "That link is gone." });
       }
     }
 

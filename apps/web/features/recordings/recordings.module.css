@@ -1,0 +1,123 @@
+/* Meetings → Recordings. Design tokens only. */
+
+.toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toolbar > label:first-child {
+  flex: 1 1 240px;
+}
+
+.toolbar select {
+  width: auto;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.item[data-focus] {
+  border-color: var(--border-strong);
+}
+
+.head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.icon {
+  align-items: center;
+  background: var(--subtle);
+  border-radius: 10px;
+  color: var(--text-2);
+  display: inline-flex;
+  flex: none;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-weight: 500;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.title a {
+  color: inherit;
+}
+
+.meta {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.actions {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.video {
+  aspect-ratio: 16 / 9;
+  background: var(--ink);
+  border-radius: 10px;
+  max-height: 60vh;
+  width: 100%;
+}
+
+.audio {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .toolbar select {
+    flex: 1 1 140px;
+  }
+}

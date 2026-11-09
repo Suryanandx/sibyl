@@ -25,6 +25,7 @@ import {
   type UsageEvent,
   type InviteRecord,
   type MeetingComment,
+  type CallLogRecord,
   type MeetingRecord,
   type MonitorEventRecord,
   type MonitorRecord,
@@ -1108,6 +1109,53 @@ for (const harness of harnesses) {
       expect(await store.meetings.get("org", "m")).toBeUndefined();
       expect(await store.meetings.segments("org", "m")).toEqual([]);
       expect(await store.meetings.comments("org", "m")).toEqual([]);
+    });
+  });
+}
+
+/* ───────────── Call log (the phone line) ───────────── */
+
+for (const harness of harnesses) {
+  describe(`Call log contract: ${harness.name}`, () => {
+    let store: Store;
+    let cleanup: () => void;
+    beforeEach(() => {
+      ({ store, cleanup } = harness.open());
+    });
+    afterEach(async () => {
+      await store.close();
+      cleanup();
+    });
+
+    const call = (id: string, extra: Partial<CallLogRecord> = {}): CallLogRecord => ({
+      id,
+      ownerId: "org",
+      workspaceId: "default",
+      direction: "inbound",
+      status: "completed",
+      room: `sibyl.phone.default.${id}`,
+      agentId: "sibyl",
+      agentName: "Sibyl",
+      startedAt: 10,
+      updatedAt: 10,
+      ...extra
+    });
+
+    it("stores, lists newest first, filters and pages; scoped by organization", async () => {
+      await store.calls.upsert(call("a", { startedAt: 10 }));
+      await store.calls.upsert(call("b", { startedAt: 30, direction: "outbound", remoteNumber: "+15550001111" }));
+      await store.calls.upsert(call("c", { startedAt: 20, workspaceId: "ws2" }));
+      await store.calls.upsert(call("d", { ownerId: "other", startedAt: 40 }));
+      expect((await store.calls.list("org")).map((c) => c.id)).toEqual(["b", "c", "a"]);
+      expect((await store.calls.list("org", { workspaceId: "default" })).map((c) => c.id)).toEqual(["b", "a"]);
+      expect((await store.calls.list("org", { direction: "outbound" })).map((c) => c.id)).toEqual(["b"]);
+      expect((await store.calls.list("org", { before: 30 })).map((c) => c.id)).toEqual(["c", "a"]);
+      expect((await store.calls.list("org", { limit: 1 })).map((c) => c.id)).toEqual(["b"]);
+      expect(await store.calls.get("other", "a")).toBeUndefined();
+      await store.calls.upsert(call("a", { status: "voicemail", voicemail: { transcript: "Call me" } }));
+      expect(await store.calls.get("org", "a")).toMatchObject({ status: "voicemail", voicemail: { transcript: "Call me" } });
+      await store.calls.remove("org", "a");
+      expect(await store.calls.get("org", "a")).toBeUndefined();
     });
   });
 }

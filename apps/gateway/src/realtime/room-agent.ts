@@ -17,6 +17,8 @@
  *   is transcribed; the session answers only when an agent is addressed
  *   (floor.ts); everything else is kept as a note in the conversation.
  * - listen (a stream): note-taker only, never speaks.
+ * - voicemail (a phone line outside business hours): speaks the greeting,
+ *   then only takes the caller's message down (onUtterance), never answers.
  *
  * Meetings (options.meeting): every utterance is transcribed first and kept
  * as a transcript segment (agents' replies too). Each agent has a role:
@@ -27,7 +29,7 @@
 import { randomUUID } from "node:crypto";
 import type { AudioFrame, AudioSource, RemoteParticipant, RemoteTrack, Room } from "@livekit/rtc-node";
 import type { LocalTrackPublication } from "@livekit/rtc-node";
-import { AGENT_EVENTS, MEETING_SIGNAL_TOPIC, REALTIME_EVENTS, WS_EVENTS, type ServerMessage } from "@open-gpt-live/protocol";
+import { AGENT_EVENTS, MEETING_HAND_TOPIC, MEETING_SIGNAL_TOPIC, REALTIME_EVENTS, WS_EVENTS, type ServerMessage } from "@open-gpt-live/protocol";
 import { AdaptiveVadEngine, DEFAULT_VAD_CONFIG, type AvatarSpec, type MeetingAgentRole, type MeetingParticipantKind, type VadConfig } from "@open-gpt-live/core";
 import type { SpeechSegment, VoiceSessionPort } from "../session-port.js";
 import { LISTEN_MIME_TYPE, LISTEN_SAMPLE_RATE, SpeechDecoder, pcmBytes, resample, rmsOf } from "./audio.js";
@@ -38,7 +40,7 @@ import { issueToken } from "./token.js";
 
 type Rtc = typeof import("@livekit/rtc-node");
 
-export type RoomAgentMode = "conversation" | "listen";
+export type RoomAgentMode = "conversation" | "listen" | "voicemail";
 
 /** An agent who can speak in the room ("sibyl" or an agent id). */
 export interface RoomVoiceProfile extends FloorCandidate {
@@ -68,8 +70,18 @@ export interface RoomArrival {
 export interface RoomMeetingHooks {
   /** Roles at the start ("sibyl" / agent id → role; absent: participant). */
   roles: Record<string, MeetingAgentRole>;
+  /** Raised hands kept from before (identities): sent to everyone who joins. */
+  hands?: () => string[];
   onSegment(segment: RoomSegment): void;
   onArrival(arrival: RoomArrival): void;
+  /** Someone raised or lowered their hand (MEETING_HAND_TOPIC), or left with it up. */
+  onHand?(identity: string, raised: boolean): void;
+}
+
+/** Who was still in the room when the agent left (host handover). */
+export interface RoomPresent {
+  identity: string;
+  name: string;
 }
 
 export interface RoomAgentOptions {
@@ -87,7 +99,9 @@ export interface RoomAgentOptions {
   /** Once someone was here and everyone left (hung up): leave after this long (default idleTimeoutMs). */
   emptyAfterLeaveMs?: number;
   log: (event: string, fields?: Record<string, unknown>) => void;
-  onStop?: (reason: string) => void;
+  onStop?: (reason: string, present: RoomPresent[]) => void;
+  /** Every transcribed utterance of a person (voicemail messages, call logs). */
+  onUtterance?: (segment: RoomSegment) => void;
   now?: () => number;
   /** A meeting room: transcript segments, agent roles, arrivals. */
   meeting?: RoomMeetingHooks;
@@ -190,7 +204,7 @@ export class RoomAgent {
     const { port } = this.options;
     this.unobserve = port.observe((message) => this.onSessionMessage(message));
     this.unclose = port.onClose(() => void this.stop("session ended"));
-    if (this.options.mode === "conversation") {
+    if (this.options.mode !== "listen") {
       port.attachMedia({
         speech: (segment) => this.play(segment),
         speechEnd: (requestId, reason) => {
@@ -213,10 +227,22 @@ export class RoomAgent {
     room.on(rtc.RoomEvent.ParticipantConnected, (participant) => {
       this.arrived(participant);
       this.checkIdle();
+      // Newcomers see the hands already up (kept by the meeting, also across a gateway restart).
+      void this.sendHands([participant.identity]);
     });
     room.on(rtc.RoomEvent.ParticipantDisconnected, (participant) => {
       this.forget(participant.identity);
+      this.options.meeting?.onHand?.(participant.identity, false);
       this.checkIdle();
+    });
+    room.on(rtc.RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+      if (topic !== MEETING_HAND_TOPIC || !participant || !this.options.meeting?.onHand) return;
+      try {
+        const raised = Boolean((JSON.parse(new TextDecoder().decode(payload)) as { raised?: unknown }).raised);
+        this.options.meeting.onHand(participant.identity, raised);
+      } catch {
+        // Not ours: ignore.
+      }
     });
     room.on(rtc.RoomEvent.Disconnected, () => void this.stop("disconnected"));
     // People and tracks already there before we joined.
@@ -227,7 +253,15 @@ export class RoomAgent {
       }
     }
     this.checkIdle();
+    void this.sendHands();
     this.options.log("realtime.agent_joined", { room: this.room, mode: this.options.mode });
+  }
+
+  /** The meeting's raised hands, to everyone (or to newcomers). */
+  private async sendHands(to?: string[]): Promise<void> {
+    const hands = this.options.meeting?.hands?.() ?? [];
+    if (hands.length === 0) return;
+    await this.publishSignal({ type: "hands", hands }, to);
   }
 
   /** The host hands the floor to an agent ("sibyl" / agent id) or takes it back. */
@@ -269,10 +303,14 @@ export class RoomAgent {
   }
 
   /** Nudge browsers in the room (they refetch over HTTP, where access is checked). */
-  async signal(type: "notes" | "lobby" | "roles" | "ended", to?: string[]): Promise<void> {
+  async signal(type: "notes" | "lobby" | "roles" | "ended" | "recording", to?: string[]): Promise<void> {
+    await this.publishSignal({ type }, to);
+  }
+
+  private async publishSignal(payload: Record<string, unknown>, to?: string[]): Promise<void> {
     const room = this.primary;
     if (!room?.localParticipant || this.stopped) return;
-    const data = new TextEncoder().encode(JSON.stringify({ type }));
+    const data = new TextEncoder().encode(JSON.stringify(payload));
     await room.localParticipant
       .publishData(data, { reliable: true, topic: MEETING_SIGNAL_TOPIC, ...(to?.length ? { destination_identities: to } : {}) })
       .catch((error: unknown) => this.options.log("realtime.signal_failed", { room: this.room, error: errorMessage(error) }));
@@ -309,9 +347,11 @@ export class RoomAgent {
     if (this.stopped) return;
     this.stopped = true;
     if (this.idleTimer) clearTimeout(this.idleTimer);
+    // Who is still here (the meeting may pass the host role on instead of ending).
+    const present = this.people().map((participant) => ({ identity: participant.identity, name: participant.name || participant.identity }));
     this.unobserve?.();
     this.unclose?.();
-    if (this.options.mode === "conversation") this.options.port.attachMedia(undefined);
+    if (this.options.mode !== "listen") this.options.port.attachMedia(undefined);
     for (const listener of this.listeners.values()) listener.stop();
     this.listeners.clear();
     const voices = await Promise.allSettled([...this.voices.values()]);
@@ -325,7 +365,7 @@ export class RoomAgent {
       await voice.room.disconnect().catch(() => undefined);
     }
     this.options.log("realtime.agent_left", { room: this.room, reason });
-    this.options.onStop?.(reason);
+    this.options.onStop?.(reason, present);
   }
 
   /* ───────────── voices (our participants) ───────────── */
@@ -356,7 +396,7 @@ export class RoomAgent {
     const track = rtc.LocalAudioTrack.createAudioTrack(`${id}-voice`, source);
     // Silent note-takers never publish a voice.
     const publication =
-      this.options.mode === "conversation" && role === "participant"
+      this.options.mode !== "listen" && role === "participant"
         ? await room.localParticipant!.publishTrack(track, new rtc.TrackPublishOptions({ source: rtc.TrackSource.SOURCE_MICROPHONE }))
         : undefined;
     this.options.meeting?.onArrival({ identity, name: profile.name, kind: "agent", agentId: id, role });
@@ -432,7 +472,7 @@ export class RoomAgent {
       identity: participant.identity,
       name: participant.name || participant.identity,
       // Note-taking keeps whole sentences together; a conversation answers sooner.
-      vad: new AdaptiveVadEngine(this.options.mode === "listen" ? { ...SERVER_VAD, hangoverMs: 1_000 } : SERVER_VAD),
+      vad: new AdaptiveVadEngine(this.options.mode !== "conversation" ? { ...SERVER_VAD, hangoverMs: 1_000 } : SERVER_VAD),
       preRoll: [],
       stop: () => void reader.cancel().catch(() => undefined)
     };
@@ -548,14 +588,16 @@ export class RoomAgent {
     }
     if (!text || this.stopped) return;
     void this.caption(SIBYL_IDENTITY, `${turn.requestId}:user`, text, true, listener.identity, listener.name);
-    this.options.meeting?.onSegment({
+    const said: RoomSegment = {
       speaker: listener.identity,
       speakerName: listener.name,
       kind: listener.identity.startsWith("guest:") ? "guest" : "person",
       text,
       startedAt: turn.startedAt,
       endedAt
-    });
+    };
+    this.options.meeting?.onSegment(said);
+    this.options.onUtterance?.(said);
     // Note-takers are never answered by; in a meeting with one person Sibyl (a participant) still waits to be addressed.
     // Agents already in the room come first (two agents may share a name).
     const candidates = (await this.options.candidates())

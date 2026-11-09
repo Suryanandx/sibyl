@@ -96,7 +96,7 @@
     <article class="prose">
 <h1 id="meetings">Meetings</h1>
 <p>Meetings are calls where people and agents meet together, like a video call. Sibyl keeps the transcript, writes the notes as you talk, and finds the action items. Afterwards, the meeting has its own page with the notes, the transcript, playback and comments.</p>
-<p>Meetings are part of the open-source edition. Audio recordings of a meeting are part of Agent Serve.</p>
+<p>Meetings are part of the open-source edition. Audio and video recordings of a meeting are part of Agent Serve.</p>
 <p>The room needs the realtime layer (LiveKit): see <a href="realtime.html">Realtime calls (LiveKit)</a> to turn it on. Without it you can still schedule meetings and read the notes of past ones.</p>
 <h2 id="start-a-meeting"><a class="anchor" href="#start-a-meeting" aria-hidden="true" tabindex="-1">#</a>Start a meeting</h2>
 <ul>
@@ -142,22 +142,27 @@
 </ul>
 <h3 id="guests"><a class="anchor" href="#guests" aria-hidden="true" tabindex="-1">#</a>Guests</h3>
 <p><strong>Invite → Copy guest link</strong> gives a link (<code>/join/&lt;id&gt;?k=…</code>) for people without an account. They check their camera and microphone, give their name and ask to join. The host sees them under <strong>People → Asking to join</strong> and admits or denies them. A guest gets a room token only after the host admits them.</p>
-<p>Guests see the room and its captions. They never see the notes, transcript or comments.</p>
+<p>Guests see the room and its captions. They never see the notes, transcript or comments, unless the host shares the notes by link (below).</p>
+<p>People waiting in the lobby, and raised hands, are kept with the meeting: a gateway restart or a reload doesn&#39;t lose them. Someone who joins later sees the hands already up.</p>
 <p>People in the workspace join with <strong>Invite → Copy link for the workspace</strong> (<code>/call/&lt;id&gt;</code>).</p>
 <h3 id="host-controls"><a class="anchor" href="#host-controls" aria-hidden="true" tabindex="-1">#</a>Host controls</h3>
-<p>The host can mute someone&#39;s microphone (they can unmute themselves), remove someone, and <strong>End meeting for everyone</strong>. If the host leaves, Sibyl leaves too and the notes are finished; the host can start the meeting again from its page.</p>
+<p>The host can mute someone&#39;s microphone (they can unmute themselves), remove someone, and <strong>End meeting for everyone</strong>.</p>
+<p>If the host leaves (or closes the tab) while another member of the workspace is in the room, the meeting goes on: that member becomes the host, and their own session brings Sibyl back (replies and approvals then land in their chat). Everyone sees who hosts now. Only <strong>End meeting for everyone</strong> ends it, or the room emptying. Guests never become hosts.</p>
 <h2 id="after-the-meeting"><a class="anchor" href="#after-the-meeting" aria-hidden="true" tabindex="-1">#</a>After the meeting</h2>
 <p>When the meeting ends, the final notes are written and everyone who was there gets a <strong>Notes ready</strong> notification.</p>
 <p>The meeting&#39;s page (<code>/meetings/&lt;id&gt;</code>) has:</p>
 <ul>
 <li>the title (the host can rename it), date and time, and participant chips;</li>
 <li>Summary, Transcript and Actions;</li>
-<li>the people in the meeting and <strong>playback</strong>: a timeline coloured by who spoke, a waveform, the time, speed, skip and play. With Agent Serve and a recording, it plays the audio. Without one, the same controls walk through the transcript.</li>
+<li>the people in the meeting and <strong>playback</strong>: a timeline coloured by who spoke, a waveform, the time, speed, skip and play. With Agent Serve and a recording, it plays the audio with its waveform, or the video. Clicking a line of the transcript jumps there. Without one, the same controls walk through the transcript.</li>
 <li><strong>Comments</strong> with reactions and replies, <strong>Ask AI</strong> and <strong>Keyword</strong>;</li>
 <li><strong>Export</strong> as Markdown, <strong>Print</strong> (or save as PDF), and <strong>Save to knowledge</strong> (the notes and transcript become a document agents can search).</li>
+<li><strong>Share notes</strong> (host): a read-only link to the summary and action items, optionally with the transcript, for people without an account. It works for 1, 7 or 30 days, shows how often it was opened, and can be revoked. Only a hash of the link&#39;s token is stored.</li>
 </ul>
 <h2 id="recordings-enterprise"><a class="anchor" href="#recordings-enterprise" aria-hidden="true" tabindex="-1">#</a>Recordings (Enterprise)</h2>
-<p>With a licence that includes <code>recordings</code>, people with <code>calls.record</code> see <strong>Record (audio)</strong> under Invite in the room. The recording is linked to the meeting and plays on its page with a waveform. See <a href="realtime.html#recordings-enterprise">Realtime calls (LiveKit)</a>.</p>
+<p>With a licence that includes <code>recordings</code>, people with <code>calls.record</code> see <strong>Record audio</strong> and <strong>Record video</strong> under Invite in the room. Everyone in the room sees <strong>Recording</strong> while it runs. The recording is linked to the meeting and plays on its page. All recordings are under <strong>Meetings → Recordings</strong>, with search, filters, how long each is kept, legal hold, play, download and delete. See <a href="realtime.html#recordings-enterprise">Realtime calls (LiveKit)</a>.</p>
+<h2 id="share-notes"><a class="anchor" href="#share-notes" aria-hidden="true" tabindex="-1">#</a>Share notes</h2>
+<p>On a meeting&#39;s page the host picks <strong>Share notes</strong>, chooses how long the link works and whether the transcript is included, and copies the link (<code>/shared/meetings/&lt;id&gt;?t=…</code>; hosted links also carry <code>&amp;o=&lt;organization&gt;</code>). Whoever opens it sees the title, date, people, summary, key points, insights and action items, and the transcript if shared. They can&#39;t comment, ask or see recordings. The host sees the open links with how often each was opened, and revokes them.</p>
 <h2 id="cost"><a class="anchor" href="#cost" aria-hidden="true" tabindex="-1">#</a>Cost</h2>
 <p>Notes use a cheap model: <code>SIBYL_MEETING_MODEL</code>, else the catalogue&#39;s cheapest preset, else the voice model. Each refresh sends only the new part of the transcript plus the notes so far, so a long meeting costs about the same per refresh as a short one. Ask AI uses the deep brain&#39;s model. All of it is metered as <strong>Meeting notes</strong> (<code>meetings</code>) and checked against your budgets before each call.</p>
 <p>Transcription is metered as speech-to-text (<code>stt</code>) on the host&#39;s session.</p>
@@ -282,6 +287,14 @@
 <td>host</td>
 </tr>
 <tr>
+<td><code>GET</code> · <code>POST /api/meetings/&lt;id&gt;/shares {days, transcript}</code> · <code>DELETE …/shares/&lt;shareId&gt;</code></td>
+<td>host (or a workspace admin)</td>
+</tr>
+<tr>
+<td><code>POST /api/meetings/&lt;id&gt;/shared {token}</code></td>
+<td>anyone with the link</td>
+</tr>
+<tr>
 <td><code>GET</code> · <code>POST /api/meetings/&lt;id&gt;/comments</code>, <code>PATCH</code> · <code>DELETE …/comments/&lt;cid&gt;</code>, <code>POST …/comments/&lt;cid&gt;/reactions {emoji}</code></td>
 <td><code>chat.use</code> (edit: author)</td>
 </tr>
@@ -298,7 +311,7 @@
 <td>the session&#39;s approval card</td>
 </tr>
 </tbody></table></div>
-<p>In the room, the gateway nudges browsers over LiveKit data (topic <code>sibyl.meeting</code>: <code>notes</code>, <code>lobby</code>, <code>roles</code>, <code>ended</code>); they then fetch over HTTP, where access is checked. Raised hands travel on <code>sibyl.hand</code>.</p>
+<p>In the room, the gateway nudges browsers over LiveKit data (topic <code>sibyl.meeting</code>: <code>notes</code>, <code>lobby</code>, <code>roles</code>, <code>ended</code>, <code>recording</code> with <code>state</code>, <code>hands</code> with the hands kept by the meeting, <code>host</code> with the new host&#39;s identity); they then fetch over HTTP, where access is checked. Raised hands travel on <code>sibyl.hand</code>; Sibyl&#39;s room agent keeps them on the meeting.</p>
 <h2 id="verified"><a class="anchor" href="#verified" aria-hidden="true" tabindex="-1">#</a>Verified</h2>
 <p>Run live on 2026-11-09 with the LiveKit dev server, the gateway and scripted participants (<code>@livekit/rtc-node</code>) speaking synthesized audio:</p>
 <ul>
@@ -308,7 +321,17 @@
 <li>Notes refreshed during the meeting; <strong>End meeting for everyone</strong> disconnected everyone and wrote the final notes, credited to the note-taker agent, with three action items (owners and due dates); Ask AI answered from the transcript; comments, a reply and a reaction; Markdown export.</li>
 <li>The room and the meeting page in headless Chromium with a fake camera: light and dark, desktop and 375 px.</li>
 </ul>
-<p>Not verified live: audio recording playback (it needs the egress service from <code>--profile realtime</code>), calendar import against a real Google or Microsoft account.</p>
+<p>Run live again on 2026-11-10 with LiveKit, Redis, egress and SIP in Docker, the gateway (with the Enterprise dev licence) and the web app, two headless Chromium browsers with a fake camera and a spoken WAV as microphone (host and guest), and a scripted member (Bob):</p>
+<ul>
+<li>The host started a meeting from <strong>Meetings → New meeting → Start now</strong>; the guest asked to join from the guest link and the host admitted them under People; both cameras were in the room; the host presented their screen.</li>
+<li>A silent note-taker (added from <strong>Add an agent</strong>) joined with no audio track; a participant agent answered Bob in the room when he named it (&quot;The capital of France is Paris.&quot;).</li>
+<li>The guest raised a hand: the host saw it and it was stored on the meeting. The host muted the guest (LiveKit reported the track muted) and removed Bob.</li>
+<li><strong>Record video</strong> made everyone, the guest included, see <strong>Recording</strong>; the MP4 (1280×720, speaker layout with the shared screen) was linked to the meeting and played on its page. <strong>End meeting for everyone</strong> ended the guest&#39;s call; the final notes were credited to the note-taker with three action items.</li>
+<li>A guest&#39;s knock and a raised hand survived a gateway restart; after the restart the host&#39;s session brought Sibyl back and she sent the kept hands to the room. The host leaving with Bob still there made Bob the host (everyone got the <code>host</code> signal) and the meeting stayed live.</li>
+<li>Hosted mode with two organizations: a guest link and a shared-notes link reach the right organization (also for a guest signed in to the other one); the other organization&#39;s id finds nothing.</li>
+<li>Without a licence: no Recordings tab, <code>/api/recordings</code> is 404, and the meeting page says recordings come with Agent Serve.</li>
+</ul>
+<p>Not verified live: the new host&#39;s browser bringing Sibyl back after a handover (tested with the host&#39;s WebSocket session and a scripted member, not two signed-in browsers), calendar import against a real Google or Microsoft account.</p>
 
     </article>
     <p class="editLink"><a href="https://github.com/Suryanandx/sibyl/blob/HEAD/docs/meetings.md">View the source of this page on GitHub</a></p>
@@ -317,7 +340,7 @@
       <a class="next" href="realtime.html"><span>Next</span>Realtime calls (LiveKit)</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#start-a-meeting">Start a meeting</a></li><li class="d2"><a href="#in-the-room">In the room</a></li><li class="d3"><a href="#agents">Agents</a></li><li class="d3"><a href="#ai-notes">AI notes</a></li><li class="d3"><a href="#guests">Guests</a></li><li class="d3"><a href="#host-controls">Host controls</a></li><li class="d2"><a href="#after-the-meeting">After the meeting</a></li><li class="d2"><a href="#recordings-enterprise">Recordings (Enterprise)</a></li><li class="d2"><a href="#cost">Cost</a></li><li class="d2"><a href="#settings">Settings</a></li><li class="d2"><a href="#permissions">Permissions</a></li><li class="d2"><a href="#api">API</a></li><li class="d2"><a href="#verified">Verified</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#start-a-meeting">Start a meeting</a></li><li class="d2"><a href="#in-the-room">In the room</a></li><li class="d3"><a href="#agents">Agents</a></li><li class="d3"><a href="#ai-notes">AI notes</a></li><li class="d3"><a href="#guests">Guests</a></li><li class="d3"><a href="#host-controls">Host controls</a></li><li class="d2"><a href="#after-the-meeting">After the meeting</a></li><li class="d2"><a href="#recordings-enterprise">Recordings (Enterprise)</a></li><li class="d2"><a href="#share-notes">Share notes</a></li><li class="d2"><a href="#cost">Cost</a></li><li class="d2"><a href="#settings">Settings</a></li><li class="d2"><a href="#permissions">Permissions</a></li><li class="d2"><a href="#api">API</a></li><li class="d2"><a href="#verified">Verified</a></li></ul></aside>
 </div>
 
   <footer class="footer">

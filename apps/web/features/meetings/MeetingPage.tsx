@@ -4,9 +4,10 @@
  * A meeting's page (/meetings/<id>), during and after the meeting: title
  * (editable by the host), date and time, participant chips; the notes as
  * Summary / Transcript / Actions; the people and playback (the recording
- * with Sibyl Enterprise, otherwise a timeline over the transcript); and
+ * with Sibyl Enterprise: its waveform for audio, the video itself for a
+ * video recording; otherwise a timeline over the transcript); and
  * Comments / Ask AI / Keyword. Export as Markdown, print to PDF, save to
- * knowledge.
+ * knowledge, and (host) share the notes by a read-only link.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -15,13 +16,14 @@ import {
   MEETING_EVENTS,
   type KnowledgeBaseView,
   type MeetingSegmentView,
+  type MeetingShareView,
   type MeetingView,
   type ServerMessage
 } from "@open-gpt-live/protocol";
 import { ScreenFrame } from "../../components/ScreenFrame";
 import { Mark } from "../../components/Brand";
 import { Icon } from "../../components/Icon";
-import { Button, ButtonLink, Dialog, EmptyState, Field, Notice, Select } from "../../components/ui";
+import { Button, ButtonLink, Checkbox, Dialog, EmptyState, Field, Input, Notice, Select } from "../../components/ui";
 import { useAppSession } from "../../lib/app-session";
 import { useGateway } from "../../lib/gateway";
 import { errorText, gatewayHeaders, gatewayRequest, gatewayUrlFor } from "../../lib/gateway-http";
@@ -50,7 +52,9 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingTasks, setPendingTasks] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
-  const [audio, setAudio] = useState<{ url: string; data: ArrayBuffer } | null>(null);
+  const [audio, setAudio] = useState<{ url: string; data: ArrayBuffer; video: boolean } | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const video = useRef<HTMLVideoElement | null>(null);
   const playback = useRef<PlaybackHandle | null>(null);
   const canRecordings = session.hasFeature("recordings") && session.can("calls.record");
 
@@ -87,8 +91,9 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
         if (!response.ok) throw new Error("recording unavailable");
         const data = await response.arrayBuffer();
         if (cancelled) return;
-        url = URL.createObjectURL(new Blob([data], { type: response.headers.get("content-type") ?? "audio/ogg" }));
-        setAudio({ url, data });
+        const type = response.headers.get("content-type") ?? "audio/ogg";
+        url = URL.createObjectURL(new Blob([data], { type }));
+        setAudio({ url, data, video: type.startsWith("video/") });
       })
       .catch(() => setAudio(null));
     return () => {
@@ -205,7 +210,13 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
       ? meeting.recordingId
         ? "The recording isn't available (it may have expired)."
         : undefined
-      : `Playback follows the transcript. Audio recordings come with ${ENTERPRISE.name}.`;
+      : `Playback follows the transcript. Audio and video recordings come with ${ENTERPRISE.name}.`;
+  const seek = (ms: number) => {
+    if (audio?.video && video.current) {
+      video.current.currentTime = ms / 1000;
+      void video.current.play().catch(() => undefined);
+    } else playback.current?.seek(ms);
+  };
 
   return (
     <ScreenFrame
@@ -252,6 +263,11 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
           {session.can("knowledge.edit") ? (
             <Button size="sm" onClick={() => setSaving(true)}>
               Save to knowledge
+            </Button>
+          ) : null}
+          {meeting.isHost ? (
+            <Button size="sm" onClick={() => setSharing(true)}>
+              Share notes
             </Button>
           ) : null}
           {meeting.isHost ? (
@@ -305,7 +321,7 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
               query={query}
               onQuery={setQuery}
               positionMs={position}
-              onSeek={(ms) => playback.current?.seek(ms)}
+              onSeek={seek}
               onCreateTask={createTask}
               pendingTasks={pendingTasks}
               onRefresh={() => void refreshNotes()}
@@ -314,7 +330,17 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
           </section>
         </div>
         <aside className={styles.pageSide}>
-          {stageMain ? (
+          {audio?.video ? (
+            <video
+              ref={video}
+              className={styles.recordingVideo}
+              src={audio.url}
+              controls
+              playsInline
+              aria-label="Video recording"
+              onTimeUpdate={(event) => setPosition(Math.round(event.currentTarget.currentTime * 1000))}
+            />
+          ) : stageMain ? (
             <div style={{ display: "grid", gap: 8 }}>
               <div style={{ aspectRatio: "16 / 9" }}>
                 <StaticTile person={stageMain} speaking={Boolean(current && current.speaker === stageMain.identity && position > 0)} large />
@@ -333,6 +359,13 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
               ) : null}
             </div>
           ) : null}
+          {audio?.video ? (
+            <ButtonLink href={`${paths.recordings}?id=${encodeURIComponent(meeting.recordingId ?? "")}`} size="sm">
+              <Icon name="download" size={15} />
+              Open in Recordings
+            </ButtonLink>
+          ) : null}
+          {audio?.video ? null : (
           <Playback
             ref={playback}
             meeting={meeting}
@@ -349,6 +382,7 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
             downloadLabel={audio ? "Download the recording" : "Download notes and transcript"}
             note={recordingNote}
           />
+          )}
           <section className={styles.card}>
             <AssistPanel
               meeting={meeting}
@@ -359,7 +393,7 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
                 setTab("transcript");
               }}
               positionMs={position}
-              onSeek={(ms) => playback.current?.seek(ms)}
+              onSeek={seek}
             />
           </section>
           {meeting.conversationId ? (
@@ -370,6 +404,7 @@ export function MeetingPage({ meetingId }: { meetingId: string }) {
         </aside>
       </div>
       {saving ? <SaveToKnowledge meeting={meeting} onClose={() => setSaving(false)} onSaved={(name) => setNotice(`Saved to ${name}.`)} /> : null}
+      {sharing ? <ShareNotes meeting={meeting} onClose={() => setSharing(false)} /> : null}
     </ScreenFrame>
   );
 }
@@ -475,6 +510,101 @@ function SaveToKnowledge({ meeting, onClose, onSaved }: { meeting: MeetingView; 
         </Field>
       ) : bases ? (
         <p className={styles.muted}>{canCreate ? "A knowledge base called “Meetings” will be created." : "There's no knowledge base yet. Ask an admin to create one."}</p>
+      ) : null}
+    </Dialog>
+  );
+}
+
+/** Host: read-only links to the notes for people outside the workspace (revocable, expiring). */
+function ShareNotes({ meeting, onClose }: { meeting: MeetingView; onClose(): void }) {
+  const [links, setLinks] = useState<MeetingShareView[] | null>(null);
+  const [days, setDays] = useState(7);
+  const [transcript, setTranscript] = useState(false);
+  const [created, setCreated] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLinks(await meetingsApi.shares(meeting.id));
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  }, [meeting.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function create(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const { path } = await meetingsApi.share(meeting.id, { days, transcript });
+      const url = `${window.location.origin}${path}`;
+      setCreated(url);
+      await navigator.clipboard?.writeText(url).catch(() => undefined);
+      await load();
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(id: string): Promise<void> {
+    try {
+      await meetingsApi.revokeShare(meeting.id, id);
+      await load();
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  }
+
+  const open = (links ?? []).filter((link) => !link.revoked && link.expiresAt > Date.now());
+  return (
+    <Dialog
+      title="Share notes"
+      onClose={onClose}
+      actions={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Done
+          </Button>
+          <Button variant="primary" onClick={() => void create()} disabled={busy}>
+            {busy ? "Creating…" : "Create link"}
+          </Button>
+        </>
+      }
+    >
+      <p className={styles.muted}>Anyone with the link can read the summary and action items, without an account. They can't comment or ask questions.</p>
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+      <Field label="The link works for">
+        <Select value={String(days)} onChange={(event) => setDays(Number(event.target.value))}>
+          <option value="1">1 day</option>
+          <option value="7">7 days</option>
+          <option value="30">30 days</option>
+        </Select>
+      </Field>
+      <Checkbox label="Include the transcript" checked={transcript} onChange={(event) => setTranscript(event.target.checked)} />
+      {created ? (
+        <Field label="Link (copied)">
+          <Input readOnly value={created} onFocus={(event) => event.currentTarget.select()} />
+        </Field>
+      ) : null}
+      {open.length > 0 ? (
+        <ul className={styles.shareList} aria-label="Open links">
+          {open.map((link) => (
+            <li key={link.id} className={styles.shareRow}>
+              <span>
+                {link.transcript ? "Notes and transcript" : "Notes"} · until {new Date(link.expiresAt).toLocaleDateString([], { dateStyle: "medium" })} · opened {link.views}×
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => void revoke(link.id)}>
+                Revoke
+              </Button>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </Dialog>
   );

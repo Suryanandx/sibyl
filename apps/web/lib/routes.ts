@@ -19,6 +19,8 @@
  *   /admin/<section>           organization admin (Sibyl Enterprise)
  *   /meetings                  meetings: upcoming, live now, past
  *   /meetings/<id>             a meeting's notes, transcript, playback and comments
+ *   /meetings/recordings       call and meeting recordings (Sibyl Enterprise)
+ *   /shared/meetings/<id>?t=…  notes the host shared by link (read-only, no account)
  *   /call/<id>                 a meeting's room (realtime layer; ?host=1 for the host)
  *   /join/<id>?k=…             the guest link (no account: knock, the host admits)
  *   /slides/presentation?id=…  the deck editor (Sibyl Slides engine)
@@ -60,13 +62,14 @@ export const SETTINGS_SECTION_TITLES: Record<SettingsSection, string> = {
   licence: "Licence"
 };
 
-export const ADMIN_SECTIONS = ["org", "users", "sso", "scim", "sessions", "roles", "policies", "audit", "usage"] as const;
+export const ADMIN_SECTIONS = ["org", "users", "phone", "sso", "scim", "sessions", "roles", "policies", "audit", "usage"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 /** Browser tab titles; typed so every section has one. */
 export const ADMIN_SECTION_TITLES: Record<AdminSection, string> = {
   org: "Organization",
   users: "Users",
+  phone: "Phone",
   sso: "Single sign-on",
   scim: "Provisioning (SCIM)",
   sessions: "Session policies",
@@ -99,7 +102,8 @@ export const paths = {
   admin: (section?: AdminSection) => (section ? `/admin/${section}` : "/admin"),
   call: (callId: string, host = false) => `/call/${encodeURIComponent(callId)}${host ? "?host=1" : ""}`,
   meetings: "/meetings",
-  meeting: (meetingId: string) => `/meetings/${encodeURIComponent(meetingId)}`
+  meeting: (meetingId: string) => `/meetings/${encodeURIComponent(meetingId)}`,
+  recordings: "/meetings/recordings"
 } as const;
 
 /** The conversation named by a chat address (`/c/<id>`), or null. */

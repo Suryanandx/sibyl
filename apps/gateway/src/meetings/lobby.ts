@@ -3,10 +3,13 @@
  * (/join/<id>?k=…), give a name and knock; the host admits or denies them.
  * A room token is minted only after admission.
  *
- * Kept in memory: a knock lives while someone waits in front of the door
- * (15 minutes); a gateway restart empties the lobby and guests knock again.
+ * Knocks are kept on the meeting record (MeetingRecord.lobby), so a gateway
+ * restart doesn't drop the people waiting or the ones already admitted. A
+ * knock lives 15 minutes. These helpers are pure: the meeting service stores
+ * what they return. Only the flood limit is in memory.
  */
 import { randomBytes } from "node:crypto";
+import type { MeetingKnock } from "@open-gpt-live/core";
 
 export const LOBBY_WAIT_MS = 15 * 60 * 1000;
 /** People waiting at once per meeting (more get "the lobby is full"). */
@@ -14,16 +17,7 @@ export const LOBBY_MAX_WAITING = 20;
 /** Knocks per meeting per minute (a guest link pasted somewhere public can't flood the host). */
 export const LOBBY_KNOCKS_PER_MINUTE = 12;
 
-export type KnockStatus = "waiting" | "admitted" | "denied";
-
-export interface Knock {
-  ticket: string;
-  /** Guest id (identity guest:<id>). */
-  guestId: string;
-  name: string;
-  at: number;
-  status: KnockStatus;
-}
+export type Knock = MeetingKnock;
 
 export class LobbyError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -31,58 +25,48 @@ export class LobbyError extends Error {
   }
 }
 
-export class Lobby {
-  private readonly meetings = new Map<string, Map<string, Knock>>();
+/** Knocks still current (younger than LOBBY_WAIT_MS). */
+export function currentKnocks(knocks: readonly Knock[] | undefined, now: number): Knock[] {
+  return (knocks ?? []).filter((knock) => now - knock.at <= LOBBY_WAIT_MS);
+}
+
+/** A new knock added to the (pruned) list. */
+export function addKnock(knocks: readonly Knock[] | undefined, rawName: string, now: number): { knocks: Knock[]; knock: Knock } {
+  const name = cleanName(rawName);
+  if (!name) throw new LobbyError("Enter your name to ask to join.");
+  const current = currentKnocks(knocks, now);
+  if (current.filter((knock) => knock.status === "waiting").length >= LOBBY_MAX_WAITING) {
+    throw new LobbyError("The lobby is full. Try again in a few minutes.", 429);
+  }
+  const knock: Knock = { ticket: randomBytes(18).toString("base64url"), guestId: randomBytes(9).toString("base64url"), name, at: now, status: "waiting" };
+  return { knocks: [...current, knock], knock };
+}
+
+/** The host's decision on a waiting knock (undefined: no such waiting knock). */
+export function decideKnock(knocks: readonly Knock[] | undefined, ticket: string, admit: boolean, now: number): { knocks: Knock[]; knock: Knock } | undefined {
+  const current = currentKnocks(knocks, now);
+  const found = current.find((knock) => knock.ticket === ticket && knock.status === "waiting");
+  if (!found) return undefined;
+  const knock: Knock = { ...found, status: admit ? "admitted" : "denied" };
+  return { knocks: current.map((item) => (item === found ? knock : item)), knock };
+}
+
+/** Flood limit per meeting (in memory: a restart only resets the count). */
+export class KnockLimiter {
   private readonly recent = new Map<string, number[]>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  knock(meetingId: string, rawName: string): Knock {
-    const name = cleanName(rawName);
-    if (!name) throw new LobbyError("Enter your name to ask to join.");
+  check(meetingId: string): void {
     const now = this.now();
     const hits = (this.recent.get(meetingId) ?? []).filter((at) => now - at < 60_000);
     if (hits.length >= LOBBY_KNOCKS_PER_MINUTE) throw new LobbyError("Too many people are asking to join right now. Try again in a minute.", 429);
     hits.push(now);
     this.recent.set(meetingId, hits);
-    const knocks = this.prune(meetingId);
-    if ([...knocks.values()].filter((knock) => knock.status === "waiting").length >= LOBBY_MAX_WAITING) {
-      throw new LobbyError("The lobby is full. Try again in a few minutes.", 429);
-    }
-    const knock: Knock = { ticket: randomBytes(18).toString("base64url"), guestId: randomBytes(9).toString("base64url"), name, at: now, status: "waiting" };
-    knocks.set(knock.ticket, knock);
-    this.meetings.set(meetingId, knocks);
-    return { ...knock };
   }
 
-  get(meetingId: string, ticket: string): Knock | undefined {
-    const knock = this.prune(meetingId).get(ticket);
-    return knock ? { ...knock } : undefined;
-  }
-
-  waiting(meetingId: string): Knock[] {
-    return [...this.prune(meetingId).values()].filter((knock) => knock.status === "waiting").map((knock) => ({ ...knock }));
-  }
-
-  decide(meetingId: string, ticket: string, admit: boolean): Knock | undefined {
-    const knock = this.prune(meetingId).get(ticket);
-    if (!knock || knock.status !== "waiting") return undefined;
-    knock.status = admit ? "admitted" : "denied";
-    return { ...knock };
-  }
-
-  /** The meeting ended: nobody else gets in. */
-  close(meetingId: string): void {
-    this.meetings.delete(meetingId);
+  forget(meetingId: string): void {
     this.recent.delete(meetingId);
-  }
-
-  private prune(meetingId: string): Map<string, Knock> {
-    const knocks = this.meetings.get(meetingId) ?? new Map<string, Knock>();
-    const now = this.now();
-    for (const [ticket, knock] of knocks) if (now - knock.at > LOBBY_WAIT_MS) knocks.delete(ticket);
-    if (knocks.size === 0) this.meetings.delete(meetingId);
-    return knocks;
   }
 }
 

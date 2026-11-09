@@ -51,6 +51,7 @@ import type {
 import { meetingSortAt } from "@open-gpt-live/core";
 import { createSqliteIdentityStore, IDENTITY_MIGRATION } from "./identity";
 import { createSqliteTenancyStores, TENANCY_MIGRATION } from "./tenancy";
+import { CALLS_MIGRATION, createSqliteCallLogStore } from "./calls";
 
 export interface SqliteStoreOptions {
   /** Database file path, or ":memory:". Parent directories are created. */
@@ -336,7 +337,9 @@ const MIGRATIONS: string[] = [
   CREATE INDEX meeting_comments_meeting ON meeting_comments (meeting_id, created_at);
   `,
   // Hosted Sibyl: organizations, the AI credits ledger, users by email across organizations.
-  TENANCY_MIGRATION
+  TENANCY_MIGRATION,
+  // The phone line's call log.
+  CALLS_MIGRATION
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
@@ -744,6 +747,7 @@ export function createSqliteStore(options: SqliteStoreOptions): Store {
     },
     organizations: tenancy.organizations,
     credits: tenancy.credits,
+    calls: createSqliteCallLogStore(db),
     audit: {
       async append(record) {
         sql.auditInsert.run(

@@ -186,7 +186,16 @@ export async function createRuntime(input: RuntimeOptions): Promise<GatewayRunti
     notify: (input) => notifications.publish(input)
   });
   // Realtime (LiveKit; off unless LIVEKIT_* is set): its tools register before the tool switches.
-  const realtime = installRealtime({ env: options.env, store, tools, ownerId, agents, log: options.log });
+  const realtime = installRealtime({
+    env: options.env,
+    store,
+    tools,
+    ownerId,
+    agents,
+    vault: () => secretsService?.vault,
+    notify: (input) => notifications.publish(input),
+    log: options.log
+  });
   // Meetings own the realtime layer's call records (the meeting id is the call id).
   const meetings = installMeetings({ store, tools, meter, ownerId, env: options.env, log: options.log, notifications, ...(realtime ? { realtime } : {}) });
   // Media generation (create_image / create_video / create_audio): results are uploads; tools before the switches.
@@ -225,7 +234,9 @@ export async function createRuntime(input: RuntimeOptions): Promise<GatewayRunti
         notify: (notice) => notifications.publish(notice),
         addJobType: (type) => routines.addJobType(type),
         ...(notifications.mailer ? { mailer: notifications.mailer } : {}),
-        ...(installed.secrets ? { secrets: vaultFor(installed.secrets.vault, ownerId) } : {})
+        ...(installed.secrets ? { secrets: vaultFor(installed.secrets.vault, ownerId) } : {}),
+        // Call recordings plug into the realtime layer (announce, link to meetings, record phone calls).
+        ...(realtime ? { calls: realtime.recordingHost() } : {})
       });
   const modelAccess = new ModelAccessService({
     store,

@@ -7,11 +7,13 @@
  */
 import type { Store, ToolRegistry } from "@open-gpt-live/core";
 import type { AgentRuntime } from "../agents/runtime.js";
+import type { SecretVault } from "../secrets/vault.js";
 import { realtimeConfigFromEnv } from "./config.js";
-import { RealtimeService } from "./service.js";
+import { RealtimeService, type RealtimeServiceOptions } from "./service.js";
 import { realtimeTools } from "./tools.js";
 
-export { RealtimeService, RealtimeError, type PhoneSettings, type StreamView, type CallRecord } from "./service.js";
+export { RealtimeService, RealtimeError, type StreamView, type CallRecord } from "./service.js";
+export { PhoneLine, PhoneError, PHONE_PROVIDERS, isOpen, type PhoneLineRecord } from "./phone.js";
 export { realtimeConfigFromEnv, type RealtimeConfig } from "./config.js";
 export { orgOfRoom, parseRoomName, roomName, roomPrefix, roomSpace, type RoomKind } from "./rooms.js";
 export { handleRealtimeHttp, handleRealtimeWebhook } from "./http.js";
@@ -23,6 +25,10 @@ export interface InstallRealtimeOptions {
   tools: ToolRegistry;
   ownerId: string;
   agents?: AgentRuntime;
+  /** The vault (installed after realtime): the phone line's trunk password. */
+  vault?: () => SecretVault | undefined;
+  /** Inbox notices (voicemail). */
+  notify?: RealtimeServiceOptions["notify"];
   log: (event: string, fields?: Record<string, unknown>) => void;
 }
 
@@ -37,6 +43,8 @@ export function installRealtime(options: InstallRealtimeOptions): RealtimeServic
     store: options.store,
     ownerId: options.ownerId,
     ...(options.agents ? { agents: options.agents } : {}),
+    ...(options.vault ? { vault: options.vault } : {}),
+    ...(options.notify ? { notify: options.notify } : {}),
     log: options.log
   });
   for (const tool of realtimeTools(service)) options.tools.register(tool);

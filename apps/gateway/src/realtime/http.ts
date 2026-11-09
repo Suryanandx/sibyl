@@ -9,9 +9,13 @@
  *   GET    /api/realtime/streams                → { items }                              chat.use
  *   POST   /api/realtime/streams {name, input, url?} → stream                            tools.write
  *   DELETE /api/realtime/streams/:id            → { ok }                                 tools.write
- *   GET    /api/realtime/phone                  → { phone }                              org.settings
- *   PUT    /api/realtime/phone {provider, address, number, username?, password?, agentId?, greeting?} org.settings
+ *   GET    /api/realtime/calls?direction=&before= → { items } (the phone line's call log)  chat.view_all
+ *   GET    /api/realtime/phone                  → { phone, cloud, providers }            org.settings
+ *   PUT    /api/realtime/phone PhoneLineInput   → { phone }                              org.settings
  *   DELETE /api/realtime/phone                  → { ok }                                 org.settings
+ *   POST   /api/realtime/phone/test             → PhoneTestView                          org.settings
+ *   GET    /api/realtime/phone/numbers[?areaCode=] → { owned, available } (LiveKit Cloud) org.settings
+ *   POST   /api/realtime/phone/numbers {number} → { number } (rents it from LiveKit)     org.settings
  *   POST   /api/realtime/webhook                (LiveKit; signed)
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -22,6 +26,7 @@ import {
   readJsonObject,
   requestCaller,
   requestPath,
+  queryParam,
   requestWorkspace,
   runRoute,
   sendBodyError,
@@ -29,6 +34,9 @@ import {
   sendJson,
   type ApiOptions
 } from "../http/index.js";
+import type { PhoneLineInput } from "@open-gpt-live/protocol";
+import { LiveKitNumbersError } from "./livekit-numbers.js";
+import { PHONE_PROVIDERS, PhoneError } from "./phone.js";
 import { RealtimeError, type RealtimeService } from "./service.js";
 
 export interface RealtimeHttpOptions extends ApiOptions {
@@ -116,35 +124,50 @@ async function serve(options: RealtimeHttpOptions, request: IncomingMessage, res
       }
     }
 
+    if (rest === "calls" && method === "GET") {
+      const direction = queryParam(request, "direction");
+      const before = Number(queryParam(request, "before"));
+      return reply(200, {
+        items: await realtime.phone.log({
+          workspaceId,
+          ...(direction === "inbound" || direction === "outbound" ? { direction } : {}),
+          ...(Number.isFinite(before) && before > 0 ? { before } : {})
+        })
+      });
+    }
+
     if (rest === "phone") {
-      // Trunk credentials are passed to LiveKit and never stored here.
-      if (method === "GET") return reply(200, { phone: (await realtime.phoneSettings()) ?? null });
+      // The trunk password goes to LiveKit and the vault; it is never sent back.
+      if (method === "GET") return reply(200, { phone: await realtime.phone.view(), cloud: realtime.phone.cloud, providers: PHONE_PROVIDERS });
       if (method === "DELETE") {
-        await realtime.removePhone();
+        await realtime.phone.remove();
         return reply(200, { ok: true });
       }
       if (method === "PUT") {
-        const input = await readJsonObject(request, 8 * 1024);
-        const text = (key: string) => (typeof input[key] === "string" && (input[key] as string).trim() ? (input[key] as string).trim() : undefined);
-        const address = text("address");
-        const number = text("number");
-        if (!address || !number) return reply(400, { error: "bad_request", message: "address and number are required." });
-        const settings = await realtime.setupPhone({
-          provider: input.provider === "twilio" ? "twilio" : "other",
-          address,
-          number,
-          workspaceId,
-          ...(text("username") ? { username: text("username") } : {}),
-          ...(text("password") ? { password: text("password") } : {}),
-          ...(text("agentId") ? { agentId: text("agentId") } : {}),
-          ...(text("greeting") ? { greeting: text("greeting") } : {})
-        });
-        return reply(200, { phone: settings });
+        const input = (await readJsonObject(request, 16 * 1024)) as unknown as PhoneLineInput & { number?: unknown };
+        // Older clients sent one `number`.
+        const numbers = Array.isArray(input.numbers) ? input.numbers.map(String) : typeof input.number === "string" ? [input.number] : [];
+        return reply(200, { phone: await realtime.phone.save({ ...input, numbers }, workspaceId) });
+      }
+    }
+    if (rest === "phone/test" && method === "POST") {
+      request.resume();
+      return reply(200, await realtime.phone.test());
+    }
+    if (rest === "phone/numbers") {
+      if (method === "GET") {
+        const areaCode = queryParam(request, "areaCode");
+        return reply(200, await realtime.phone.liveKitNumbers(areaCode === undefined ? undefined : areaCode.replace(/\D/g, "").slice(0, 3)));
+      }
+      if (method === "POST") {
+        const input = await readJsonObject(request, 1024);
+        return reply(201, { number: await realtime.phone.buyNumber(typeof input.number === "string" ? input.number : "") });
       }
     }
   } catch (error) {
     if (sendBodyError(response, error, cors)) return;
-    if (error instanceof RealtimeError) return reply(error.status, { error: "realtime", message: error.message });
+    if (error instanceof RealtimeError || error instanceof PhoneError) return reply(error.status, { error: "realtime", message: error.message });
+    if (error instanceof LiveKitNumbersError) return reply(error.status >= 500 ? 502 : error.status, { error: "livekit_numbers", message: error.message });
     // LiveKit unreachable or refused: say so without leaking internals.
     options.log?.("realtime.api_failed", { path, error: error instanceof Error ? error.message : String(error) });
     return reply(502, { error: "livekit_unavailable", message: "The call service (LiveKit) didn't answer." });

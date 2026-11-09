@@ -101,9 +101,9 @@
 <li><strong>Steadier voice.</strong> WebRTC handles echo cancellation, jitter, packet loss and mobile networks.</li>
 <li><strong>Meetings.</strong> Several people and agents in one call, with video, live captions, AI notes and a page afterwards (<a href="meetings.html">Meetings</a>).</li>
 <li><strong>Agents with their own voices.</strong> Each agent joins as its own participant, with its avatar.</li>
-<li><strong>Phone calls.</strong> Sibyl can call a number (always after your approval) and answer a phone line, through a SIP trunk such as Twilio.</li>
+<li><strong>Phone calls.</strong> Sibyl answers a phone line and can call a number (always after your approval), with a LiveKit Cloud number or a SIP trunk such as Twilio. Business hours, messages after hours, a call log.</li>
 <li><strong>Streams.</strong> Bring a live stream (RTMP, WHIP or a live HLS URL) into a room. An agent listens and writes notes into a chat.</li>
-<li><strong>Recordings</strong> (Agent Serve). Record calls, keep them for 30 days, list and download them.</li>
+<li><strong>Recordings</strong> (Agent Serve). Record meetings (audio or video) and phone calls, keep them for 30 days or on legal hold, search, play and download them.</li>
 </ul>
 <h2 id="turn-it-on"><a class="anchor" href="#turn-it-on" aria-hidden="true" tabindex="-1">#</a>Turn it on</h2>
 <h3 id="with-docker-compose"><a class="anchor" href="#with-docker-compose" aria-hidden="true" tabindex="-1">#</a>With Docker Compose</h3>
@@ -187,30 +187,118 @@ LIVEKIT_URL=ws://127.0.0.1:7880 LIVEKIT_API_KEY=devkey LIVEKIT_API_SECRET=secret
 <li>In a meeting, silent note-takers never speak, and every turn is transcribed first (also with one person in the room), so the meeting keeps a full transcript.</li>
 </ul>
 <h2 id="phone-calls"><a class="anchor" href="#phone-calls" aria-hidden="true" tabindex="-1">#</a>Phone calls</h2>
-<p>Phone calls use a SIP trunk from a provider. Twilio is documented first.</p>
-<h3 id="set-up-twilio"><a class="anchor" href="#set-up-twilio" aria-hidden="true" tabindex="-1">#</a>Set up Twilio</h3>
+<p>Give Sibyl a phone number. People can call her, and she can call people for you (always after your approval). Set it up in <strong>Settings → Admin → Phone</strong> (owners and admins).</p>
+<h3 id="two-ways-to-get-a-number"><a class="anchor" href="#two-ways-to-get-a-number" aria-hidden="true" tabindex="-1">#</a>Two ways to get a number</h3>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th></th>
+<th>A LiveKit phone number</th>
+<th>Your SIP provider</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>What it is</td>
+<td>A US number you rent straight from LiveKit Cloud</td>
+<td>A SIP trunk at Twilio, Telnyx, Plivo, Vonage or any other provider</td>
+</tr>
+<tr>
+<td>Needs</td>
+<td>LiveKit Cloud (<code>LIVEKIT_URL</code> at <code>*.livekit.cloud</code>)</td>
+<td>Any LiveKit: Cloud, or self-hosted with the <code>sip</code> service (<code>--profile phone</code>)</td>
+</tr>
+<tr>
+<td>Incoming calls</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Calling out</td>
+<td>Not yet (LiveKit: inbound only)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Countries</td>
+<td>US local and toll-free numbers</td>
+<td>Whatever the provider sells</td>
+</tr>
+<tr>
+<td>Price</td>
+<td>Billed monthly by LiveKit; one local number is included with every Cloud plan</td>
+<td>The provider&#39;s prices</td>
+</tr>
+</tbody></table></div>
+<p>Self-hosted LiveKit always needs a SIP provider: LiveKit&#39;s own numbers live in LiveKit Cloud.</p>
+<h3 id="a-livekit-phone-number-livekit-cloud"><a class="anchor" href="#a-livekit-phone-number-livekit-cloud" aria-hidden="true" tabindex="-1">#</a>A LiveKit phone number (LiveKit Cloud)</h3>
 <ol>
-<li><p>In Twilio, create an <strong>Elastic SIP Trunk</strong>.</p>
-<ul>
-<li>Termination: add a termination URI (for example <code>sibyl.pstn.twilio.com</code>) and a credential list (user name and password).</li>
-<li>Origination: add <code>sip:&lt;your LiveKit SIP host&gt;:5060</code> (the <code>sip</code> service from <code>--profile phone</code>; it needs a public IP and UDP 5060 and 10000–10100 open).</li>
+<li>Point Sibyl at your Cloud project: <code>LIVEKIT_URL=wss://&lt;project&gt;.livekit.cloud</code> with its key and secret.</li>
+<li>Open <strong>Settings → Admin → Phone</strong> and pick <strong>A LiveKit phone number</strong>.</li>
+<li>Tick a number your project already has, or search by area code and <strong>Rent</strong> one (LiveKit bills it; there is a confirmation first).</li>
+<li><strong>Set up the line.</strong> Sibyl creates a dispatch rule in LiveKit and routes the numbers to it.</li>
+</ol>
+<p>Behind the scenes this uses LiveKit&#39;s Phone Numbers API (<code>SearchPhoneNumbers</code>, <code>PurchasePhoneNumber</code>, <code>ListPhoneNumbers</code>, <code>UpdatePhoneNumber</code>; <a href="https://docs.livekit.io/reference/telephony/phone-numbers-api/" rel="noopener">reference</a>). You can also buy numbers with the <code>lk number</code> CLI or in the Cloud dashboard (Telephony → Phone numbers) and then pick them here.</p>
+<h3 id="twilio-step-by-step"><a class="anchor" href="#twilio-step-by-step" aria-hidden="true" tabindex="-1">#</a>Twilio, step by step</h3>
+<ol>
+<li>In the Twilio console, open <strong>Elastic SIP Trunking → Trunks → Create new SIP Trunk</strong>. Name it &quot;Sibyl&quot;.</li>
+<li><strong>Termination</strong> (calls from Sibyl to phones):<ul>
+<li>Set a <strong>Termination SIP URI</strong>, for example <code>acme-sibyl.pstn.twilio.com</code>. This is the <strong>SIP address</strong> in Sibyl.</li>
+<li>Under <strong>Authentication → Credential Lists</strong>, create a list with a user name and a strong password. These are the <strong>User name</strong> and <strong>Password</strong> in Sibyl.</li>
 </ul>
 </li>
-<li><p>Buy or move a number to the trunk.</p>
+<li><strong>Origination</strong> (calls from phones to Sibyl): add an origination URI pointing at LiveKit&#39;s SIP service: <code>sip:&lt;your LiveKit SIP host&gt;:5060</code>.<ul>
+<li>LiveKit Cloud: your project&#39;s SIP URI (Project settings → SIP URI).</li>
+<li>Self-hosted: the server&#39;s public address. Start the SIP service with <code>docker compose --profile realtime --profile phone up -d</code> and open UDP 5060 and the RTP ports (10000–10100 in <code>docker-compose.yml</code>).</li>
+</ul>
 </li>
-<li><p>Set up the line in Sibyl as an organization owner or admin:</p>
-<div class="codeBlock"><span class="codeLang">bash</span><pre><code class="language-bash">curl -X PUT http://localhost:8787/api/realtime/phone \
-  -H &quot;authorization: Bearer $SIBYL_OWNER_TOKEN&quot; -H &quot;content-type: application/json&quot; \
-  -d '{&quot;provider&quot;:&quot;twilio&quot;,&quot;address&quot;:&quot;sibyl.pstn.twilio.com&quot;,&quot;number&quot;:&quot;+15551234567&quot;,
-       &quot;username&quot;:&quot;&lt;termination user&gt;&quot;,&quot;password&quot;:&quot;&lt;termination password&gt;&quot;,
-       &quot;greeting&quot;:&quot;Hello, this is Sibyl. How can I help?&quot;,&quot;agentId&quot;:&quot;&lt;optional agent&gt;&quot;}'</code></pre><button type="button" class="btn btnLine btnXs copy" aria-label="Copy code">Copy</button></div>
-<p>This creates the outbound trunk, the inbound trunk and an inbound dispatch rule in LiveKit. The SIP password is passed to LiveKit and not stored by Sibyl. <code>GET</code> shows the line; <code>DELETE</code> removes it.</p>
-</li>
+<li><strong>Numbers</strong>: buy a number (or move one) and attach it to the trunk.</li>
+<li>In Sibyl, <strong>Settings → Admin → Phone → Your SIP provider</strong>: provider Twilio, the SIP address, user name, password and the number (<code>+15551234567</code>). <strong>Set up the line.</strong></li>
+<li>Press <strong>Test</strong>. It checks LiveKit, LiveKit&#39;s SIP API, that the SIP address resolves, the trunks and the routing in LiveKit, and the business hours. It does not place a call: call the number from your phone to try it.</li>
 </ol>
-<h3 id="calling-out"><a class="anchor" href="#calling-out" aria-hidden="true" tabindex="-1">#</a>Calling out</h3>
-<p>Ask Sibyl to call someone: &quot;Call +1 555 123 4567 and confirm my appointment for Tuesday.&quot; The <code>place_phone_call</code> tool is <strong>high risk</strong>, so it always shows an approval card, whatever an agent&#39;s autonomy says. Once approved, Sibyl (or the agent you named) joins a new room and LiveKit dials the number. The call is saved as a new chat.</p>
+<p>The password is sent to LiveKit (it needs it for the trunk) and kept in Sibyl&#39;s vault as <code>PHONE_SIP_PASSWORD</code>, usable only for the trunk&#39;s host, so Sibyl can rebuild the trunks when you change the numbers. It is never shown again; leave the field empty to keep it. Without a vault key (<code>SIBYL_SECRET_KEY</code>), it is only in LiveKit and you enter it again when the trunk changes.</p>
+<h3 id="other-sip-providers"><a class="anchor" href="#other-sip-providers" aria-hidden="true" tabindex="-1">#</a>Other SIP providers</h3>
+<p>Same steps: create a SIP trunk with credentials (outbound, called termination by most) and point incoming calls at LiveKit&#39;s SIP URI.</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>SIP address (example)</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Telnyx</td>
+<td><code>sip.telnyx.com</code></td>
+<td>Voice → SIP Trunking: an FQDN connection with credentials; outbound voice profile</td>
+</tr>
+<tr>
+<td>Plivo</td>
+<td><code>&lt;your id&gt;.zt.plivo.com</code></td>
+<td>Zentrunk → Outbound trunk with a credentials list; inbound trunk to LiveKit&#39;s URI</td>
+</tr>
+<tr>
+<td>Vonage</td>
+<td><code>sip.nexmo.com</code></td>
+<td>SIP trunking (Vonage API): a number linked to a SIP endpoint</td>
+</tr>
+<tr>
+<td>Any other</td>
+<td>the provider&#39;s SIP host</td>
+<td>Their SIP trunking docs</td>
+</tr>
+</tbody></table></div>
+<p>LiveKit&#39;s own guides per provider: <a href="https://docs.livekit.io/telephony/" rel="noopener">docs.livekit.io/telephony</a>.</p>
 <h3 id="answering"><a class="anchor" href="#answering" aria-hidden="true" tabindex="-1">#</a>Answering</h3>
-<p>Calls to the line join a room named after the line (<code>sibyl.phone.&lt;workspace&gt;.&lt;number&gt;_&lt;random&gt;</code>; the caller&#39;s number is never in a room name). LiveKit tells the gateway through its signed webhook, and Sibyl answers with the greeting.</p>
+<ul>
+<li><strong>Who answers</strong>: Sibyl, or one of your agents, with the <strong>greeting</strong> you set.</li>
+<li><strong>Business hours</strong> (optional): open days, opening and closing time, time zone. Closing before opening means overnight (22:00–06:00).</li>
+<li><strong>After hours</strong>: Sibyl <strong>takes a message</strong>: she says the message greeting, then only listens. What the caller says is transcribed and lands in the <strong>Inbox</strong> (&quot;Voicemail from +1…&quot;, with the words and a link to the call&#39;s chat). Or choose <strong>Answer anyway</strong>.</li>
+<li>Calls join a room named after the line (<code>sibyl.phone.&lt;workspace&gt;.&lt;number&gt;_&lt;random&gt;</code>; the caller&#39;s number is never in a room name). LiveKit tells the gateway through its signed webhook.</li>
+</ul>
+<h3 id="calling-out"><a class="anchor" href="#calling-out" aria-hidden="true" tabindex="-1">#</a>Calling out</h3>
+<p>Ask Sibyl to call someone: &quot;Call +1 555 123 4567 and confirm my appointment for Tuesday.&quot; The <code>place_phone_call</code> tool is <strong>high risk</strong>, so it always shows an approval card, whatever an agent&#39;s autonomy says. <strong>Who may ask</strong> is set on the Phone page: owners and admins (default), members too, or nobody. Once approved, Sibyl (or the agent you named) joins a new room and LiveKit dials the number from the line&#39;s first number. The call is saved as a new chat.</p>
+<p><code>LIVEKIT_SIP_OUTBOUND_TRUNK_ID</code> and <code>LIVEKIT_SIP_FROM_NUMBER</code> still work if you created a trunk yourself.</p>
+<h3 id="call-log"><a class="anchor" href="#call-log" aria-hidden="true" tabindex="-1">#</a>Call log</h3>
+<p>Under the line&#39;s settings: every call, in and out, with the number, who answered, when, how long, what it cost (model and speech, from the usage meter), its transcript (the call&#39;s chat), its recording and a voicemail&#39;s words. Filter by direction. People with <code>chat.view_all</code> (owners and admins) see it. Each organization and workspace has its own.</p>
 <h3 id="who-the-caller-is"><a class="anchor" href="#who-the-caller-is" aria-hidden="true" tabindex="-1">#</a>Who the caller is</h3>
 <p>Phone sessions never act with more than a <strong>viewer</strong>&#39;s rights in the line&#39;s workspace, whoever placed or answers the call. The person on the phone can talk and use read-only tools, but nothing that writes. Calls Sibyl answers have no owner: owners and admins see them in the chat history.</p>
 <p>US rules (TCPA) and many countries limit automated calls. Check them before you let Sibyl call people.</p>
@@ -226,10 +314,13 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
 <h2 id="recordings-enterprise"><a class="anchor" href="#recordings-enterprise" aria-hidden="true" tabindex="-1">#</a>Recordings (Enterprise)</h2>
 <p>Needs a licence with <code>recordings</code> and the <code>egress</code> service (in <code>--profile realtime</code>).</p>
 <ul>
-<li><strong>Record</strong> in a call starts an audio recording of the room (one mixed Ogg/Opus file). Everyone in the call sees <strong>Recording</strong>.</li>
+<li><strong>Record audio</strong> or <strong>Record video</strong> (Invite menu in a meeting) records the room: audio is one mixed Ogg/Opus file; video is an MP4 with the active speaker (or a shared screen) large and everyone&#39;s audio. You choose per recording.</li>
+<li><strong>Consent.</strong> Everyone in the room sees <strong>Recording</strong> as soon as it starts (guests too). Phone callers hear &quot;This call is being recorded&quot;. The phone line can record every call (Settings → Admin → Phone → Record every call).</li>
+<li>A meeting&#39;s recording is linked to it: its page plays the audio with a waveform, or the video, in step with the transcript.</li>
+<li><strong>Meetings → Recordings</strong> lists recordings of meetings and calls: search, filter (meetings or calls, audio or video, legal hold), how many days are left, play, download, delete.</li>
 <li>Files go to the data volume (<code>recordings</code>, shared by the gateway and egress) or to S3-compatible storage (<code>SIBYL_RECORDINGS_S3_*</code>).</li>
-<li>They are deleted after 30 days (<code>SIBYL_RECORDINGS_RETENTION_DAYS</code>).</li>
-<li>People with <code>calls.record</code> (admins and owners) can list and download them:</li>
+<li>They are deleted after 30 days (<code>SIBYL_RECORDINGS_RETENTION_DAYS</code>), unless they are on <strong>legal hold</strong>. A recording on hold can&#39;t be deleted until the hold is lifted.</li>
+<li>People with <code>calls.record</code> (admins and owners) record, list, play and download them.</li>
 </ul>
 <div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
 <thead>
@@ -239,11 +330,11 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
 </tr>
 </thead>
 <tbody><tr>
-<td><code>GET /api/recordings</code></td>
+<td><code>GET /api/recordings?q=&amp;kind=call|phone&amp;type=audio|video&amp;status=&amp;held=1</code></td>
 <td>Recordings of the workspace</td>
 </tr>
 <tr>
-<td><code>POST /api/recordings {room}</code></td>
+<td><code>POST /api/recordings {room, video?}</code></td>
 <td>Start recording a room of the workspace</td>
 </tr>
 <tr>
@@ -251,15 +342,19 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
 <td>Stop</td>
 </tr>
 <tr>
-<td><code>GET /api/recordings/&lt;id&gt;/file</code></td>
-<td>Download (a presigned link for S3)</td>
+<td><code>PATCH /api/recordings/&lt;id&gt; {legalHold}</code></td>
+<td>Put on or lift legal hold</td>
+</tr>
+<tr>
+<td><code>GET /api/recordings/&lt;id&gt;/file[?inline=1]</code></td>
+<td>Download or play (a presigned link for S3)</td>
 </tr>
 <tr>
 <td><code>DELETE /api/recordings/&lt;id&gt;</code></td>
 <td>Delete</td>
 </tr>
 </tbody></table></div>
-<p>The open-source edition has no recording.</p>
+<p>The open-source edition has no recording: the tab is hidden and the meeting page says &quot;Audio and video recordings come with Agent Serve&quot;.</p>
 <h2 id="permissions-and-api"><a class="anchor" href="#permissions-and-api" aria-hidden="true" tabindex="-1">#</a>Permissions and API</h2>
 <div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
 <thead>
@@ -293,8 +388,12 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
 <td><code>tools.write</code></td>
 </tr>
 <tr>
-<td><code>GET</code>, <code>PUT</code>, <code>DELETE /api/realtime/phone</code></td>
+<td><code>GET</code>, <code>PUT</code>, <code>DELETE /api/realtime/phone</code>, <code>POST /api/realtime/phone/test</code>, <code>GET</code>, <code>POST /api/realtime/phone/numbers</code></td>
 <td><code>org.settings</code></td>
+</tr>
+<tr>
+<td><code>GET /api/realtime/calls?direction=&amp;before=</code> (call log)</td>
+<td><code>chat.view_all</code></td>
 </tr>
 <tr>
 <td><code>POST /api/realtime/webhook</code></td>
@@ -333,12 +432,24 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
 </tr>
 </tbody></table></div>
 <p>The voice brain&#39;s first word still dominates. LiveKit&#39;s gains are steadier audio and networks, calls and phones, not a faster brain.</p>
+<h3 id="verified-phone-line-and-recordings"><a class="anchor" href="#verified-phone-line-and-recordings" aria-hidden="true" tabindex="-1">#</a>Verified (phone line and recordings)</h3>
+<p>Run on 2026-11-10 against LiveKit, Redis, egress and SIP in Docker (no real phone network: no PSTN number was available, and nothing was bought):</p>
+<ul>
+<li>Setting up a Twilio-style line created the outbound and inbound trunks and the dispatch rule in LiveKit; the password was never sent back and was kept in the vault; <strong>Test</strong> passed every step (LiveKit, SIP API, the SIP address resolving, trunks, routing, hours).</li>
+<li>A signed <code>participant_joined</code> webhook for a SIP caller (a forged one got 401) made Sibyl answer with the greeting and &quot;This call is being recorded&quot;; the caller (a scripted participant speaking a recorded question) heard the answer, and the call&#39;s audio recording was ready afterwards.</li>
+<li>After hours the same call got the message greeting; the caller&#39;s message was transcribed into the Inbox (&quot;Voicemail from …&quot;) and the call log.</li>
+<li>Asking Sibyl in chat to call a number showed the high-risk approval card; after approval LiveKit dialled out through the (fake) trunk and the call log recorded it.</li>
+</ul>
+<p>Not verified: a real phone call through Twilio or another provider, and LiveKit Cloud phone numbers (the Phone Numbers API is implemented from LiveKit&#39;s reference and unit-tested with a fake; this test stack is self-hosted, and renting a number costs money).</p>
 <h2 id="troubleshooting"><a class="anchor" href="#troubleshooting" aria-hidden="true" tabindex="-1">#</a>Troubleshooting</h2>
 <ul>
 <li><strong>No sound on macOS with Docker:</strong> start LiveKit with <code>--node-ip 127.0.0.1</code> (compose: <code>LIVEKIT_NODE_IP</code>).</li>
 <li><strong>&quot;secret is too short&quot;:</strong> <code>LIVEKIT_API_SECRET</code> must be 32 characters or more.</li>
 <li><strong>Inbound calls don&#39;t get an answer:</strong> the webhook in <code>livekit.yaml</code> must reach the gateway, and its <code>api_key</code> must equal <code>LIVEKIT_API_KEY</code>.</li>
 <li><strong>Recording doesn&#39;t start:</strong> the <code>egress</code> service must be running and share the <code>recordings</code> volume with the gateway.</li>
+<li><strong>A video recording is empty or never finishes:</strong> egress renders the room in headless Chrome and must reach LiveKit&#39;s media. With LiveKit in Docker on one machine, start LiveKit with <code>--node-ip</code> set to the machine&#39;s LAN address (not <code>127.0.0.1</code>), so both browsers and the egress container can reach it.</li>
+<li><strong>Test says &quot;LiveKit&#39;s SIP API failed&quot;:</strong> self-hosted LiveKit needs Redis and the <code>sip</code> service (<code>--profile phone</code>).</li>
+<li><strong>A LiveKit number can&#39;t be picked:</strong> LiveKit numbers need LiveKit Cloud; with self-hosted LiveKit use a SIP provider.</li>
 </ul>
 
     </article>
@@ -348,7 +459,7 @@ curl -X POST … -d '{&quot;input&quot;:&quot;url&quot;,&quot;name&quot;:&quot;W
       <a class="next" href="slides.html"><span>Next</span>Sibyl Slides</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#turn-it-on">Turn it on</a></li><li class="d3"><a href="#with-docker-compose">With Docker Compose</a></li><li class="d3"><a href="#for-development-gateway-on-your-machine">For development (gateway on your machine)</a></li><li class="d3"><a href="#livekit-cloud">LiveKit Cloud</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d3"><a href="#why-these-sdks">Why these SDKs</a></li><li class="d2"><a href="#voice-in-a-chat">Voice in a chat</a></li><li class="d2"><a href="#calls">Calls</a></li><li class="d2"><a href="#phone-calls">Phone calls</a></li><li class="d3"><a href="#set-up-twilio">Set up Twilio</a></li><li class="d3"><a href="#calling-out">Calling out</a></li><li class="d3"><a href="#answering">Answering</a></li><li class="d3"><a href="#who-the-caller-is">Who the caller is</a></li><li class="d2"><a href="#streams">Streams</a></li><li class="d2"><a href="#recordings-enterprise">Recordings (Enterprise)</a></li><li class="d2"><a href="#permissions-and-api">Permissions and API</a></li><li class="d2"><a href="#measured">Measured</a></li><li class="d2"><a href="#troubleshooting">Troubleshooting</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#turn-it-on">Turn it on</a></li><li class="d3"><a href="#with-docker-compose">With Docker Compose</a></li><li class="d3"><a href="#for-development-gateway-on-your-machine">For development (gateway on your machine)</a></li><li class="d3"><a href="#livekit-cloud">LiveKit Cloud</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d3"><a href="#why-these-sdks">Why these SDKs</a></li><li class="d2"><a href="#voice-in-a-chat">Voice in a chat</a></li><li class="d2"><a href="#calls">Calls</a></li><li class="d2"><a href="#phone-calls">Phone calls</a></li><li class="d3"><a href="#two-ways-to-get-a-number">Two ways to get a number</a></li><li class="d3"><a href="#a-livekit-phone-number-livekit-cloud">A LiveKit phone number (LiveKit Cloud)</a></li><li class="d3"><a href="#twilio-step-by-step">Twilio, step by step</a></li><li class="d3"><a href="#other-sip-providers">Other SIP providers</a></li><li class="d3"><a href="#answering">Answering</a></li><li class="d3"><a href="#calling-out">Calling out</a></li><li class="d3"><a href="#call-log">Call log</a></li><li class="d3"><a href="#who-the-caller-is">Who the caller is</a></li><li class="d2"><a href="#streams">Streams</a></li><li class="d2"><a href="#recordings-enterprise">Recordings (Enterprise)</a></li><li class="d2"><a href="#permissions-and-api">Permissions and API</a></li><li class="d2"><a href="#measured">Measured</a></li><li class="d3"><a href="#verified-phone-line-and-recordings">Verified (phone line and recordings)</a></li><li class="d2"><a href="#troubleshooting">Troubleshooting</a></li></ul></aside>
 </div>
 
   <footer class="footer">

@@ -211,7 +211,9 @@ export function protectedRoutePermission(method: string, path: string): Protecte
     // LiveKit's webhook is signed instead (realtime/http.ts).
     if (path === "/api/realtime/webhook") return undefined;
     // The phone line (SIP trunks) belongs to the organization.
-    if (path === "/api/realtime/phone") return { permission: PERMISSIONS.ORG_SETTINGS };
+    if (path === "/api/realtime/phone" || path.startsWith("/api/realtime/phone/")) return { permission: PERMISSIONS.ORG_SETTINGS };
+    // The phone line's call log: the people who see every chat of the workspace (calls are chats).
+    if (path === "/api/realtime/calls") return { permission: PERMISSIONS.CHAT_VIEW_ALL };
     // Starting or stopping a stream an agent listens to is a write action.
     if (path.startsWith("/api/realtime/streams") && write) return { permission: PERMISSIONS.TOOLS_WRITE };
     return { permission: PERMISSIONS.CHAT_USE };

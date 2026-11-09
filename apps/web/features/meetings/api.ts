@@ -9,7 +9,9 @@ import type {
   MeetingLobbyStatusView,
   MeetingParticipantView,
   MeetingSegmentView,
-  MeetingView
+  MeetingShareView,
+  MeetingView,
+  SharedMeetingView
 } from "@open-gpt-live/protocol";
 import { MEETING_SPEAKER_SLOTS } from "./speakers";
 import { gatewayRequest, gatewayUrlFor, gatewayHeaders } from "../../lib/gateway-http";
@@ -48,6 +50,10 @@ export const meetingsApi = {
   deleteComment: (id: string, commentId: string) => gatewayRequest(`${base(id)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" }),
   react: (id: string, commentId: string, emoji: string) =>
     gatewayRequest<MeetingCommentView>(`${base(id)}/comments/${encodeURIComponent(commentId)}/reactions`, { method: "POST", body: { emoji } }),
+  /** Read-only links to the notes (host). */
+  shares: (id: string) => gatewayRequest<{ items: MeetingShareView[] }>(`${base(id)}/shares`).then((r) => r.items),
+  share: (id: string, body: { days: number; transcript: boolean }) => gatewayRequest<{ share: MeetingShareView; path: string }>(`${base(id)}/shares`, { method: "POST", body }),
+  revokeShare: (id: string, shareId: string) => gatewayRequest(`${base(id)}/shares/${encodeURIComponent(shareId)}`, { method: "DELETE" }),
   /** The Markdown export (also what "Save to knowledge" stores). */
   markdown: async (id: string): Promise<string> => {
     const response = await fetch(gatewayUrlFor(`${base(id)}/export`), { credentials: "include", headers: gatewayHeaders() });
@@ -60,7 +66,10 @@ export const meetingsApi = {
   knock: (id: string, key: string, name: string) =>
     gatewayRequest<{ ticket: string }>(`${base(id)}/lobby`, { method: "POST", body: { key, name }, ownerToken: null, workspaceId: null, headers: guestHeaders() }),
   lobbyStatus: (id: string, ticket: string) =>
-    gatewayRequest<MeetingLobbyStatusView>(`${base(id)}/lobby/${encodeURIComponent(ticket)}`, { ownerToken: null, workspaceId: null, headers: guestHeaders() })
+    gatewayRequest<MeetingLobbyStatusView>(`${base(id)}/lobby/${encodeURIComponent(ticket)}`, { ownerToken: null, workspaceId: null, headers: guestHeaders() }),
+  /** A shared link (no account): the token is the check; hosted links name the organization (?o=). */
+  shared: (id: string, token: string) =>
+    gatewayRequest<SharedMeetingView>(`${base(id)}/shared`, { method: "POST", body: { token }, ownerToken: null, workspaceId: null, headers: guestHeaders() })
 };
 
 /** A participant's speaker colour slot by identity (unknown speakers get a stable slot from their identity). */

@@ -13,7 +13,7 @@
  *   nothing that writes, whoever placed the call.
  */
 import { randomBytes } from "node:crypto";
-import { ParticipantInfo_Kind, SIPTransport, TrackSource } from "@livekit/protocol";
+import { DataPacket_Kind, ParticipantInfo_Kind, TrackSource } from "@livekit/protocol";
 import {
   IngressClient,
   IngressInput,
@@ -24,18 +24,29 @@ import {
   type WebhookEvent
 } from "livekit-server-sdk";
 import {
-  AGENT_EVENTS,
+  MEETING_SIGNAL_TOPIC,
   REALTIME_EVENTS,
   type RealtimeCapability,
   type RealtimeJoinedMessage
 } from "@open-gpt-live/protocol";
-import { PERMISSIONS, authorize, type MeetingAgentRole, type Principal, type Store } from "@open-gpt-live/core";
+import {
+  PERMISSIONS,
+  authorize,
+  type CallRecorder,
+  type CallRecordingHost,
+  type CallRoomInfo,
+  type MeetingAgentRole,
+  type Principal,
+  type Store
+} from "@open-gpt-live/core";
 import type { AgentRuntime } from "../agents/runtime.js";
 import { conversationVisible } from "../conversations.js";
 import type { Authenticated } from "../identity/index.js";
+import type { SecretVault } from "../secrets/vault.js";
 import type { VoiceSessionPort } from "../session-port.js";
 import type { RealtimeConfig } from "./config.js";
-import { RoomAgent, type RoomAgentMode, type RoomMeetingHooks, type RoomVoiceProfile } from "./room-agent.js";
+import { PhoneLine, PhoneError } from "./phone.js";
+import { RoomAgent, type RoomAgentMode, type RoomMeetingHooks, type RoomPresent, type RoomSegment, type RoomVoiceProfile } from "./room-agent.js";
 import { parseRoomName, roomName, roomPrefix, roomSpace, userIdentity, type RoomKind } from "./rooms.js";
 import { issueToken } from "./token.js";
 
@@ -56,11 +67,16 @@ export type SessionOpener = (auth: Authenticated, workspaceId: string) => VoiceS
  */
 export interface CallHooks {
   /** The call (meeting) by id, if it exists. */
-  find(callId: string): Promise<{ workspaceId: string; host: string; ended: boolean } | undefined>;
+  find(callId: string): Promise<{ workspaceId: string; host: string; ended: boolean; title?: string } | undefined>;
   /** The host's session brings Sibyl in: throws a RealtimeError unless the caller may host it. */
   open(input: { callId: string; principal: Principal; workspaceId: string; conversationId: string }): Promise<RoomMeetingHooks>;
-  /** Sibyl left the call room (ended, emptied, host gone). */
-  closed(callId: string, reason: string): void;
+  /**
+   * Sibyl left the call room (ended, emptied, host gone). `present`: who was
+   * still in the room, so the meeting can pass the host role on instead of ending.
+   */
+  closed(callId: string, reason: string, present: RoomPresent[]): void;
+  /** A recording of the call started (Enterprise): the meeting page plays it. */
+  recorded?(callId: string, recordingId: string): Promise<void>;
 }
 
 export interface CallRecord {
@@ -70,33 +86,6 @@ export interface CallRecord {
   host: string;
   conversationId?: string;
   createdAt: number;
-}
-
-/** Phone line set up from Settings (one number per organization). */
-export interface PhoneSettings {
-  provider: "twilio" | "other";
-  /** E.164 number of the line. */
-  number: string;
-  workspaceId: string;
-  /** Agent that answers (absent: Sibyl). */
-  agentId?: string;
-  greeting?: string;
-  outboundTrunkId?: string;
-  inboundTrunkId?: string;
-  dispatchRuleId?: string;
-  updatedAt: number;
-}
-
-export interface PhoneSetupInput {
-  provider: "twilio" | "other";
-  /** SIP host of the provider, e.g. "example.pstn.twilio.com". */
-  address: string;
-  number: string;
-  username?: string;
-  password?: string;
-  workspaceId: string;
-  agentId?: string;
-  greeting?: string;
 }
 
 export interface StreamView {
@@ -116,6 +105,10 @@ export interface RealtimeServiceOptions {
   store: Store;
   ownerId: string;
   agents?: AgentRuntime;
+  /** The vault (the phone line's SIP trunk password); filled in once secrets are installed. */
+  vault?: () => SecretVault | undefined;
+  /** Inbox notices (voicemail). */
+  notify?: (input: { kind: "voicemail"; workspaceId: string; title: string; body: string; links: { conversationId?: string } }) => void;
   log: (event: string, fields?: Record<string, unknown>) => void;
   /** Tests: replace the native module and the clock the speech detector runs on. */
   loadRtc?: () => Promise<Rtc>;
@@ -123,10 +116,9 @@ export interface RealtimeServiceOptions {
 }
 
 const CALLS_KEY = "realtime.calls";
-const PHONE_KEY = "realtime.phone";
 const CALL_TTL_MS = 24 * 60 * 60 * 1000;
-const E164 = /^\+[1-9]\d{6,14}$/;
-const SIP_HOST = /^[A-Za-z0-9.-]{3,253}(:\d{1,5})?$/;
+/** Why an agent left that doesn't end a meeting (the host's session brought Sibyl back, or handed the room on). */
+const NOT_THE_END = new Set(["replaced"]);
 
 export class RealtimeService {
   readonly config: RealtimeConfig;
@@ -141,6 +133,9 @@ export class RealtimeService {
   private readonly webhooks: WebhookReceiver;
   private clients: { rooms: RoomServiceClient; sip: SipClient; ingress: IngressClient } | undefined;
   private callHooks: CallHooks | undefined;
+  private recorder: CallRecorder | undefined;
+  /** The organization's phone line (Settings → Phone): set up, test, answer, call out, call log. */
+  readonly phone: PhoneLine;
 
   /** A room of this organization's workspace (see rooms.ts: hosted rooms carry the organization). */
   roomFor(kind: RoomKind, workspaceId: string, id: string): string {
@@ -154,10 +149,26 @@ export class RealtimeService {
   constructor(private readonly options: RealtimeServiceOptions) {
     this.config = options.config;
     this.webhooks = new WebhookReceiver(options.config.apiKey, options.config.apiSecret);
+    this.phone = new PhoneLine({
+      config: options.config,
+      store: options.store,
+      ownerId: options.ownerId,
+      api: () => this.api(),
+      prefixFor: (workspaceId) => this.prefixFor("phone", workspaceId),
+      roomFor: (workspaceId, id) => this.roomFor("phone", workspaceId, id),
+      headless: (principal, workspaceId) => this.headless(principal, workspaceId),
+      startAgent: (input) => this.startAgent(input),
+      candidates: (principal, workspaceId) => this.candidates(principal, workspaceId),
+      ...(options.vault ? { vault: options.vault } : {}),
+      recorder: () => this.recorder,
+      ...(options.notify ? { notify: options.notify } : {}),
+      log: options.log,
+      ...(options.now ? { now: options.now } : {})
+    });
   }
 
   /** What session.config advertises to the web app. */
-  capability(phone = Boolean(this.config.sipOutboundTrunkId || this.phoneCache?.outboundTrunkId)): RealtimeCapability {
+  capability(phone = this.phone.canCallOut): RealtimeCapability {
     return { url: this.config.publicUrl, phone };
   }
 
@@ -169,7 +180,7 @@ export class RealtimeService {
   /** The gateway hands over how to open a session without a browser. */
   bindSessions(open: SessionOpener): void {
     this.openSession = open;
-    void this.phoneSettings().catch(() => undefined);
+    void this.phone.settings().catch(() => undefined);
   }
 
   api(): { rooms: RoomServiceClient; sip: SipClient; ingress: IngressClient } {
@@ -216,7 +227,13 @@ export class RealtimeService {
       idleTimeoutMs: 30_000,
       emptyAfterLeaveMs: 15_000,
       ...(meeting ? { meeting } : {}),
-      ...(callId && this.callHooks ? { onStop: (reason: string) => this.callHooks?.closed(callId, reason) } : {})
+      ...(callId && this.callHooks
+        ? {
+            onStop: (reason: string, present: RoomPresent[]) => {
+              if (!NOT_THE_END.has(reason)) this.callHooks?.closed(callId, reason, present.filter((person) => person.identity !== identity));
+            }
+          }
+        : {})
     });
     this.attached.set(port, agent);
     port.onClose(() => {
@@ -284,6 +301,18 @@ export class RealtimeService {
     await this.api().rooms.removeParticipant(this.roomFor("call", workspaceId, callId), identity);
   }
 
+  /** Tell everyone in a call room something when Sibyl isn't there to say it (server API data packet). */
+  async signalRoom(workspaceId: string, callId: string, payload: Record<string, unknown>): Promise<void> {
+    await this.sendSignal(this.roomFor("call", workspaceId, callId), payload);
+  }
+
+  private async sendSignal(room: string, payload: Record<string, unknown>): Promise<void> {
+    const data = new TextEncoder().encode(JSON.stringify(payload));
+    await this.api()
+      .rooms.sendData(room, data, DataPacket_Kind.RELIABLE, { topic: MEETING_SIGNAL_TOPIC })
+      .catch((error: unknown) => this.options.log("realtime.signal_failed", { room, error: error instanceof Error ? error.message : String(error) }));
+  }
+
   /** End the call for everyone: Sibyl leaves and the room closes. */
   async endCall(workspaceId: string, callId: string): Promise<void> {
     const room = this.roomFor("call", workspaceId, callId);
@@ -334,103 +363,13 @@ export class RealtimeService {
     return calls[id];
   }
 
-  /* ───────────── phone (SIP) ───────────── */
+  /* ───────────── phone and webhooks ───────────── */
 
-  private phoneCache: PhoneSettings | undefined;
-
-  async phoneSettings(): Promise<PhoneSettings | undefined> {
-    this.phoneCache = await this.options.store.kv.get<PhoneSettings>(this.options.ownerId, PHONE_KEY);
-    return this.phoneCache;
-  }
-
-  /** Create the SIP trunks and the inbound dispatch rule for one number (Twilio documented first). */
-  async setupPhone(input: PhoneSetupInput): Promise<PhoneSettings> {
-    if (!E164.test(input.number)) throw new RealtimeError("The number must be in E.164 form, like +15551234567.");
-    if (!SIP_HOST.test(input.address)) throw new RealtimeError("The SIP address must be a host name, like example.pstn.twilio.com.");
-    const { sip } = this.api();
-    await this.removePhone();
-    const auth = input.username && input.password ? { authUsername: input.username, authPassword: input.password } : {};
-    const outbound = await sip.createSipOutboundTrunk("Sibyl outbound", input.address, [input.number], { transport: SIPTransport.SIP_TRANSPORT_AUTO, ...auth });
-    const inbound = await sip.createSipInboundTrunk("Sibyl inbound", [input.number], {});
-    // Rooms are named after the called line (never the caller): sibyl.phone.<ws>.<line>_<random>.
-    const rule = await sip.createSipDispatchRule(
-      { type: "callee", roomPrefix: this.prefixFor("phone", input.workspaceId), randomize: true },
-      { name: "Sibyl inbound", trunkIds: [inbound.sipTrunkId] }
-    );
-    const settings: PhoneSettings = {
-      provider: input.provider,
-      number: input.number,
-      workspaceId: input.workspaceId,
-      ...(input.agentId ? { agentId: input.agentId } : {}),
-      ...(input.greeting?.trim() ? { greeting: input.greeting.trim().slice(0, 300) } : {}),
-      outboundTrunkId: outbound.sipTrunkId,
-      inboundTrunkId: inbound.sipTrunkId,
-      dispatchRuleId: rule.sipDispatchRuleId,
-      updatedAt: Date.now()
-    };
-    await this.options.store.kv.set(this.options.ownerId, PHONE_KEY, settings);
-    this.phoneCache = settings;
-    this.options.log("realtime.phone_setup", { workspaceId: input.workspaceId, provider: input.provider });
-    return settings;
-  }
-
-  async removePhone(): Promise<void> {
-    const current = await this.phoneSettings();
-    if (!current) return;
-    const { sip } = this.api();
-    if (current.dispatchRuleId) await sip.deleteSipDispatchRule(current.dispatchRuleId).catch(() => undefined);
-    for (const trunk of [current.inboundTrunkId, current.outboundTrunkId]) {
-      if (trunk) await sip.deleteSipTrunk(trunk).catch(() => undefined);
-    }
-    await this.options.store.kv.delete(this.options.ownerId, PHONE_KEY);
-    this.phoneCache = undefined;
-  }
-
-  /**
-   * Place a phone call: Sibyl (or an agent) joins a new room, then LiveKit
-   * dials the number into it. Only reached through the place_phone_call tool,
-   * which always needs the person's approval.
-   */
-  async placeCall(input: { principal: Principal; workspaceId: string; to: string; purpose: string; agentId?: string }): Promise<{ callId: string; room: string; conversationId: string }> {
-    const settings = this.phoneCache ?? (await this.phoneSettings());
-    const trunk = this.config.sipOutboundTrunkId ?? settings?.outboundTrunkId;
-    if (!trunk) throw new RealtimeError("Phone calls aren't set up on this Sibyl (see docs/realtime.md#phone-calls).", 409);
-    if (!E164.test(input.to)) throw new RealtimeError("The number must be in E.164 form, like +15551234567.");
-    const id = randomId();
-    const room = this.roomFor("phone", input.workspaceId, id);
-    const session = this.headless(input.principal, input.workspaceId);
-    if (input.agentId) session.deliver({ type: AGENT_EVENTS.SELECT, agentId: input.agentId });
-    const caller = input.principal.name ?? input.principal.email ?? "the person you work for";
-    session.addNote(
-      "Call brief",
-      `You are on a phone call you placed for ${caller}. Purpose: ${input.purpose.slice(0, 1_000)} ` +
-        "When they answer, greet them, say who you are calling for, handle the purpose briefly and politely, and end the call when done."
-    );
-    const agent = await this.startAgent({
-      room,
-      port: session,
-      mode: "conversation",
-      principal: input.principal,
-      workspaceId: input.workspaceId,
-      idleTimeoutMs: 60_000,
-      emptyAfterLeaveMs: 2_000,
-      onStop: () => session.close("call ended")
+  /** Place a phone call (the place_phone_call tool, always after an approval). */
+  placeCall(input: { principal: Principal; workspaceId: string; to: string; purpose: string; agentId?: string }): Promise<{ callId: string; room: string; conversationId: string }> {
+    return this.phone.placeCall(input).catch((error: unknown) => {
+      throw error instanceof PhoneError ? new RealtimeError(error.message, error.status) : error;
     });
-    try {
-      await this.api().sip.createSipParticipant(trunk, input.to, room, {
-        participantIdentity: `phone:${id}`,
-        participantName: "Phone",
-        ...((this.config.sipFromNumber ?? settings?.number) ? { fromNumber: this.config.sipFromNumber ?? settings?.number } : {}),
-        ringingTimeout: 45,
-        maxCallDuration: 30 * 60,
-        playDialtone: false
-      });
-    } catch (error) {
-      await agent.stop("dial failed");
-      throw error;
-    }
-    this.options.log("realtime.phone_call", { room, workspaceId: input.workspaceId });
-    return { callId: id, room, conversationId: session.conversationId };
   }
 
   /** LiveKit webhooks: inbound calls, rooms closing. */
@@ -441,35 +380,67 @@ export class RealtimeService {
 
   private async onEvent(event: WebhookEvent): Promise<void> {
     const name = event.room?.name ?? "";
+    const parsed = parseRoomName(name);
     if (event.event === "room_finished") {
-      await this.rooms.get(name)?.stop("room finished");
+      const agent = this.rooms.get(name);
+      if (agent) await agent.stop("room finished");
+      // A meeting room closed with nobody bringing Sibyl back (the host left it to others who then left): finish it.
+      else if (parsed?.kind === "call" && this.callHooks && this.ownSpace(parsed.workspaceId)) this.callHooks.closed(parsed.id, "room finished", []);
       return;
     }
     if (event.event !== "participant_joined" || event.participant?.kind !== ParticipantInfo_Kind.SIP) return;
-    const parsed = parseRoomName(name);
-    // Outbound calls already have their agent in the room.
-    if (!parsed || parsed.kind !== "phone" || this.rooms.has(name)) return;
-    const line = await this.phoneSettings();
-    if (!line || roomSpace(this.options.ownerId, line.workspaceId) !== parsed.workspaceId) {
-      this.options.log("realtime.phone_unrouted", { room: name });
-      return;
+    if (!parsed || parsed.kind !== "phone") return;
+    await this.phone.answer(name, event, (workspaceId) => roomSpace(this.options.ownerId, workspaceId) === parsed.workspaceId);
+  }
+
+  /** The room-name space belongs to this organization (hosted rooms carry the organization). */
+  private ownSpace(space: string): boolean {
+    return this.workspaceOfSpace(space) !== undefined;
+  }
+
+  private workspaceOfSpace(space: string): string | undefined {
+    const owner = this.options.ownerId;
+    if (owner === "owner") return /^o[0-9a-f]{24}_/.test(space) ? undefined : space;
+    return space.startsWith(`${owner}_`) ? space.slice(owner.length + 1) : undefined;
+  }
+
+  /* ───────────── recordings (Enterprise plugs in through CallRecordingHost) ───────────── */
+
+  /** The hooks the recordings module gets (packages/core/src/features.ts). */
+  recordingHost(): CallRecordingHost {
+    return {
+      describe: async (room) => this.describeRoom(room),
+      announce: async (room, state) => {
+        // Everyone in a meeting sees "Recording" (LiveKit marks the room); phone callers hear it.
+        // At once, before egress has joined (LiveKit's own "recording" flag follows a few seconds later).
+        if (!this.phone.announce(room, state)) await this.sendSignal(room, { type: "recording", state });
+      },
+      linked: async (room, recordingId) => {
+        const parsed = parseRoomName(room);
+        if (parsed?.kind === "call") await this.callHooks?.recorded?.(parsed.id, recordingId);
+        else if (parsed?.kind === "phone") await this.phone.linkRecording(room, recordingId);
+      },
+      useRecorder: (recorder) => {
+        this.recorder = recorder;
+      }
+    };
+  }
+
+  private async describeRoom(room: string): Promise<CallRoomInfo | undefined> {
+    const parsed = parseRoomName(room);
+    const workspaceId = parsed ? this.workspaceOfSpace(parsed.workspaceId) : undefined;
+    if (!parsed || !workspaceId) return undefined;
+    if (parsed.kind === "call") {
+      const meeting = await this.callHooks?.find(parsed.id);
+      if (this.callHooks && (!meeting || meeting.workspaceId !== workspaceId)) return undefined;
+      return { kind: "call", workspaceId, title: meeting?.title ?? "Call", meetingId: parsed.id };
     }
-    // The caller is a stranger: a viewer-level session with no person behind it.
-    const principal: Principal = { kind: "user", orgId: this.options.ownerId, name: "Phone caller", workspaceRoles: { [line.workspaceId]: "viewer" } };
-    const session = this.headless(principal, line.workspaceId);
-    if (line.agentId) session.deliver({ type: AGENT_EVENTS.SELECT, agentId: line.agentId });
-    await this.startAgent({
-      room: name,
-      port: session,
-      mode: "conversation",
-      principal,
-      workspaceId: line.workspaceId,
-      idleTimeoutMs: 30_000,
-      emptyAfterLeaveMs: 2_000,
-      onStop: () => session.close("call ended")
-    });
-    session.say(line.greeting ?? "Hello, this is Sibyl. How can I help?");
-    this.options.log("realtime.phone_answered", { room: name, workspaceId: line.workspaceId });
+    if (parsed.kind === "phone") {
+      const call = await this.phone.callOfRoom(room);
+      const who = call?.remoteNumber ? ` with ${call.remoteNumber}` : "";
+      return { kind: "phone", workspaceId, title: call ? `${call.direction === "inbound" ? "Incoming" : "Outgoing"} call${who}` : "Phone call", ...(call ? { callId: call.id } : {}) };
+    }
+    return undefined;
   }
 
   /* ───────────── streams (ingress) ───────────── */
@@ -600,7 +571,8 @@ export class RealtimeService {
     workspaceId: string;
     idleTimeoutMs: number;
     emptyAfterLeaveMs?: number;
-    onStop?: (reason: string) => void;
+    onStop?: (reason: string, present: RoomPresent[]) => void;
+    onUtterance?: (segment: RoomSegment) => void;
     meeting?: RoomMeetingHooks;
   }): Promise<RoomAgent> {
     const agent = new RoomAgent({
@@ -614,11 +586,12 @@ export class RealtimeService {
       idleTimeoutMs: input.idleTimeoutMs,
       ...(input.emptyAfterLeaveMs !== undefined ? { emptyAfterLeaveMs: input.emptyAfterLeaveMs } : {}),
       ...(input.meeting ? { meeting: input.meeting } : {}),
+      ...(input.onUtterance ? { onUtterance: input.onUtterance } : {}),
       log: this.options.log,
       ...(this.options.now ? { now: this.options.now } : {}),
-      onStop: (reason) => {
+      onStop: (reason, present) => {
         if (this.rooms.get(input.room) === agent) this.rooms.delete(input.room);
-        input.onStop?.(reason);
+        input.onStop?.(reason, present);
         if (input.hostIdentity) input.port.notify({ type: REALTIME_EVENTS.LEFT, room: input.room, reason });
       }
     });

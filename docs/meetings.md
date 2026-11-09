@@ -2,7 +2,7 @@
 
 Meetings are calls where people and agents meet together, like a video call. Sibyl keeps the transcript, writes the notes as you talk, and finds the action items. Afterwards, the meeting has its own page with the notes, the transcript, playback and comments.
 
-Meetings are part of the open-source edition. Audio recordings of a meeting are part of Agent Serve.
+Meetings are part of the open-source edition. Audio and video recordings of a meeting are part of Agent Serve.
 
 The room needs the realtime layer (LiveKit): see [realtime.md](realtime.md) to turn it on. Without it you can still schedule meetings and read the notes of past ones.
 
@@ -46,13 +46,17 @@ Open **AI notes** in the room, or the meeting's page:
 
 **Invite → Copy guest link** gives a link (`/join/<id>?k=…`) for people without an account. They check their camera and microphone, give their name and ask to join. The host sees them under **People → Asking to join** and admits or denies them. A guest gets a room token only after the host admits them.
 
-Guests see the room and its captions. They never see the notes, transcript or comments.
+Guests see the room and its captions. They never see the notes, transcript or comments, unless the host shares the notes by link (below).
+
+People waiting in the lobby, and raised hands, are kept with the meeting: a gateway restart or a reload doesn't lose them. Someone who joins later sees the hands already up.
 
 People in the workspace join with **Invite → Copy link for the workspace** (`/call/<id>`).
 
 ### Host controls
 
-The host can mute someone's microphone (they can unmute themselves), remove someone, and **End meeting for everyone**. If the host leaves, Sibyl leaves too and the notes are finished; the host can start the meeting again from its page.
+The host can mute someone's microphone (they can unmute themselves), remove someone, and **End meeting for everyone**.
+
+If the host leaves (or closes the tab) while another member of the workspace is in the room, the meeting goes on: that member becomes the host, and their own session brings Sibyl back (replies and approvals then land in their chat). Everyone sees who hosts now. Only **End meeting for everyone** ends it, or the room emptying. Guests never become hosts.
 
 ## After the meeting
 
@@ -62,13 +66,18 @@ The meeting's page (`/meetings/<id>`) has:
 
 - the title (the host can rename it), date and time, and participant chips;
 - Summary, Transcript and Actions;
-- the people in the meeting and **playback**: a timeline coloured by who spoke, a waveform, the time, speed, skip and play. With Agent Serve and a recording, it plays the audio. Without one, the same controls walk through the transcript.
+- the people in the meeting and **playback**: a timeline coloured by who spoke, a waveform, the time, speed, skip and play. With Agent Serve and a recording, it plays the audio with its waveform, or the video. Clicking a line of the transcript jumps there. Without one, the same controls walk through the transcript.
 - **Comments** with reactions and replies, **Ask AI** and **Keyword**;
 - **Export** as Markdown, **Print** (or save as PDF), and **Save to knowledge** (the notes and transcript become a document agents can search).
+- **Share notes** (host): a read-only link to the summary and action items, optionally with the transcript, for people without an account. It works for 1, 7 or 30 days, shows how often it was opened, and can be revoked. Only a hash of the link's token is stored.
 
 ## Recordings (Enterprise)
 
-With a licence that includes `recordings`, people with `calls.record` see **Record (audio)** under Invite in the room. The recording is linked to the meeting and plays on its page with a waveform. See [realtime.md](realtime.md#recordings-enterprise).
+With a licence that includes `recordings`, people with `calls.record` see **Record audio** and **Record video** under Invite in the room. Everyone in the room sees **Recording** while it runs. The recording is linked to the meeting and plays on its page. All recordings are under **Meetings → Recordings**, with search, filters, how long each is kept, legal hold, play, download and delete. See [realtime.md](realtime.md#recordings-enterprise).
+
+## Share notes
+
+On a meeting's page the host picks **Share notes**, chooses how long the link works and whether the transcript is included, and copies the link (`/shared/meetings/<id>?t=…`; hosted links also carry `&o=<organization>`). Whoever opens it sees the title, date, people, summary, key points, insights and action items, and the transcript if shared. They can't comment, ask or see recordings. The host sees the open links with how often each was opened, and revokes them.
 
 ## Cost
 
@@ -119,12 +128,14 @@ Meetings use the existing permissions:
 | `PUT` · `DELETE /api/meetings/<id>/agents/<agentId> {role}` | host (+ `agents.use`) |
 | `POST /api/meetings/<id>/participants/<identity>/mute` · `/remove` | host |
 | `GET /api/meetings/<id>/lobby` · `POST /api/meetings/<id>/lobby/<ticket> {admit}` | host |
+| `GET` · `POST /api/meetings/<id>/shares {days, transcript}` · `DELETE …/shares/<shareId>` | host (or a workspace admin) |
+| `POST /api/meetings/<id>/shared {token}` | anyone with the link |
 | `GET` · `POST /api/meetings/<id>/comments`, `PATCH` · `DELETE …/comments/<cid>`, `POST …/comments/<cid>/reactions {emoji}` | `chat.use` (edit: author) |
 | `GET /api/meetings/calendar` | `chat.use` + `integrations.use` |
 | `POST /api/meetings/<id>/preview {key}` · `POST /api/meetings/<id>/lobby {key, name}` · `GET /api/meetings/<id>/lobby/<ticket>` | guests (the link's key or their ticket) |
 | WS `meeting.task {meetingId, actionId}` → `meeting.task_result` | the session's approval card |
 
-In the room, the gateway nudges browsers over LiveKit data (topic `sibyl.meeting`: `notes`, `lobby`, `roles`, `ended`); they then fetch over HTTP, where access is checked. Raised hands travel on `sibyl.hand`.
+In the room, the gateway nudges browsers over LiveKit data (topic `sibyl.meeting`: `notes`, `lobby`, `roles`, `ended`, `recording` with `state`, `hands` with the hands kept by the meeting, `host` with the new host's identity); they then fetch over HTTP, where access is checked. Raised hands travel on `sibyl.hand`; Sibyl's room agent keeps them on the meeting.
 
 ## Verified
 
@@ -136,4 +147,14 @@ Run live on 2026-11-09 with the LiveKit dev server, the gateway and scripted par
 - Notes refreshed during the meeting; **End meeting for everyone** disconnected everyone and wrote the final notes, credited to the note-taker agent, with three action items (owners and due dates); Ask AI answered from the transcript; comments, a reply and a reaction; Markdown export.
 - The room and the meeting page in headless Chromium with a fake camera: light and dark, desktop and 375 px.
 
-Not verified live: audio recording playback (it needs the egress service from `--profile realtime`), calendar import against a real Google or Microsoft account.
+Run live again on 2026-11-10 with LiveKit, Redis, egress and SIP in Docker, the gateway (with the Enterprise dev licence) and the web app, two headless Chromium browsers with a fake camera and a spoken WAV as microphone (host and guest), and a scripted member (Bob):
+
+- The host started a meeting from **Meetings → New meeting → Start now**; the guest asked to join from the guest link and the host admitted them under People; both cameras were in the room; the host presented their screen.
+- A silent note-taker (added from **Add an agent**) joined with no audio track; a participant agent answered Bob in the room when he named it ("The capital of France is Paris.").
+- The guest raised a hand: the host saw it and it was stored on the meeting. The host muted the guest (LiveKit reported the track muted) and removed Bob.
+- **Record video** made everyone, the guest included, see **Recording**; the MP4 (1280×720, speaker layout with the shared screen) was linked to the meeting and played on its page. **End meeting for everyone** ended the guest's call; the final notes were credited to the note-taker with three action items.
+- A guest's knock and a raised hand survived a gateway restart; after the restart the host's session brought Sibyl back and she sent the kept hands to the room. The host leaving with Bob still there made Bob the host (everyone got the `host` signal) and the meeting stayed live.
+- Hosted mode with two organizations: a guest link and a shared-notes link reach the right organization (also for a guest signed in to the other one); the other organization's id finds nothing.
+- Without a licence: no Recordings tab, `/api/recordings` is 404, and the meeting page says recordings come with Agent Serve.
+
+Not verified live: the new host's browser bringing Sibyl back after a handover (tested with the host's WebSocket session and a scripted member, not two signed-in browsers), calendar import against a real Google or Microsoft account.

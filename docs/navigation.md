@@ -8,7 +8,7 @@ with more than one part shows them as tabs at the top of its screens.
 | Inbox (bell, top) | | `/inbox` |
 | **Chat** | | `/`, `/c/<id>` |
 | **Agents** | | `/agents`, `/agents/<id>/computer` |
-| **Meetings** | | `/meetings`, `/meetings/<id>`, `/call/<id>` |
+| **Meetings** | Meetings · Recordings (Enterprise) | `/meetings`, `/meetings/<id>`, `/call/<id>`, `/meetings/recordings` |
 | **Spaces** | Slides · Media | `/library/slides`, `/media` |
 | **Library** | Knowledge · Skills · Plugins · Integrations | `/knowledge`, `/skills`, `/skills/plugins`, `/integrations` |
 | **Automations** | Routines · Monitors | `/routines`, `/monitors` |
@@ -20,7 +20,7 @@ finish or dismiss it), the light/dark switch and the connection dot.
 - **Inbox.** The bell opens the inbox: approvals waiting for you and what
   routines, monitors and agents did. The badge counts what is new.
 - **Admin.** Organization owners and admins see an **Admin** heading in the
-  Settings list (Organization, Users, Single sign-on, and so on). Admin
+  Settings list (Organization, Users, Phone, Single sign-on, and so on). Admin
   sections keep their own addresses, `/admin/<section>`.
 - **Only what you can use.** Groups and tabs you have no access to are hidden.
   A viewer, for example, has no Integrations tab. A group with no tabs left

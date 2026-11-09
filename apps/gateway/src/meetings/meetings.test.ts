@@ -11,7 +11,7 @@ import { protectedRoutePermission } from "../identity/http.js";
 import { createNoopMeter } from "../runtime.js";
 import type { RealtimeService, CallHooks } from "../realtime/service.js";
 import type { RoomMeetingHooks } from "../realtime/room-agent.js";
-import { Lobby, LOBBY_KNOCKS_PER_MINUTE, cleanName } from "./lobby.js";
+import { KnockLimiter, LOBBY_KNOCKS_PER_MINUTE, LOBBY_WAIT_MS, addKnock, cleanName, currentKnocks } from "./lobby.js";
 import { clock, parseNotes, tail, transcriptLines } from "./notes.js";
 import { isMeetingGuestRoute } from "./routes.js";
 import { MeetingError, MeetingService, meetingMarkdown } from "./service.js";
@@ -34,9 +34,9 @@ function fakeModel(reply: (user: string) => string) {
   return { provider, calls };
 }
 
-function setup(options: { reply?: (user: string) => string } = {}) {
+function setup(options: { reply?: (user: string) => string; store?: ReturnType<typeof createMemoryStore> } = {}) {
   let now = 1_000_000;
-  const store = createMemoryStore();
+  const store = options.store ?? createMemoryStore();
   const recorded: UsageEvent[] = [];
   const meter = { ...createNoopMeter(), record: (event: never) => void recorded.push(event) };
   const published: Array<{ recipientUserId?: string; title: string }> = [];
@@ -63,13 +63,15 @@ function setup(options: { reply?: (user: string) => string } = {}) {
   service.configure({ provider: model.provider, model: () => "deep/model" });
   let hooks: CallHooks | undefined;
   const ended: string[] = [];
+  const signals: Array<Record<string, unknown>> = [];
   const realtime = {
     useCalls: (given: CallHooks) => (hooks = given),
     callAgent: () => undefined,
+    signalRoom: async (_ws: string, _callId: string, payload: Record<string, unknown>) => void signals.push(payload),
     guestToken: async (_ws: string, callId: string, guest: { id: string; name: string }) => ({ url: "ws://lk", token: `token-for-${guest.name}`, room: `sibyl.call.default.${callId}`, identity: `guest:${guest.id}` }),
     endCall: async (_ws: string, callId: string) => {
       ended.push(callId);
-      hooks?.closed(callId, "ended by host");
+      hooks?.closed(callId, "ended by host", []);
     }
   } as unknown as RealtimeService;
   service.attach(realtime);
@@ -80,6 +82,7 @@ function setup(options: { reply?: (user: string) => string } = {}) {
     recorded,
     published,
     ended,
+    signals,
     hooks: () => hooks!,
     tick: (ms: number) => (now += ms),
     now: () => now
@@ -203,15 +206,77 @@ describe("guests", () => {
 
   test("the lobby limits knocks and expires them", () => {
     let now = 0;
-    const lobby = new Lobby(() => now);
-    for (let i = 0; i < LOBBY_KNOCKS_PER_MINUTE; i += 1) lobby.knock("m", `Guest ${i}`);
-    expect(() => lobby.knock("m", "One more")).toThrow(/too many/i);
+    const limiter = new KnockLimiter(() => now);
+    for (let i = 0; i < LOBBY_KNOCKS_PER_MINUTE; i += 1) limiter.check("m");
+    expect(() => limiter.check("m")).toThrow(/too many/i);
     now += 61_000;
-    const late = lobby.knock("m", "Late");
-    now += 16 * 60_000;
-    expect(lobby.get("m", late.ticket)).toBeUndefined();
-    expect(() => lobby.knock("m", "   ")).toThrow(/name/i);
+    expect(() => limiter.check("m")).not.toThrow();
+    const { knocks, knock } = addKnock([], "Late", now);
+    expect(currentKnocks(knocks, now + LOBBY_WAIT_MS + 1).find((item) => item.ticket === knock.ticket)).toBeUndefined();
+    expect(() => addKnock([], "   ", now)).toThrow(/name/i);
     expect(cleanName("A\u0000b [admin] {x}")).toBe("Ab admin x");
+  });
+
+  test("the lobby and raised hands survive a gateway restart (they are on the record)", async () => {
+    const first = setup();
+    const view = await first.service.create(ada0, { title: "Kept" });
+    const key = /k=([^&]+)/.exec(view.guestPath!)![1]!;
+    const room = await first.hooks().open({ callId: view.id, principal: ada, workspaceId: "default", conversationId: "c1" });
+    const { ticket } = await first.service.knock(view.id, decodeURIComponent(key), "Grace");
+    room.onHand!("user:bob", true);
+    await settle();
+    // A new gateway process over the same database.
+    const second = setup({ store: first.store });
+    expect((await second.service.lobbyWaiting(ada0, view.id)).map((entry) => entry.name)).toEqual(["Grace"]);
+    expect(await second.service.decideKnock(ada0, view.id, ticket, true)).toBe(true);
+    expect((await second.service.lobbyStatus(view.id, ticket)).status).toBe("admitted");
+    expect((await second.service.get(ada0, view.id)).raisedHands).toEqual(["user:bob"]);
+    const reopened = await second.hooks().open({ callId: view.id, principal: ada, workspaceId: "default", conversationId: "c1" });
+    expect(reopened.hands!()).toEqual(["user:bob"]);
+    reopened.onHand!("user:bob", false);
+    await settle();
+    expect((await second.service.get(ada0, view.id)).raisedHands).toBeUndefined();
+  });
+});
+
+describe("host handover and shared notes", () => {
+  test("the host leaving passes the meeting to a member still there; nobody left ends it", async () => {
+    const t = setup();
+    const view = await t.service.create(ada0, { title: "Handover" });
+    await t.hooks().open({ callId: view.id, principal: ada, workspaceId: "default", conversationId: "c1" });
+    t.hooks().closed(view.id, "left", [{ identity: "guest:g1", name: "Guest" }, { identity: "user:bob", name: "Bob" }]);
+    await settle();
+    const handed = await t.service.get(bob0, view.id);
+    expect(handed).toMatchObject({ status: "live", isHost: true, hostName: "Bob" });
+    expect(t.signals).toEqual([{ type: "host", identity: "user:bob" }]);
+    // Bob brings Sibyl back with his own session; when he leaves with only a guest there, the meeting ends.
+    await t.hooks().open({ callId: view.id, principal: bob, workspaceId: "default", conversationId: "c2" });
+    t.hooks().closed(view.id, "left", [{ identity: "guest:g1", name: "Guest" }]);
+    await settle();
+    expect((await t.service.get(bob0, view.id)).status).toBe("ended");
+  });
+
+  test("a shared link shows the notes read-only until it expires or is revoked", async () => {
+    const t = setup();
+    const view = await t.service.create(ada0, { title: "Shared" });
+    await expect(t.service.share(bob0, view.id, {})).rejects.toMatchObject({ status: 403 });
+    const { share, path } = await t.service.share(ada0, view.id, { days: 2, transcript: false });
+    const token = new URL(`https://x${path}`).searchParams.get("t")!;
+    const shown = await t.service.shared(view.id, token);
+    expect(shown).toMatchObject({ title: "Shared", hostName: "Ada" });
+    expect(shown.transcript).toBeUndefined();
+    await expect(t.service.shared(view.id, "x".repeat(32))).rejects.toMatchObject({ status: 404 });
+    await settle();
+    expect((await t.service.shares(ada0, view.id))[0]).toMatchObject({ id: share.id, views: 1, revoked: false });
+    // The stored record keeps only a hash.
+    expect(JSON.stringify(await t.store.meetings.get("owner", view.id))).not.toContain(token);
+    t.tick(3 * 24 * 60 * 60 * 1000);
+    await expect(t.service.shared(view.id, token)).rejects.toMatchObject({ status: 404 });
+    const again = await t.service.share(ada0, view.id, { transcript: true });
+    const second = new URL(`https://x${again.path}`).searchParams.get("t")!;
+    expect((await t.service.shared(view.id, second)).transcript).toEqual([]);
+    expect(await t.service.revokeShare(ada0, view.id, again.share.id)).toBe(true);
+    await expect(t.service.shared(view.id, second)).rejects.toMatchObject({ status: 404 });
   });
 });
 
@@ -301,6 +366,8 @@ describe("route gate", () => {
     expect(isMeetingGuestRoute("GET", "/api/meetings/abcdef123/lobby")).toBe(false);
     expect(isMeetingGuestRoute("POST", "/api/meetings/abcdef123/lobby/ticket1")).toBe(false);
     expect(isMeetingGuestRoute("GET", "/api/meetings/abcdef123")).toBe(false);
+    expect(isMeetingGuestRoute("POST", "/api/meetings/abcdef123/shared")).toBe(true);
+    expect(isMeetingGuestRoute("GET", "/api/meetings/abcdef123/shares")).toBe(false);
     expect(protectedRoutePermission("POST", "/api/meetings/abcdef123/lobby")).toBeUndefined();
     expect(protectedRoutePermission("GET", "/api/meetings/abcdef123/lobby")).toEqual({ permission: "chat.use" });
     expect(protectedRoutePermission("GET", "/api/meetings/abcdef123/transcript")).toEqual({ permission: "chat.use" });

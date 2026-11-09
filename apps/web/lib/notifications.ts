@@ -108,7 +108,8 @@ export const ACTIVITY_FILTERS: ReadonlyArray<{ label: string; kinds: Notificatio
   { label: "Approvals", kinds: ["approval_needed"] },
   { label: "Decks", kinds: ["deck_ready"] },
   { label: "Members", kinds: ["invite_accepted"] },
-  { label: "Meetings", kinds: ["meeting_notes"] }
+  { label: "Meetings", kinds: ["meeting_notes"] },
+  { label: "Calls", kinds: ["voicemail"] }
 ];
 
 /** Tone for the toast and list dot. */

@@ -4,7 +4,8 @@
  * group is highlighted for any address (with `placeOf` in ./routes).
  *
  * A group or tab is shown only to people with at least one of its `anyOf`
- * permissions; a group whose tabs are all hidden disappears.
+ * permissions (and, for an Enterprise tab, a licence with its `feature`); a
+ * group whose tabs are all hidden disappears.
  */
 import type { IconName } from "../components/Icon";
 import { paths, placeOf, type Place } from "./routes";
@@ -15,6 +16,8 @@ export interface NavTab {
   href: string;
   /** Hidden unless the person has at least one of these. */
   anyOf?: readonly string[];
+  /** Hidden unless the licence has this feature (packages/core/src/features.ts). */
+  feature?: string;
 }
 
 export type NavGroupId = Exclude<Place, "inbox">;
@@ -38,7 +41,18 @@ export interface NavGroup {
 export const NAV_GROUPS: readonly NavGroup[] = [
   { place: "chat", name: "Chat", icon: "chat", slot: "top", href: paths.newChat },
   { place: "agents", name: "Agents", icon: "sparkle", slot: "top", href: paths.agents, anyOf: ["agents.use", "agents.create"] },
-  { place: "meetings", name: "Meetings", icon: "video", slot: "top", href: paths.meetings, anyOf: ["chat.use"] },
+  {
+    place: "meetings",
+    name: "Meetings",
+    label: "Meetings and recordings",
+    icon: "video",
+    slot: "top",
+    anyOf: ["chat.use"],
+    tabs: [
+      { id: "meetings", label: "Meetings", href: paths.meetings, anyOf: ["chat.use"] },
+      { id: "recordings", label: "Recordings", href: paths.recordings, anyOf: ["calls.record"], feature: "recordings" }
+    ]
+  },
   {
     place: "spaces",
     name: "Spaces",
@@ -78,8 +92,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 ];
 
 export type Can = (permission: string) => boolean;
+/** Licence features (useAppSession().hasFeature); without it, Enterprise tabs stay hidden. */
+export type HasFeature = (feature: string) => boolean;
 
 const allowed = (can: Can, anyOf?: readonly string[]) => !anyOf || anyOf.some((permission) => can(permission));
+const licensed = (hasFeature: HasFeature | undefined, feature?: string) => !feature || Boolean(hasFeature?.(feature));
 
 export interface VisibleGroup extends NavGroup {
   /** Where the rail entry goes: the group's address or its first visible tab. */
@@ -88,11 +105,11 @@ export interface VisibleGroup extends NavGroup {
 }
 
 /** The groups this person can use, with only the tabs they can use, in rail order. */
-export function visibleNavGroups(can: Can): VisibleGroup[] {
+export function visibleNavGroups(can: Can, hasFeature?: HasFeature): VisibleGroup[] {
   const visible: VisibleGroup[] = [];
   for (const group of NAV_GROUPS) {
     if (!allowed(can, group.anyOf)) continue;
-    const tabs = (group.tabs ?? []).filter((tab) => allowed(can, tab.anyOf));
+    const tabs = (group.tabs ?? []).filter((tab) => allowed(can, tab.anyOf) && licensed(hasFeature, tab.feature));
     if (group.tabs && tabs.length === 0) continue;
     const href = group.href ?? tabs[0]!.href;
     visible.push({ ...group, href, tabs });

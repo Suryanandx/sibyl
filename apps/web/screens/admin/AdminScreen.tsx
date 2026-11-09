@@ -10,8 +10,9 @@ import { ScreenFrame, ScreenNotice, type ScreenNavItem } from "../../components/
 import { AdminIcon } from "../../components/AppRail";
 import { useAppSession, type AppSession } from "../../lib/app-session";
 import { ADMIN_SECTIONS, paths, type AdminSection } from "../../lib/routes";
-import { AuditIcon, OrgIcon, PoliciesIcon, RolesIcon, UsageIcon, UsersIcon, type SectionIcon } from "../settings/icons";
+import { AuditIcon, OrgIcon, PhoneIcon, PoliciesIcon, RolesIcon, UsageIcon, UsersIcon, type SectionIcon } from "../settings/icons";
 import { UsageControls } from "../../features/admin-usage";
+import { PhoneSection } from "../../features/phone";
 import { ENTERPRISE } from "../../lib/edition";
 import { adminNavId, settingsNav } from "../settings/nav";
 
@@ -37,6 +38,13 @@ const ADMIN_SECTION_DEFINITIONS: Record<AdminSection, AdminSectionDefinition> = 
     description: "Everyone in the organization: roles, workspaces, sign-in and invitations.",
     icon: UsersIcon,
     component: UsersSection
+  },
+  phone: {
+    id: "phone",
+    title: "Phone",
+    description: "The organization's phone line: numbers, who answers, business hours and messages, calling out, and the call log.",
+    icon: PhoneIcon,
+    component: PhoneSection
   },
   sso: {
     id: "sso",

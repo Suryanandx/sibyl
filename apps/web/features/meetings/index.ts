@@ -8,6 +8,7 @@ export { MeetingsScreen } from "./MeetingsScreen";
 export { MeetingPage } from "./MeetingPage";
 export { MeetingRoom } from "./MeetingRoom";
 export { GuestJoin } from "./GuestJoin";
+export { SharedNotes } from "./SharedNotes";
 export { meetingsApi } from "./api";
 
 /** The chat's Meet button: a meeting started now; replies and approvals land in this chat. */

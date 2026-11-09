@@ -156,6 +156,8 @@ export interface EnterpriseModuleContext {
   notify?(notice: EnterpriseNotice): void;
   /** Run a job type on the gateway's one scheduler (absent when routines are off in a bare runtime). */
   addJobType?(type: ScheduledJobType<any>): void;
+  /** Calls of the realtime layer (absent without LiveKit); see CallRecordingHost. */
+  calls?: CallRecordingHost;
   /** Add sign-in providers and session rules (see IdentityExtension). */
   registerIdentityExtension(extension: IdentityExtension): void;
   /** Add a usage policy the meter consults after its own caps (see UsagePolicy in usage.ts). */
@@ -173,6 +175,40 @@ export interface EnterpriseModule {
   /** The module installs only when the licence enables this feature. */
   feature: FeatureId;
   install(ctx: EnterpriseModuleContext): void | { close?(): void | Promise<void> } | Promise<void | { close?(): void | Promise<void> }>;
+}
+
+/* ── Call recordings (the realtime layer as the recordings module sees it) ── */
+
+/** What a recording is of, for its list entry (meeting title, phone call). */
+export interface CallRoomInfo {
+  kind: "call" | "phone";
+  workspaceId: string;
+  title: string;
+  /** Meeting rooms: the meeting (its page plays the recording). */
+  meetingId?: string;
+  /** Phone rooms: the call log entry. */
+  callId?: string;
+}
+
+/** Records rooms (Enterprise `recordings`). Without one, calls are never recorded. */
+export interface CallRecorder {
+  /** Start recording a room of the workspace; `video` records the active speaker's camera or screen with everyone's audio (MP4), otherwise audio only (Ogg). */
+  start(input: { principal?: Principal; workspaceId: string; room: string; video: boolean }): Promise<{ id: string }>;
+}
+
+/**
+ * Hooks the gateway's realtime layer gives the recordings module. Open-source
+ * behaviour without it: no recording, no announcement.
+ */
+export interface CallRecordingHost {
+  /** The meeting or phone call a room belongs to (undefined: not a recordable room of this organization). */
+  describe(room: string): Promise<CallRoomInfo | undefined>;
+  /** A recording started or stopped: everyone in the room sees it; phone callers hear it announced. */
+  announce(room: string, state: "started" | "stopped"): Promise<void>;
+  /** A recording of a room started: link it to the meeting or call log entry. */
+  linked(room: string, recordingId: string): Promise<void>;
+  /** The recorder the phone line uses to record calls when its settings ask for it. */
+  useRecorder(recorder: CallRecorder | undefined): void;
 }
 
 /* ── Identity extensions (sign-in providers, session rules) ── */

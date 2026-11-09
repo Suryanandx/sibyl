@@ -92,8 +92,14 @@ export interface MeetingRecord {
   notes?: MeetingNotes;
   /** The host's chat the meeting's replies and approvals land in. */
   conversationId?: string;
-  /** Enterprise audio recording of the room. */
+  /** Enterprise recording of the room (audio or video; the latest). */
   recordingId?: string;
+  /** Guests asking to join, kept so a gateway restart doesn't drop them (see MeetingKnock). */
+  lobby?: MeetingKnock[];
+  /** Raised hands in the room: identity → when raised. */
+  raisedHands?: Record<string, number>;
+  /** Read-only links to the notes (summary, transcript, actions) the host shared. */
+  shares?: MeetingShare[];
   /** Secret in the guest link (/join/<id>?k=…); guests knock and the host admits them. */
   inviteKey: string;
   /** Imported from a calendar event. */
@@ -104,6 +110,32 @@ export interface MeetingRecord {
   segmentCount?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A guest's knock at the lobby (guest link → name → the host admits or denies). */
+export interface MeetingKnock {
+  /** Secret the guest polls with. */
+  ticket: string;
+  /** Guest id (room identity guest:<id>). */
+  guestId: string;
+  name: string;
+  at: number;
+  status: "waiting" | "admitted" | "denied";
+}
+
+/** A read-only link to a meeting's notes: revocable, expiring. Only a hash of its token is kept. */
+export interface MeetingShare {
+  id: string;
+  tokenHash: string;
+  /** Who made it (host key). */
+  createdBy: string;
+  createdAt: number;
+  expiresAt: number;
+  revokedAt?: number;
+  /** Include the transcript (otherwise summary and actions only). */
+  transcript: boolean;
+  /** Times the link was opened. */
+  views?: number;
 }
 
 export interface MeetingSegment {

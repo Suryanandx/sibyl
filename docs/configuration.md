@@ -373,3 +373,7 @@ Made with the media models on OpenRouter, in chat (Create mode or the `create_im
 | `SIBYL_MEDIA_MUSIC_MODEL` | `google/lyria-3-clip-preview` | Default music model. |
 | `SIBYL_MEDIA_BASE_URL` | `https://openrouter.ai/api/v1` | Another OpenRouter-compatible address for media calls. |
 | `SIBYL_PUBLIC_GATEWAY_URL` | unset | Also used by media: reference videos and audio are fetched by the provider from a signed link on this address (OpenRouter takes them only over HTTPS). |
+
+## Phone line
+
+The phone line has no settings of its own in `.env`: owners and admins set it up in Settings → Admin → Phone ([realtime.md](realtime.md#phone-calls)). It needs the realtime layer (`LIVEKIT_*`). LiveKit phone numbers need `LIVEKIT_URL` at LiveKit Cloud (`*.livekit.cloud`). The SIP trunk password is kept in the vault, so `SIBYL_SECRET_KEY` should be set. `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` and `LIVEKIT_SIP_FROM_NUMBER` (above) still override the line for outbound calls.

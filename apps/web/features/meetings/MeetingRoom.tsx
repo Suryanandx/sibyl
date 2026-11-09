@@ -11,7 +11,10 @@
  *   large, everyone else in a filmstrip. Agents show their animated avatar
  *   and a speaking ring; silent note-takers say "Taking notes".
  * - Controls: microphone, camera, screen, captions, raise hand, people,
- *   AI notes, add agent, invite link, leave / end for everyone.
+ *   AI notes, add agent, invite link, record (audio or video, Enterprise),
+ *   leave / end for everyone. Everyone sees "Recording" while the room is
+ *   recorded. The host leaving passes the meeting to another member, whose
+ *   session then brings Sibyl back; only "End for everyone" ends it.
  * - Side panel (members): Summary, Transcript, Actions, Ask AI, and People
  *   (the host admits guests, mutes, removes, and switches agent roles live).
  */
@@ -96,7 +99,10 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
   const [menu, setMenu] = useState<"leave" | "invite" | null>(null);
   const [adding, setAdding] = useState(false);
   const [recordingId, setRecordingId] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
+  const [myIdentity, setMyIdentity] = useState<string | null>(null);
+  const [roomRecording, setRoomRecording] = useState(false);
+  const [recordingSignal, setRecordingSignal] = useState(false);
+  const recording = roomRecording || recordingSignal;
   const [toast, setToast] = useState<string | null>(null);
   const [pendingTasks, setPendingTasks] = useState<Set<string>>(new Set());
   const joinedRef = useRef<JoinedRoom | null>(null);
@@ -116,6 +122,8 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
       const [view, lines] = await Promise.all([meetingsApi.get(meetingId), meetingsApi.transcript(meetingId)]);
       setMeeting(view);
       setSegments(lines);
+      // Raised hands are kept by the meeting (a reload or a gateway restart doesn't lose them).
+      if (view.raisedHands?.length) setHands((current) => new Set([...current, ...view.raisedHands!]));
     } catch (reason) {
       setError(errorText(reason));
       setPhase((current) => (current === "prejoin" ? "error" : current));
@@ -175,7 +183,7 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
     const speaker = room.activeSpeakers.find((participant) => participant !== room.localParticipant);
     if (speaker) lastSpeaker.current = speaker.identity;
     setTiles(next);
-    setRecording(room.isRecording);
+    setRoomRecording(room.isRecording);
     // Someone new: tell them my hand is up.
     const people = room.remoteParticipants.size;
     if (people > peopleCount.current && handRef.current) void joinedRef.current?.send(MEETING_HAND_TOPIC, { raised: true });
@@ -204,10 +212,18 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
               });
             }
             if (topic === MEETING_SIGNAL_TOPIC) {
-              const type = (payload as { type?: unknown })?.type;
+              const signal = payload as { type?: unknown; hands?: unknown; identity?: unknown; state?: unknown };
+              const type = signal?.type;
               if (type === "notes" || type === "roles") void loadMeeting();
               if (type === "lobby") void loadLobby();
               if (type === "ended") setPhase("ended");
+              // The gateway says at once; LiveKit's own flag follows when the recorder has joined.
+              if (type === "recording") setRecordingSignal(signal.state === "started");
+              if (type === "hands" && Array.isArray(signal.hands)) {
+                const raised = signal.hands.filter((item): item is string => typeof item === "string");
+                setHands((current) => new Set([...current, ...raised]));
+              }
+              if (type === "host" && typeof signal.identity === "string") setHostSignal(signal.identity);
             }
           },
           onDisconnected: () => {
@@ -225,6 +241,7 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
         }
       );
       joinedRef.current = joined;
+      setMyIdentity(joined.room.localParticipant.identity);
       setMuted(!choice.microphone || !joined.microphone);
       setCameraOn(joined.room.localParticipant.isCameraEnabled);
       if (choice.microphone && !joined.microphone) setError("Your microphone is blocked or missing: you can listen but not talk. Allow it in the browser and rejoin.");
@@ -284,6 +301,33 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
       setPhase("prejoin");
     }
   }
+
+  // The host left and named a new host: if it's me, my session brings Sibyl back into the room.
+  const [hostSignal, setHostSignal] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hostSignal) return;
+    setHostSignal(null);
+    void loadMeeting();
+    if (hostSignal !== myIdentity) {
+      flash("The host left. Another member is hosting now.");
+      return;
+    }
+    const off = subscribe((message: ServerMessage) => {
+      if (message.type === REALTIME_EVENTS.JOINED && message.callId === meetingId) {
+        off();
+        flash("The host left: you're the host now. Sibyl is back with you.");
+        void loadMeeting();
+        void loadLobby();
+      } else if (message.type === "error" && !message.requestId) {
+        off();
+        flash(message.message);
+      }
+    });
+    if (!send({ type: REALTIME_EVENTS.JOIN, callId: meetingId })) {
+      off();
+      flash("You're the host now, but not connected to Sibyl. Rejoin to bring her back.");
+    }
+  }, [hostSignal, myIdentity, meetingId, send, subscribe, loadMeeting, loadLobby]);
 
   // Leaving the screen ends your part of the call.
   useEffect(
@@ -387,16 +431,23 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
     flash(label);
   }
 
-  async function toggleRecording(): Promise<void> {
+  /** Start an audio or video recording (the gateway links it to the meeting and tells the room), or stop it. */
+  async function record(kind: "audio" | "video" | "stop"): Promise<void> {
+    setMenu(null);
     const room = joinedRef.current?.room.name;
     try {
-      if (recordingId) {
-        await gatewayRequest(`/api/recordings/${encodeURIComponent(recordingId)}/stop`, { method: "POST" });
+      if (kind === "stop") {
+        // Started by someone else (or before a reload): find this room's recording.
+        const id =
+          recordingId ??
+          (await gatewayRequest<{ items: Array<{ id: string; room: string; status: string }> }>("/api/recordings?status=recording")).items.find((item) => item.room === room)?.id;
+        if (id) await gatewayRequest(`/api/recordings/${encodeURIComponent(id)}/stop`, { method: "POST" });
         setRecordingId(null);
+        flash("Recording stopped. It's under Meetings → Recordings and on the meeting's page.");
       } else if (room) {
-        const started = await gatewayRequest<{ id: string }>("/api/recordings", { method: "POST", body: { room } });
+        const started = await gatewayRequest<{ id: string }>("/api/recordings", { method: "POST", body: { room, video: kind === "video" } });
         setRecordingId(started.id);
-        await meetingsApi.update(meetingId, { recordingId: started.id }).catch(() => undefined);
+        flash(kind === "video" ? "Recording video. Everyone sees that the meeting is recorded." : "Recording audio. Everyone sees that the meeting is recorded.");
       }
     } catch (reason) {
       flash(errorText(reason));
@@ -497,7 +548,11 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
         <div className={styles.roomTitle}>
           <strong>{title}</strong>
           {phase === "live" ? <span className={styles.liveBadge}>Live</span> : null}
-          {recording ? <span className={styles.liveBadge}>Recording</span> : null}
+          {recording ? (
+            <span className={styles.liveBadge} role="status" title="This meeting is being recorded">
+              Recording
+            </span>
+          ) : null}
         </div>
         {meeting?.notes ? (
           <span className={`${styles.badge} ${styles.hideNarrow}`}>
@@ -639,10 +694,20 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
                       Add an agent…
                     </button>
                   ) : null}
-                  {canRecord ? (
-                    <button type="button" role="menuitem" onClick={() => void toggleRecording()}>
-                      {recordingId ? "Stop recording" : "Record (audio)"}
+                  {canRecord && (recording || recordingId) ? (
+                    <button type="button" role="menuitem" onClick={() => void record("stop")}>
+                      Stop recording
                     </button>
+                  ) : null}
+                  {canRecord && !recording && !recordingId ? (
+                    <>
+                      <button type="button" role="menuitem" onClick={() => void record("audio")}>
+                        Record audio
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => void record("video")}>
+                        Record video
+                      </button>
+                    </>
                   ) : null}
                 </div>
               ) : null}
@@ -660,7 +725,7 @@ export function MeetingRoom({ meetingId, guest }: { meetingId: string; guest?: {
                 End meeting for everyone
               </button>
               <button type="button" role="menuitem" onClick={leave}>
-                Leave (Sibyl leaves with you)
+                Leave (another member takes over as host)
               </button>
             </div>
           ) : null}

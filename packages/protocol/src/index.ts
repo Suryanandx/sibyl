@@ -3880,7 +3880,8 @@ export const NOTIFICATION_KIND_VALUES = [
   "agent_action",
   "deck_ready",
   "invite_accepted",
-  "meeting_notes"
+  "meeting_notes",
+  "voicemail"
 ] as const;
 
 export type NotificationKindView = (typeof NOTIFICATION_KIND_VALUES)[number];
@@ -5356,6 +5357,8 @@ export interface MeetingView {
   guestPath?: string;
   calendar?: { provider: "google" | "microsoft"; eventId: string };
   costUsd?: number;
+  /** Live: identities with a raised hand (kept across reloads and gateway restarts). */
+  raisedHands?: string[];
   segmentCount: number;
 }
 
@@ -5821,4 +5824,191 @@ export function parseMediaCreateSpec(value: unknown): { success: true; data: Med
       ...(references.length ? { references } : {})
     }
   };
+}
+
+/* ── Calls: phone line, call log, recordings, shared meeting notes (wave C follow-up) ── */
+/*
+ * HTTP only (docs/realtime.md, docs/meetings.md):
+ *   GET    /api/realtime/phone                       → { phone: PhoneLineView | null, cloud, providers }   org.settings
+ *   PUT    /api/realtime/phone  PhoneLineInput       → { phone }                                           org.settings
+ *   DELETE /api/realtime/phone                       → { ok }                                              org.settings
+ *   POST   /api/realtime/phone/test                  → PhoneTestView                                       org.settings
+ *   GET    /api/realtime/phone/numbers[?areaCode=]   → { owned, available }  (LiveKit Cloud)               org.settings
+ *   POST   /api/realtime/phone/numbers {number}      → { number }  rents a LiveKit number                  org.settings
+ *   GET    /api/realtime/calls?direction=&before=    → { items: CallLogView[] }                            chat.view_all
+ *   GET    /api/recordings?q=&kind=&type=&status=    → { items: RecordingView[], retentionDays }           calls.record (Enterprise)
+ *   PATCH  /api/recordings/:id {legalHold}           → RecordingView                                       calls.record
+ *   POST   /api/meetings/:id/shares {days, transcript} → { share, path }                                   host
+ *   GET    /api/meetings/:id/shares                  → { items: MeetingShareView[] }                       host
+ *   DELETE /api/meetings/:id/shares/:shareId         → { ok }                                              host
+ *   POST   /api/meetings/:id/shared {token}          → SharedMeetingView                                   the link's token
+ *
+ * In a meeting room the gateway also signals { type: "recording" } (a
+ * recording started or stopped), { type: "hands", hands } (the raised hands
+ * kept by the meeting, sent to newcomers) and { type: "host", identity } (the
+ * host left: the named member now hosts and brings Sibyl back with their
+ * session) on MEETING_SIGNAL_TOPIC.
+ */
+
+/** livekit: a LiveKit Cloud phone number; the rest: a SIP trunk at that provider. */
+export type PhoneProviderView = "livekit" | "twilio" | "telnyx" | "plivo" | "vonage" | "other";
+export type PhoneOutboundView = "off" | "admin" | "member";
+
+export interface PhoneHoursView {
+  /** IANA time zone, e.g. "Europe/Berlin". */
+  timeZone: string;
+  /** 0 = Sunday … 6 = Saturday. */
+  days: number[];
+  /** "09:00" */
+  open: string;
+  /** "17:30" */
+  close: string;
+}
+
+export interface PhoneLineView {
+  provider: PhoneProviderView;
+  /** The line's numbers (E.164); the first is the caller ID for outbound calls. */
+  numbers: string[];
+  workspaceId: string;
+  /** SIP providers: the provider's SIP host and the trunk's user name. */
+  address?: string;
+  username?: string;
+  /** A trunk password is stored in the vault (it is never shown again). */
+  hasPassword: boolean;
+  /** Agent that answers (absent: Sibyl). */
+  agentId?: string;
+  greeting?: string;
+  /** Absent: always open. */
+  hours?: PhoneHoursView;
+  /** Outside business hours: take a message (into the Inbox) or answer anyway. */
+  afterHours: "voicemail" | "answer";
+  voicemailGreeting?: string;
+  /** Who may ask for outbound calls (each call still needs an approval). */
+  outbound: PhoneOutboundView;
+  /** Record every call (Sibyl Enterprise); callers hear that the call is recorded. */
+  record: boolean;
+  /** Outbound calls work (a SIP trunk is set up). */
+  canCallOut: boolean;
+  /** Open right now (business hours). */
+  openNow: boolean;
+  updatedAt: number;
+}
+
+export interface PhoneLineInput {
+  provider: PhoneProviderView;
+  numbers: string[];
+  address?: string;
+  username?: string;
+  /** New trunk password (omit to keep the stored one). */
+  password?: string;
+  agentId?: string | null;
+  greeting?: string;
+  hours?: PhoneHoursView | null;
+  afterHours?: "voicemail" | "answer";
+  voicemailGreeting?: string;
+  outbound?: PhoneOutboundView;
+  record?: boolean;
+}
+
+export interface PhoneProviderPreset {
+  id: PhoneProviderView;
+  label: string;
+  /** Example SIP host shown in the form. */
+  addressHint?: string;
+  inbound: boolean;
+  outbound: boolean;
+  /** Where to set it up (docs). */
+  docs: string;
+}
+
+export interface PhoneTestStep {
+  id: "livekit" | "sip" | "provider" | "trunks" | "dispatch" | "numbers" | "hours";
+  label: string;
+  status: "ok" | "warning" | "failed" | "skipped";
+  detail: string;
+}
+
+export interface PhoneTestView {
+  ok: boolean;
+  steps: PhoneTestStep[];
+  at: number;
+}
+
+export interface LiveKitNumberView {
+  id?: string;
+  number: string;
+  status?: "active" | "pending" | "released" | "offline" | "unknown";
+  locality?: string;
+  region?: string;
+  /** Owned: routed to this line. */
+  routed?: boolean;
+}
+
+export type CallStatusView = "ringing" | "active" | "completed" | "voicemail" | "missed" | "failed";
+
+export interface CallLogView {
+  id: string;
+  direction: "inbound" | "outbound";
+  status: CallStatusView;
+  workspaceId: string;
+  lineNumber?: string;
+  remoteNumber?: string;
+  agentId: string;
+  agentName: string;
+  startedAt: number;
+  answeredAt?: number;
+  endedAt?: number;
+  durationMs?: number;
+  costUsd?: number;
+  /** The call's chat (transcript, replies). */
+  conversationId?: string;
+  recordingId?: string;
+  voicemail?: string;
+  error?: string;
+}
+
+export type RecordingTypeView = "audio" | "video";
+
+export interface RecordingView {
+  id: string;
+  workspaceId: string;
+  room: string;
+  /** "call" (a meeting) or "phone". */
+  kind: string;
+  type: RecordingTypeView;
+  title: string;
+  meetingId?: string;
+  callId?: string;
+  status: "recording" | "ready" | "failed";
+  startedBy?: string;
+  startedAt: number;
+  endedAt?: number;
+  durationMs?: number;
+  sizeBytes?: number;
+  /** Deleted after this time unless on legal hold. */
+  expiresAt: number;
+  legalHold: boolean;
+  error?: string;
+}
+
+export interface MeetingShareView {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  revoked: boolean;
+  transcript: boolean;
+  views: number;
+}
+
+/** What a shared link shows (read-only, no account). */
+export interface SharedMeetingView {
+  title: string;
+  hostName: string;
+  startedAt?: number;
+  endedAt?: number;
+  participants: Array<{ name: string; kind: MeetingParticipantKindView }>;
+  notes?: MeetingNotesView;
+  /** Only when the host shared the transcript. */
+  transcript?: MeetingSegmentView[];
+  expiresAt: number;
 }

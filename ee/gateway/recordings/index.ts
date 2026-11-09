@@ -6,8 +6,10 @@
  *
  * Installs only with a licence that includes `recordings` AND a configured
  * LiveKit (LIVEKIT_*) with its egress service. Adds /api/recordings (gated by
- * calls.record) and an hourly retention sweep. The open-source edition has
- * no recording at all.
+ * calls.record) and an hourly retention sweep, and plugs into the realtime
+ * layer (ctx.calls): announcements, links to meetings and call log entries,
+ * and recording phone calls when the phone line asks for it. The open-source
+ * edition has no recording at all.
  */
 import type { EnterpriseModule } from "../../../packages/core/src/features";
 import { parseAllowedOrigins } from "../../../apps/gateway/src/config";
@@ -26,11 +28,25 @@ export const recordingsModule: EnterpriseModule = {
       return;
     }
     const s3 = s3SettingsFromEnv(ctx.env);
-    const service = new RecordingService({ config: realtime.config, store: ctx.store, ownerId: ctx.ownerId, env: ctx.env, ...(s3 ? { s3 } : {}), log: ctx.log });
+    const service = new RecordingService({
+      config: realtime.config,
+      store: ctx.store,
+      ownerId: ctx.ownerId,
+      env: ctx.env,
+      ...(s3 ? { s3 } : {}),
+      ...(ctx.calls ? { host: ctx.calls } : {}),
+      log: ctx.log
+    });
+    ctx.calls?.useRecorder({ start: (input) => service.start(input.principal, input.workspaceId, input.room, { video: input.video }) });
     ctx.registerHttpRoute(recordingsRoute(service, parseAllowedOrigins(ctx.env.ALLOWED_ORIGINS), ctx.log));
     service.startRetention();
     ctx.log("recordings.installed", { storage: s3 ? "s3" : "local", retentionDays: service.retentionDays, ...(s3 ? {} : { dir: service.localDir }) });
-    return { close: () => service.close() };
+    return {
+      close: () => {
+        ctx.calls?.useRecorder(undefined);
+        service.close();
+      }
+    };
   }
 };
 

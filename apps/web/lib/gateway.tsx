@@ -97,8 +97,8 @@ export interface Gateway {
 const SETTINGS_STORAGE_KEY = "open-gpt-live.settings.v1";
 const reconnectBaseDelayMs = 500;
 const reconnectMaximumDelayMs = 8_000;
-/** Pages with their own sign-in flow (and meeting guest links): no gateway connection there. */
-const NO_GATEWAY = /^\/(setup|login|invite|join|signup)(\/|$)/;
+/** Pages with their own sign-in flow (and meeting guest links, shared meeting notes): no gateway connection there. */
+const NO_GATEWAY = /^\/(setup|login|invite|join|signup|shared)(\/|$)/;
 
 function readStoredSettings(): Partial<SessionSettings> {
   try {

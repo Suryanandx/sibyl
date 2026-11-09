@@ -13,6 +13,7 @@ import { createMemoryNotificationStore, type NotificationStore } from "./notific
 import { createMemoryAuditStore, type AuditStore } from "./audit";
 import { createMemoryMeetingStore, type MeetingStore } from "./meetings";
 import { createMemoryCreditStore, createMemoryOrganizationStore, type CreditEntry, type CreditStore, type OrganizationStore } from "./tenancy";
+import { createMemoryCallLogStore, type CallLogStore } from "./calls";
 import {
   availableInWorkspace,
   inWorkspace,
@@ -220,6 +221,8 @@ export interface Store extends WorkspaceStore, AgentStore {
   audit: AuditStore;
   /** Meetings, their transcripts and comments (see meetings.ts). */
   meetings: MeetingStore;
+  /** The phone line's call log (see calls.ts). */
+  calls: CallLogStore;
   /** Organizations (hosted Sibyl; self-hosted has none) and their AI credits ledger (see tenancy.ts). */
   organizations: OrganizationStore;
   credits: CreditStore;
@@ -520,6 +523,7 @@ export function createMemoryStore(): Store {
     notifications: createMemoryNotificationStore(),
     audit: createMemoryAuditStore(),
     meetings: createMemoryMeetingStore(),
+    calls: createMemoryCallLogStore(),
     organizations: createMemoryOrganizationStore(),
     credits,
     ...createMemoryAgentStore(),

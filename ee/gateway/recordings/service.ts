@@ -4,9 +4,17 @@
  * Copyright (c) Sibyl contributors. Licensed under the Sibyl Enterprise
  * License (ee/LICENSE), NOT the MIT licence of the rest of the repository.
  *
- * Start and stop audio recordings of a room (LiveKit egress, one mixed Ogg
- * file), keep them in the data volume or S3-compatible storage, delete them
- * after the retention period (30 days by default), list and download them.
+ * Start and stop recordings of a room (LiveKit room-composite egress): audio
+ * only (one mixed Ogg/Opus file) or video (MP4, the "speaker" layout: the
+ * active speaker or a shared screen large, everyone's audio mixed), chosen per
+ * recording. Keep them in the data volume or S3-compatible storage, delete
+ * them after the retention period (30 days by default) unless they are on
+ * legal hold, list, search and download them.
+ *
+ * Consent: LiveKit marks the room as recording, which every participant's
+ * app shows ("Recording"); phone callers hear "This call is being recorded"
+ * (CallRecordingHost.announce). A recording of a meeting is linked to the
+ * meeting, whose page plays it.
  *
  * Storage:
  * - local (default): egress writes `<SIBYL_RECORDINGS_EGRESS_DIR>/<ws>/<id>.ogg`
@@ -17,7 +25,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { Principal, Store } from "../../../packages/core/src";
+import type { CallRecordingHost, Principal, Store } from "../../../packages/core/src";
 import { parseRoomName, type RealtimeConfig } from "../../../apps/gateway/src/realtime/index";
 import { EgressClient, EgressStatus, EncodedFileOutput, EncodedFileType, S3Upload, type EgressInfo } from "../../../apps/gateway/src/realtime/livekit";
 import { presignGet, s3Request, type S3Settings } from "./s3";
@@ -28,6 +36,14 @@ export interface RecordingRecord {
   workspaceId: string;
   room: string;
   kind: string;
+  /** Audio only (Ogg) or video (MP4). Older records: audio. */
+  type?: "audio" | "video";
+  /** What it is of (meeting title, "Incoming call with …"). */
+  title?: string;
+  meetingId?: string;
+  callId?: string;
+  /** Kept past the retention period until the hold is lifted. */
+  legalHold?: boolean;
   status: "recording" | "ready" | "failed";
   storage: "local" | "s3";
   /** Path below the recordings folder, or the S3 key. */
@@ -41,7 +57,20 @@ export interface RecordingRecord {
   error?: string;
 }
 
-export type RecordingView = Omit<RecordingRecord, "egressId" | "file" | "storage">;
+export type RecordingView = Omit<RecordingRecord, "egressId" | "file" | "storage" | "type" | "title" | "legalHold"> & {
+  type: "audio" | "video";
+  title: string;
+  legalHold: boolean;
+};
+
+export interface RecordingQuery {
+  /** Words of the title. */
+  q?: string;
+  kind?: "call" | "phone";
+  type?: "audio" | "video";
+  status?: RecordingRecord["status"];
+  held?: boolean;
+}
 
 export class RecordingError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -55,6 +84,8 @@ export interface RecordingServiceOptions {
   ownerId: string;
   env: NodeJS.ProcessEnv;
   s3?: S3Settings;
+  /** The realtime layer: what a room is, announcements, links to meetings and calls. */
+  host?: CallRecordingHost;
   log: (event: string, fields?: Record<string, unknown>) => void;
   /** Tests: replace the egress client. */
   egress?: Pick<EgressClient, "startRoomCompositeEgress" | "stopEgress" | "listEgress">;
@@ -84,18 +115,22 @@ export class RecordingService {
     this.now = options.now ?? Date.now;
   }
 
-  /** Start an audio recording of a room in the caller's workspace. */
-  async start(principal: Principal, workspaceId: string, room: string): Promise<RecordingView> {
+  /** Start recording a room of the caller's workspace: audio only, or video (MP4, active speaker). */
+  async start(principal: Principal | undefined, workspaceId: string, room: string, options: { video?: boolean } = {}): Promise<RecordingView> {
     const parsed = parseRoomName(room);
-    if (!parsed || parsed.workspaceId !== workspaceId || parsed.kind === "stream") throw new RecordingError("That call isn't in this workspace.", 404);
+    const info = this.options.host ? await this.options.host.describe(room) : undefined;
+    const inWorkspace = this.options.host ? info?.workspaceId === workspaceId : parsed?.workspaceId === workspaceId;
+    if (!parsed || !inWorkspace || (parsed.kind !== "call" && parsed.kind !== "phone")) throw new RecordingError("That call isn't in this workspace.", 404);
     const records = await this.load();
     if (records.some((record) => record.room === room && record.status === "recording")) throw new RecordingError("This call is already being recorded.", 409);
+    // Phone calls have no video.
+    const video = Boolean(options.video) && parsed.kind === "call";
     const id = randomBytes(9).toString("base64url");
-    const file = `${workspaceId}/${new Date(this.now()).toISOString().slice(0, 10)}-${id}.ogg`;
+    const file = `${workspaceId}/${new Date(this.now()).toISOString().slice(0, 10)}-${id}.${video ? "mp4" : "ogg"}`;
     const s3 = this.options.s3;
     if (!s3) await mkdir(join(this.localDir, workspaceId), { recursive: true });
     const output = new EncodedFileOutput({
-      fileType: EncodedFileType.OGG,
+      fileType: video ? EncodedFileType.MP4 : EncodedFileType.OGG,
       filepath: s3 ? file : `${this.egressDir}/${file}`,
       ...(s3
         ? {
@@ -113,29 +148,52 @@ export class RecordingService {
           }
         : {})
     });
-    let info: EgressInfo;
+    let egress: EgressInfo;
     try {
-      info = await this.egress.startRoomCompositeEgress(room, output, { audioOnly: true });
+      // "speaker": the active speaker (or a shared screen) large, the others small; everyone's audio mixed.
+      egress = await this.egress.startRoomCompositeEgress(room, output, video ? { layout: "speaker" } : { audioOnly: true });
     } catch (error) {
       this.options.log("recordings.start_failed", { room, error: error instanceof Error ? error.message : String(error) });
       throw new RecordingError("The recorder (LiveKit egress) didn't start. Is the egress service running?", 502);
     }
     const record: RecordingRecord = {
       id,
-      egressId: info.egressId,
+      egressId: egress.egressId,
       workspaceId,
       room,
       kind: parsed.kind,
+      type: video ? "video" : "audio",
+      title: (info?.title ?? (parsed.kind === "phone" ? "Phone call" : "Call")).slice(0, 140),
+      ...(info?.meetingId ? { meetingId: info.meetingId } : {}),
+      ...(info?.callId ? { callId: info.callId } : {}),
       status: "recording",
       storage: s3 ? "s3" : "local",
       file,
-      ...(principal.userId ? { startedBy: principal.userId } : {}),
+      ...(principal?.userId ? { startedBy: principal.userId } : {}),
       startedAt: this.now(),
       expiresAt: this.now() + this.retentionDays * DAY_MS
     };
     await this.update((all) => [record, ...all].slice(0, MAX_RECORDS));
-    this.options.log("recordings.started", { id, room, storage: record.storage });
+    this.options.log("recordings.started", { id, room, storage: record.storage, type: record.type });
+    await this.options.host?.linked(room, id).catch(() => undefined);
+    await this.options.host?.announce(room, "started").catch(() => undefined);
     return view(record);
+  }
+
+  /** Keep a recording past its retention date (legal hold), or let it expire again. */
+  async setLegalHold(workspaceId: string, id: string, held: boolean): Promise<RecordingView> {
+    let found: RecordingRecord | undefined;
+    await this.update((all) =>
+      all.map((item) => {
+        if (item.id !== id || item.workspaceId !== workspaceId) return item;
+        found = { ...item, legalHold: held };
+        if (!held) delete found.legalHold;
+        return found;
+      })
+    );
+    if (!found) throw new RecordingError("Recording not found.", 404);
+    this.options.log("recordings.legal_hold", { id, held });
+    return view(found);
   }
 
   async stop(workspaceId: string, id: string): Promise<RecordingView> {
@@ -143,28 +201,39 @@ export class RecordingService {
     if (!record) throw new RecordingError("Recording not found.", 404);
     if (record.status === "recording") {
       const info = await this.egress.stopEgress(record.egressId).catch(() => undefined);
+      await this.options.host?.announce(record.room, "stopped").catch(() => undefined);
       if (info) return view(await this.applyEgress(record, info));
     }
     return view((await this.refresh(workspaceId)).find((item) => item.id === id) ?? record);
   }
 
-  /** Recordings of a workspace, newest first (status refreshed from egress). */
-  async list(workspaceId: string): Promise<RecordingView[]> {
-    return (await this.refresh(workspaceId)).map(view);
+  /** Recordings of a workspace, newest first (status refreshed from egress), optionally filtered. */
+  async list(workspaceId: string, query: RecordingQuery = {}): Promise<RecordingView[]> {
+    const words = (query.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+    return (await this.refresh(workspaceId))
+      .map(view)
+      .filter(
+        (item) =>
+          (!query.kind || item.kind === query.kind) &&
+          (!query.type || item.type === query.type) &&
+          (!query.status || item.status === query.status) &&
+          (query.held === undefined || item.legalHold === query.held) &&
+          words.every((word) => item.title.toLowerCase().includes(word))
+      );
   }
 
   /** Where to read a finished recording: a local file or a presigned URL. */
-  async file(workspaceId: string, id: string): Promise<{ path: string; size: number } | { url: string }> {
+  async file(workspaceId: string, id: string): Promise<({ path: string; size: number } | { url: string }) & { type: "audio" | "video" }> {
     const record = (await this.load()).find((item) => item.id === id && item.workspaceId === workspaceId);
     if (!record || record.status !== "ready") throw new RecordingError("Recording not found or not finished yet.", 404);
     if (record.storage === "s3") {
       if (!this.options.s3) throw new RecordingError("S3 storage is no longer configured.", 409);
-      return { url: presignGet(this.options.s3, record.file, 300) };
+      return { url: presignGet(this.options.s3, record.file, 300), type: record.type ?? "audio" };
     }
     const path = this.localPath(record.file);
     const info = await stat(path).catch(() => undefined);
     if (!info?.isFile()) throw new RecordingError("The recording file is missing.", 404);
-    return { path, size: info.size };
+    return { path, size: info.size, type: record.type ?? "audio" };
   }
 
   async remove(workspaceId: string, id: string): Promise<boolean> {
@@ -179,7 +248,8 @@ export class RecordingService {
   /** Delete recordings past their retention date. */
   async sweep(): Promise<number> {
     const now = this.now();
-    const expired = (await this.load()).filter((record) => record.expiresAt <= now && record.status !== "recording");
+    // Legal hold keeps a recording whatever its date.
+    const expired = (await this.load()).filter((record) => record.expiresAt <= now && record.status !== "recording" && !record.legalHold);
     for (const record of expired) await this.deleteFile(record);
     if (expired.length) {
       const ids = new Set(expired.map((record) => record.id));
@@ -262,6 +332,6 @@ export class RecordingService {
 }
 
 function view(record: RecordingRecord): RecordingView {
-  const { egressId: _egress, file: _file, storage: _storage, ...rest } = record;
-  return rest;
+  const { egressId: _egress, file: _file, storage: _storage, type, title, legalHold, ...rest } = record;
+  return { ...rest, type: type ?? "audio", title: title ?? (record.kind === "phone" ? "Phone call" : "Call"), legalHold: Boolean(legalHold) };
 }
