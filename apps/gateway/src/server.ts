@@ -137,6 +137,15 @@ async function main(): Promise<void> {
     config.realtimeSttDelay
   );
 
+  // Routines: scheduled runs of the deep brain (off with SIBYL_ROUTINES=false).
+  await runtime.routines?.startScheduler({
+    provider: new OpenAIToolChatClient({ ...config.llm, extraHeaders: config.extraHeaders }),
+    model: () => process.env.SIBYL_ROUTINE_MODEL?.trim() || models.defaults.llmModel,
+    systemPrompt: buildBrainSystemPrompt(false, config.assistantName),
+    extraBody: (model) => models.llmParams[model],
+    catalog: () => models.catalog
+  });
+
   const gateway = await createGatewayServer({
     port: config.port,
     host: config.host,
@@ -211,6 +220,9 @@ async function main(): Promise<void> {
       const update = await runScout();
       if (update) {
         gateway.updateModels(update);
+        models.catalog = update.catalog;
+        models.defaults = { ...models.defaults, ...update.defaults };
+        if (update.llmParams) models.llmParams = update.llmParams;
         logger.info("models.applied", { defaults: update.defaults });
       }
     };

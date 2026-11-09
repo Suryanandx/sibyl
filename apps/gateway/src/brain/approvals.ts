@@ -66,7 +66,7 @@ export class ApprovalBroker {
       ...(request.conversationId ? { conversationId: request.conversationId } : {}),
       toolName: tool.name,
       title: tool.title,
-      summary: approvalSummary(tool, details),
+      summary: summarizeApproval(tool, input, details),
       input: redactInput(input),
       status: "pending",
       createdAt,
@@ -162,6 +162,25 @@ export function approvalDetails(input: Record<string, unknown>): Array<{ label: 
       label: humanize(key),
       value: SECRET_KEY.test(key) ? "••••••" : truncate(displayValue(value), MAX_VALUE_CHARS)
     }));
+}
+
+/**
+ * A tool may describe its own approval in plain words by defining an optional
+ * `approvalSummary(input)` (e.g. create_routine states the schedule and cost
+ * cap). Otherwise the generic sentence from approvalSummary() is used.
+ */
+export function summarizeApproval(
+  tool: Pick<ToolDefinition, "title"> & { approvalSummary?: (input: Record<string, unknown>) => string | undefined },
+  input: Record<string, unknown>,
+  details: Array<{ label: string; value: string }> = approvalDetails(input)
+): string {
+  try {
+    const custom = tool.approvalSummary?.(input)?.trim();
+    if (custom) return custom;
+  } catch {
+    // Fall back to the generic sentence.
+  }
+  return approvalSummary(tool, details);
 }
 
 /** One human sentence of exactly what will happen. */

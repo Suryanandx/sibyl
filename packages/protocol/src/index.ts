@@ -450,7 +450,8 @@ export type ClientMessage =
   | ConversationsRequestMessage
   | ConversationOpenMessage
   | ConversationDeleteMessage
-  | ConnectionsClientMessage;
+  | ConnectionsClientMessage
+  | RoutinesClientMessage;
 
 export type ServerMessage =
   | ServerSessionStartMessage
@@ -477,6 +478,7 @@ export type ServerMessage =
   | ConversationsListMessage
   | ConversationStateMessage
   | ConnectionsServerMessage
+  | RoutinesServerMessage
   | ErrorMessage;
 
 export type ReservedMessage = never;
@@ -684,7 +686,7 @@ export function parseClientMessage(input: unknown): ClientMessageValidationResul
     }
 
     default:
-      return parseConnectionsClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
+      return parseConnectionsClientMessage(input) ?? parseRoutinesClientMessage(input) ?? invalid(`unsupported message type: ${input.type}`);
   }
 }
 
@@ -971,7 +973,7 @@ export function parseServerMessage(input: unknown): ServerMessageValidationResul
     });
   }
 
-  return parseConnectionsServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
+  return parseConnectionsServerMessage(input) ?? parseRoutinesServerMessage(input) ?? invalidServer(`unsupported message type: ${input.type}`);
 }
 
 const MAX_MODEL_ID_LENGTH = 200;
@@ -1581,4 +1583,264 @@ export function parseAttachments(
     out.push({ id: item.id, name: item.name, mime: item.mime, ...(item.size === undefined ? {} : { size: item.size }) });
   }
   return { success: true, data: out };
+}
+
+/* ── Routines & inbox (wave 2) ── */
+
+export const ROUTINE_EVENTS = {
+  /** Client → gateway: the browser's IANA time zone (default for new routines). */
+  ROUTINES_CONTEXT: "routines.context",
+  ROUTINES_REQUEST: "routines.request",
+  ROUTINES_LIST: "routines.list",
+  ROUTINE_UPDATE: "routine.update",
+  ROUTINE_RUN_NOW: "routine.run_now",
+  ROUTINE_DELETE: "routine.delete",
+  /** Pending approvals across chat and routines (decide with approval.decision). */
+  INBOX_REQUEST: "inbox.request",
+  INBOX_LIST: "inbox.list",
+  /** A routine finished, failed, hit its budget or needs an approval. */
+  ROUTINE_NOTIFICATION: "routine.notification"
+} as const;
+
+export type RoutineRunStatusView = "running" | "awaiting_approval" | "succeeded" | "failed" | "interrupted" | "budget_blocked";
+
+export interface RoutineRunView {
+  id: string;
+  status: RoutineRunStatusView;
+  startedAt: number;
+  finishedAt?: number;
+  costUsd: number;
+  summary?: string;
+  error?: string;
+}
+
+export interface RoutineView {
+  id: string;
+  name: string;
+  instruction: string;
+  /** 5-field cron in `timezone`. */
+  cron: string;
+  timezone: string;
+  /** The schedule in plain words, e.g. "every weekday at 08:00 (Europe/Berlin)". */
+  schedule: string;
+  enabled: boolean;
+  conversationId?: string;
+  maxRunUsd?: number;
+  nextRunAt?: number;
+  lastRunAt?: number;
+  lastRun?: RoutineRunView;
+}
+
+export interface RoutinePatch {
+  name?: string;
+  instruction?: string;
+  cron?: string;
+  timezone?: string;
+  enabled?: boolean;
+  /** null clears the per-routine cap (SIBYL_BUDGET_ROUTINE_RUN_USD applies). */
+  maxRunUsd?: number | null;
+}
+
+export interface RoutinesContextMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINES_CONTEXT;
+  timezone: string;
+}
+
+export interface RoutinesRequestMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINES_REQUEST;
+}
+
+export interface RoutineUpdateMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINE_UPDATE;
+  routineId: string;
+  patch: RoutinePatch;
+}
+
+export interface RoutineRunNowMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINE_RUN_NOW;
+  routineId: string;
+}
+
+export interface RoutineDeleteMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINE_DELETE;
+  routineId: string;
+}
+
+export interface InboxRequestMessage {
+  type: typeof ROUTINE_EVENTS.INBOX_REQUEST;
+}
+
+export interface RoutinesListMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINES_LIST;
+  items: RoutineView[];
+}
+
+export interface InboxListMessage {
+  type: typeof ROUTINE_EVENTS.INBOX_LIST;
+  items: ApprovalView[];
+}
+
+export interface RoutineNotification {
+  kind: "finished" | "failed" | "budget_blocked" | "needs_approval" | "interrupted";
+  routineId: string;
+  routineName: string;
+  runId: string;
+  /** One human sentence for a toast or browser notification. */
+  message: string;
+  conversationId?: string;
+  approvalId?: string;
+  costUsd?: number;
+  at: number;
+}
+
+export interface RoutineNotificationMessage {
+  type: typeof ROUTINE_EVENTS.ROUTINE_NOTIFICATION;
+  notification: RoutineNotification;
+}
+
+export type RoutinesClientMessage =
+  | RoutinesContextMessage
+  | RoutinesRequestMessage
+  | RoutineUpdateMessage
+  | RoutineRunNowMessage
+  | RoutineDeleteMessage
+  | InboxRequestMessage;
+
+export type RoutinesServerMessage = RoutinesListMessage | InboxListMessage | RoutineNotificationMessage;
+
+const ROUTINE_ID_MAX = 100;
+const ROUTINE_RUN_STATUSES = ["running", "awaiting_approval", "succeeded", "failed", "interrupted", "budget_blocked"] as const;
+const NOTIFICATION_KINDS = ["finished", "failed", "budget_blocked", "needs_approval", "interrupted"] as const;
+
+function isRoutineId(value: unknown): value is string {
+  return isNonEmptyString(value) && value.length <= ROUTINE_ID_MAX;
+}
+
+/** Strict parser for a routine edit from the browser. */
+export function parseRoutinePatch(input: unknown): RoutinePatch | string {
+  if (!isRecord(input)) return "patch must be an object";
+  const out: RoutinePatch = {};
+  for (const [key, max] of [["name", 120], ["instruction", 4_000], ["cron", 120], ["timezone", 64]] as const) {
+    const value = input[key];
+    if (value === undefined) continue;
+    if (typeof value !== "string" || !value.trim() || value.length > max) {
+      return `${key} must be a non-empty string up to ${max} characters`;
+    }
+    out[key] = value.trim();
+  }
+  if (input.enabled !== undefined) {
+    if (typeof input.enabled !== "boolean") return "enabled must be a boolean";
+    out.enabled = input.enabled;
+  }
+  if (input.maxRunUsd !== undefined) {
+    if (input.maxRunUsd !== null && (!isFiniteNumber(input.maxRunUsd) || input.maxRunUsd <= 0 || input.maxRunUsd > 100)) {
+      return "maxRunUsd must be a number above 0 and up to 100, or null";
+    }
+    out.maxRunUsd = input.maxRunUsd;
+  }
+  if (Object.keys(out).length === 0) return "patch must change something";
+  return out;
+}
+
+/** Client messages of this block (called from parseClientMessage). */
+function parseRoutinesClientMessage(input: Record<string, unknown>): ClientMessageValidationResult | undefined {
+  switch (input.type) {
+    case ROUTINE_EVENTS.ROUTINES_CONTEXT:
+      if (!isNonEmptyString(input.timezone) || input.timezone.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(input.timezone)) {
+        return invalid("routines.context timezone must be an IANA time zone");
+      }
+      return valid({ type: ROUTINE_EVENTS.ROUTINES_CONTEXT, timezone: input.timezone });
+    case ROUTINE_EVENTS.ROUTINES_REQUEST:
+      return valid({ type: ROUTINE_EVENTS.ROUTINES_REQUEST });
+    case ROUTINE_EVENTS.INBOX_REQUEST:
+      return valid({ type: ROUTINE_EVENTS.INBOX_REQUEST });
+    case ROUTINE_EVENTS.ROUTINE_UPDATE: {
+      if (!isRoutineId(input.routineId)) return invalid("routine.update routineId must be a non-empty string");
+      const patch = parseRoutinePatch(input.patch);
+      if (typeof patch === "string") return invalid(`routine.update ${patch}`);
+      return valid({ type: ROUTINE_EVENTS.ROUTINE_UPDATE, routineId: input.routineId, patch });
+    }
+    case ROUTINE_EVENTS.ROUTINE_RUN_NOW:
+    case ROUTINE_EVENTS.ROUTINE_DELETE:
+      if (!isRoutineId(input.routineId)) return invalid(`${input.type} routineId must be a non-empty string`);
+      return valid({ type: input.type, routineId: input.routineId });
+    default:
+      return undefined;
+  }
+}
+
+function isRoutineView(value: unknown): value is RoutineView {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    typeof value.name === "string" &&
+    typeof value.instruction === "string" &&
+    typeof value.cron === "string" &&
+    typeof value.timezone === "string" &&
+    typeof value.schedule === "string" &&
+    typeof value.enabled === "boolean" &&
+    isOptionalString(value.conversationId) &&
+    isOptionalFiniteNumber(value.nextRunAt) &&
+    isOptionalFiniteNumber(value.lastRunAt) &&
+    isOptionalFiniteNumber(value.maxRunUsd) &&
+    (value.lastRun === undefined ||
+      (isRecord(value.lastRun) &&
+        isNonEmptyString(value.lastRun.id) &&
+        isEnum(value.lastRun.status, ROUTINE_RUN_STATUSES) &&
+        isFiniteNumber(value.lastRun.startedAt) &&
+        isOptionalFiniteNumber(value.lastRun.finishedAt) &&
+        isFiniteNumber(value.lastRun.costUsd) &&
+        isOptionalString(value.lastRun.summary) &&
+        isOptionalString(value.lastRun.error)))
+  );
+}
+
+function isApprovalViewValue(value: unknown): value is ApprovalView {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.runId) &&
+    isNonEmptyString(value.toolName) &&
+    typeof value.title === "string" &&
+    typeof value.summary === "string" &&
+    isFiniteNumber(value.createdAt) &&
+    isOptionalString(value.routineId) &&
+    isOptionalString(value.conversationId) &&
+    isOptionalFiniteNumber(value.expiresAt) &&
+    (value.details === undefined ||
+      (Array.isArray(value.details) &&
+        value.details.every((d) => isRecord(d) && typeof d.label === "string" && typeof d.value === "string")))
+  );
+}
+
+/** Server messages of this block (called from parseServerMessage). */
+function parseRoutinesServerMessage(input: Record<string, unknown>): ServerMessageValidationResult | undefined {
+  switch (input.type) {
+    case ROUTINE_EVENTS.ROUTINES_LIST:
+      if (!Array.isArray(input.items) || !input.items.every(isRoutineView)) return invalidServer("invalid routines.list message");
+      return validServer({ type: ROUTINE_EVENTS.ROUTINES_LIST, items: input.items });
+    case ROUTINE_EVENTS.INBOX_LIST:
+      if (!Array.isArray(input.items) || !input.items.every(isApprovalViewValue)) return invalidServer("invalid inbox.list message");
+      return validServer({ type: ROUTINE_EVENTS.INBOX_LIST, items: input.items });
+    case ROUTINE_EVENTS.ROUTINE_NOTIFICATION: {
+      const n = input.notification;
+      if (
+        !isRecord(n) ||
+        !isEnum(n.kind, NOTIFICATION_KINDS) ||
+        !isNonEmptyString(n.routineId) ||
+        typeof n.routineName !== "string" ||
+        !isNonEmptyString(n.runId) ||
+        typeof n.message !== "string" ||
+        !isFiniteNumber(n.at) ||
+        !isOptionalString(n.conversationId) ||
+        !isOptionalString(n.approvalId) ||
+        !isOptionalFiniteNumber(n.costUsd)
+      ) {
+        return invalidServer("invalid routine.notification message");
+      }
+      return validServer({ type: ROUTINE_EVENTS.ROUTINE_NOTIFICATION, notification: n as unknown as RoutineNotification });
+    }
+    default:
+      return undefined;
+  }
 }

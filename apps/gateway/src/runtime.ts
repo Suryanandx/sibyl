@@ -21,6 +21,7 @@ import type { ConnectionsManager } from "./tools/connections.js";
 import { openStore } from "@open-gpt-live/store";
 import { installSlides, type SlidesService } from "./slides/index.js";
 import { installMemoryAndUploadTools } from "./memory/install.js";
+import { RoutineService } from "./routines/service.js";
 
 export interface GatewayRuntime {
   ownerId: string;
@@ -31,6 +32,8 @@ export interface GatewayRuntime {
   slides?: SlidesService;
   /** MCP servers and tool switches managed from the app (absent in bare test runtimes). */
   connections?: ConnectionsManager;
+  /** Routines + approval inbox (chat tools now; scheduler started by the server). */
+  routines?: RoutineService;
   close(): Promise<void>;
 }
 
@@ -45,6 +48,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<GatewayRun
   options.log("store.opened", { kind, ...(file ? { file } : {}) });
   const tools = createToolRegistry();
   const meter = await createUsageMeter({ store, ownerId: DEFAULT_OWNER_ID, env: options.env, log: options.log });
+  // Routine chat tools register before the per-tool switches are applied.
+  const routines = new RoutineService({ store, tools, meter, ownerId: DEFAULT_OWNER_ID, env: options.env, log: options.log });
+  await routines.init();
   const installed = await installTools({ tools, store, meter, ownerId: DEFAULT_OWNER_ID, options });
   return {
     ownerId: DEFAULT_OWNER_ID,
@@ -53,7 +59,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<GatewayRun
     meter,
     ...(installed.slides ? { slides: installed.slides } : {}),
     connections: installed.connections,
+    routines,
     close: async () => {
+      await routines.stop();
       await installed.close();
       await store.close();
     }

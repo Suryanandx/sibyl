@@ -34,6 +34,7 @@ import { ConversationRecorder, historyFromMessages } from "./conversations.js";
 import { ApprovalBroker } from "./brain/approvals.js";
 import { runToolLoop, toolLoopStream, toolSystemPrompt, type ToolLoopInput } from "./brain/tool-loop.js";
 import { hedgedStream } from "./hedge.js";
+import { handleRoutinesMessage } from "./routines/ws.js";
 import { createTestRuntime, type GatewayRuntime } from "./runtime.js";
 import { routeSlidesRequest, takeSlidesArtifact } from "./slides/index.js";
 import { handleConnectionsMessage } from "./tools/ws.js";
@@ -646,6 +647,8 @@ class GatewayConnection {
       });
       return;
     }
+    // ── routines & inbox (incl. decisions on routine approvals) ──
+    if (await handleRoutinesMessage(message, { routines: this.config.runtime.routines, send: (m) => this.send(m), socket: this.socket })) return;
     switch (message.type) {
       // ── approvals (brain tool loop) ──
       case WS_EVENTS.APPROVAL_DECISION:
