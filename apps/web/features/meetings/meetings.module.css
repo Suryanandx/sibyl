@@ -19,7 +19,7 @@
   min-height: 30px;
   padding: 3px 10px 3px 4px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
@@ -53,7 +53,7 @@
   align-items: center;
   gap: 4px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   font-size: 11px;
   font-weight: 500;
   background: var(--accent-soft);
@@ -98,7 +98,7 @@
 
 .section {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   overflow: hidden;
 }
@@ -186,7 +186,7 @@
   padding: 0 10px;
   min-height: 36px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   color: var(--text-2);
 }
@@ -219,7 +219,7 @@
   grid-template-columns: auto 1fr;
   gap: 4px 10px;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
 }
 
 .line[data-active="true"] {
@@ -282,7 +282,7 @@
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--surface);
 }
 
@@ -350,7 +350,7 @@
 
 .ago {
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   background: var(--subtle);
   color: var(--text-2);
   font-size: 11px;
@@ -407,7 +407,7 @@
   max-height: 160px;
   padding: 9px 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -417,7 +417,7 @@
 
 .answer {
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--subtle);
   font-size: 14px;
   line-height: 1.6;
@@ -447,7 +447,7 @@
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   background: var(--surface);
 }
 
@@ -474,7 +474,7 @@
   gap: 10px;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--canvas);
 }
 
@@ -656,7 +656,7 @@
 
 .card {
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   background: var(--surface);
   padding: 14px;
   display: grid;
@@ -669,7 +669,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--subtle);
   overflow-x: auto;
 }
@@ -762,7 +762,7 @@
   align-items: center;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   color: inherit;
   text-decoration: none;
@@ -776,7 +776,7 @@
   display: grid;
   justify-items: center;
   padding: 6px 0;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   background: var(--subtle);
   font-size: 11px;
   color: var(--text-2);
@@ -852,7 +852,7 @@
   align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -956,7 +956,7 @@
   width: 100%;
   height: 100%;
   min-height: 0;
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   background: var(--subtle);
   border: 1px solid var(--border);
   overflow: hidden;
@@ -1053,7 +1053,7 @@
   align-items: center;
   gap: 7px;
   padding: 4px 10px 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: color-mix(in srgb, #111312 70%, transparent);
   color: #f4f5f2;
   font-size: 12px;
@@ -1082,7 +1082,7 @@
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   background: color-mix(in srgb, #111312 70%, transparent);
   color: #f4f5f2;
   font-size: 11px;
@@ -1101,7 +1101,7 @@
 
 .caption {
   padding: 6px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   background: color-mix(in srgb, #111312 78%, transparent);
   color: #f4f5f2;
   font-size: 15px;
@@ -1121,7 +1121,7 @@
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   background: var(--surface);
 }
 
@@ -1202,7 +1202,7 @@
   padding: 0 4px;
   display: grid;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   background: var(--danger);
   color: var(--ink-text);
   font-size: 10px;
@@ -1216,7 +1216,7 @@
   height: 44px;
   padding: 0 18px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   background: var(--danger);
   color: var(--ink-text);
   font: inherit;
@@ -1233,7 +1233,7 @@
   min-width: 200px;
   padding: 6px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   box-shadow: var(--shadow-pop);
 }
@@ -1259,7 +1259,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
 }
 
 .person > div {
@@ -1332,7 +1332,7 @@
 .preview {
   position: relative;
   aspect-ratio: 16 / 10;
-  border-radius: 20px;
+  border-radius: var(--radius-panel);
   overflow: hidden;
   background: var(--subtle);
   border: 1px solid var(--border);
@@ -1398,7 +1398,7 @@
     z-index: 3;
     width: 100%;
     max-height: calc(100dvh - 130px);
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
   .filmstrip > * {
@@ -1494,6 +1494,6 @@
 .recordingVideo {
   aspect-ratio: 16 / 9;
   background: var(--ink);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   width: 100%;
 }

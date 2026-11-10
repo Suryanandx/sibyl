@@ -133,7 +133,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     background: "var(--surface)",
     border: "1px solid var(--border)",
-    borderRadius: 22,
+    borderRadius: "var(--radius-panel)",
     boxShadow: "var(--shadow-card)",
     display: "flex",
     flexDirection: "column",
@@ -148,7 +148,7 @@ const styles: Record<string, CSSProperties> = {
   input: {
     background: "var(--bg)",
     border: "1px solid var(--border-strong)",
-    borderRadius: 12,
+    borderRadius: "var(--radius-ctl)",
     color: "var(--text)",
     font: "inherit",
     fontSize: 15,

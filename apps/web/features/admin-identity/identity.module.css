@@ -63,7 +63,7 @@
 .secretBox {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 8px;

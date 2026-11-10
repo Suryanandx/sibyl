@@ -78,7 +78,7 @@
   align-items: center;
   background: var(--subtle);
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   cursor: pointer;
   display: inline-flex;
   font-size: 13px;
@@ -105,7 +105,7 @@
 .progress {
   background: var(--canvas);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 8px;

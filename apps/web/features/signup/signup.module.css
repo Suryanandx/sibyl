@@ -56,7 +56,7 @@
   align-items: center;
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   cursor: pointer;
   display: flex;
@@ -146,7 +146,7 @@
 .orgInitial {
   align-items: center;
   background: var(--subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text);
   display: flex;
   flex: none;

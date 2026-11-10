@@ -28,7 +28,7 @@
 .box {
   background: var(--canvas);
   border: 1px dashed var(--border-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -73,7 +73,7 @@
 }
 
 .dropZone[data-dragging="true"] {
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   outline: 2px dashed var(--accent);
   outline-offset: 6px;
 }

@@ -89,6 +89,7 @@
   <main id="main">
     <!-- Hero -->
     <section class="hero wrap">
+      <canvas class="heroShader" aria-hidden="true"></canvas>
       <p class="eyebrow">Open source · Self-hosted · MIT licensed</p>
       <h1 class="wide">Open-source alternatives to the tools you pay for every month.</h1>
       <p class="lede">Sibyl is an initiative to replace the subscriptions teams pay for — the chat assistant, the meeting note-taker, the slide maker, the image studio, the AI agents — with open-source products you run yourself. Pay only for what matters: the AI you use.</p>
@@ -100,13 +101,15 @@
     </section>
 
     <figure class="heroArt wrap">
-      <div class="frame wide">
-        <video class="lazyVideo eager" muted loop playsinline preload="none" poster="assets/video/loop-horizon-poster.webp" width="1280" height="720" aria-label="An oil painting of an open upland at first light; clouds drift slowly and the grass moves in the wind.">
-          <source data-src="assets/video/loop-horizon.webm" type="video/webm" />
-          <source data-src="assets/video/loop-horizon.mp4" type="video/mp4" />
+      <div class="frame film">
+        <video class="lazyVideo eager heroFilm" muted loop playsinline preload="none" poster="assets/video/intro-film-poster.webp" width="1280" height="720" aria-label="A one-minute film: five AI subscriptions become one, then Sibyl's assistant, agents, slides, images, meetings and connectors are shown in the real app.">
+          <source data-src="assets/video/intro-film.webm" type="video/webm" />
+          <source data-src="assets/video/intro-film.mp4" type="video/mp4" />
+          <track kind="captions" srclang="en" label="English" src="assets/video/intro-film.vtt" default />
         </video>
+        <button type="button" class="btn btnLine btnSm soundBtn" aria-pressed="false">Sound on</button>
       </div>
-      <figcaption>Freedom is a horizon nobody else owns.</figcaption>
+      <figcaption>Sibyl in one minute, recorded from the real app. The voice and music are AI-generated.</figcaption>
     </figure>
 
     <!-- The product family: one page each (products/*.html, built from scripts/products.mjs) -->
@@ -523,6 +526,31 @@
       </div>
     </section>
 
+    <!-- The honest bill: every figure is from docs/models-and-costs.md, docs/media.md and docs/meetings.md -->
+    <section class="bill wrap" id="bill" aria-labelledby="bill-title">
+      <div class="billText">
+        <p class="eyebrow">The honest bill</p>
+        <h2 id="bill-title" class="sectionTitle">You pay for the thinking. Not the seat.</h2>
+        <p class="sectionLede">Sibyl has no per-seat fee. Your model key is billed by the provider for what you actually use, and Sibyl shows the price before anything costly runs.</p>
+        <p class="links"><a class="link" href="docs/models-and-costs.html">Models and costs <span aria-hidden="true">→</span></a></p>
+      </div>
+      <div class="receiptWrap">
+        <div class="receiptSlot" aria-hidden="true"></div>
+        <figure class="receipt" aria-label="Example costs of running Sibyl">
+          <p class="rHead"><span class="mark" aria-hidden="true"><span class="markBase"></span></span> Sibyl · example usage</p>
+          <ul>
+            <li><span>100 chat turns, Cheapest preset</span><b>$0.07</b></li>
+            <li><span>One image, Gemini 2.5 Flash Image</span><b>$0.04</b></li>
+            <li><span>An hour of meeting transcription</span><b>$0.012</b></li>
+            <li><span>Meeting notes, one refresh</span><b>&lt;$0.001</b></li>
+            <li><span>Seats</span><b>$0.00</b></li>
+          </ul>
+          <p class="rTotal"><span>Total</span><b>≈ $0.12</b></p>
+          <figcaption>Approximate provider prices from the docs. Yours depend on the models you pick.</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <!-- Pricing -->
     <section class="pricing wrap" id="pricing" aria-labelledby="price-title">
       <p class="eyebrow">Pricing</p>
@@ -654,6 +682,14 @@ corepack pnpm dev</code></pre>
 
   <!-- site:footer -->
   <footer class="footer">
+    <div class="wrap footCta">
+      <h2>Run your own Sibyl.</h2>
+      <p>Free, open source, and on your own server in a few minutes.</p>
+      <div class="ctaRow">
+        <a class="btn btnInk" href="#start">Get started</a>
+        <a class="btn btnLine" href="https://github.com/Suryanandx/sibyl">Star on GitHub</a>
+      </div>
+    </div>
     <div class="wrap footInner">
       <div class="footBrand">
         <a class="logo" href="#top" aria-label="Back to top">
@@ -709,6 +745,7 @@ corepack pnpm dev</code></pre>
     <div class="wrap footBase">
       <p>Sibyl is open source under the MIT License. Paintings on this page were generated for it; screenshots and screen recordings are of the real app. Set in Archivo (SIL Open Font License).</p>
     </div>
+    <div class="footWord" aria-hidden="true"><span class="wordmark"></span></div>
   </footer>
   <!-- /site:footer -->
 </body>

@@ -27,7 +27,7 @@
 .item {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -47,7 +47,7 @@
 .icon {
   align-items: center;
   background: var(--subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   display: inline-flex;
   flex: none;
@@ -97,7 +97,7 @@
 .video {
   aspect-ratio: 16 / 9;
   background: var(--ink);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   max-height: 60vh;
   width: 100%;
 }

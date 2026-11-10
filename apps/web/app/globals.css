@@ -20,6 +20,16 @@
   --ink-text: #fafaf8;
   --accent: #596c5d;
   --accent-soft: #e9eee8;
+  /* Corners, shared with the website: boxed, not pills. */
+  --radius-tag: 4px;
+  --radius-ctl: 6px;
+  --radius-box: 8px;
+  --radius-panel: 10px;
+  /* Motion, shared with the website (apps/site/site.css): quick, settled, never bouncy. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 600ms;
   --positive: #327e62;
   --warning: #a86f38;
   --danger: #b84f58;
@@ -222,7 +232,7 @@ code {
 .railLogo {
   background: #171a18;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: grid;
   height: 40px;
   margin-bottom: 10px;
@@ -242,7 +252,7 @@ code {
 .railBtn {
   background: transparent;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   display: grid;
   height: 40px;
@@ -324,7 +334,7 @@ code {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   display: inline-flex;
   height: 34px;
@@ -341,7 +351,7 @@ code {
   align-items: center;
   background: var(--ink);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--ink-text);
   display: flex;
   font-weight: 500;
@@ -359,7 +369,7 @@ code {
 .sidebarSearch {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   margin: 8px 0 0;
   outline: none;
   padding: 8px 10px;
@@ -389,7 +399,7 @@ code {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   display: flex;
   gap: 10px;
   height: 36px;
@@ -539,7 +549,7 @@ code {
 .statusBadge {
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--text-2);
   display: inline-flex;
   flex: none;
@@ -575,7 +585,7 @@ code {
 .ghostBtn,
 .darkBtn {
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   display: inline-flex;
   font-size: 13.5px;
   font-weight: 500;
@@ -607,7 +617,7 @@ code {
 .canvas {
   background: var(--canvas);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: var(--radius-panel);
   display: grid;
   /* A wide table or chart scrolls inside its card, never widens the chat. */
   grid-template-columns: minmax(0, 1fr);
@@ -679,7 +689,7 @@ code {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   display: inline-flex;
   font-size: 13.5px;
@@ -733,7 +743,7 @@ code {
 
 .bubble {
   background: var(--subtle);
-  border-radius: 20px 20px 6px 20px;
+  border-radius: var(--radius-panel) var(--radius-panel) var(--radius-tag) var(--radius-panel);
   font-size: 15px;
   line-height: 1.55;
   max-width: min(80%, 600px);
@@ -770,7 +780,7 @@ code {
 .replyAvatar.live::after {
   animation: ring 1.6s ease-out infinite;
   border: 1px solid var(--accent);
-  border-radius: 11px;
+  border-radius: var(--radius-box);
   content: "";
   inset: -4px;
   position: absolute;
@@ -951,7 +961,7 @@ code {
 
 .sourceView {
   background: var(--subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   font-family: var(--mono);
   font-size: 12px;
   margin: 0;
@@ -1003,7 +1013,7 @@ code {
 .queue {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-card);
   padding: 8px 8px 6px;
 }
@@ -1077,7 +1087,7 @@ code {
 
 .queueItem {
   align-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   gap: 10px;
   min-height: 40px;
@@ -1135,7 +1145,7 @@ code {
 .queueSend {
   background: var(--ink);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--ink-text);
   font-size: 12.5px;
   font-weight: 500;
@@ -1161,13 +1171,13 @@ code {
 .genui .openui-card-card {
   background: var(--surface);
   border-color: var(--border) !important;
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   padding: 18px 20px;
 }
 
 @media (max-width: 760px) {
   .genui .openui-card-card {
-    border-radius: 16px;
+    border-radius: var(--radius-panel);
     padding: 14px;
   }
 }
@@ -1223,7 +1233,7 @@ code {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border) !important;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text);
   cursor: pointer;
   display: inline-flex;
@@ -1341,7 +1351,7 @@ code {
 .composerCard {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-card);
   padding: 12px 12px 10px 18px;
   position: relative;
@@ -1514,7 +1524,7 @@ code {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   display: inline-flex;
   font-size: 13.5px;
   gap: 7px;
@@ -1563,7 +1573,7 @@ code {
 .popover {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   bottom: calc(100% + 10px);
   box-shadow: var(--shadow-pop);
   left: -6px;
@@ -1596,7 +1606,7 @@ code {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--radius-box);
   display: flex;
   gap: 10px;
   min-height: 38px;
@@ -1663,7 +1673,7 @@ code {
 
 .notice {
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   font-size: 13px;
   margin: 0;
   padding: 9px 14px;
@@ -1699,7 +1709,7 @@ code {
   animation: rise 180ms ease-out;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 28px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-pop);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
@@ -1744,7 +1754,7 @@ code {
 .segmented button {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   font-weight: 500;
   height: 40px;
@@ -1771,7 +1781,7 @@ code {
 .plan {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1794,7 +1804,7 @@ code {
 .planTag {
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   display: inline-flex;
   font-size: 14px;
   font-weight: 500;
@@ -1902,7 +1912,7 @@ code {
 .planBtn {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   font-weight: 500;
   height: 44px;
 }
@@ -1959,7 +1969,7 @@ code {
   appearance: none;
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   height: 42px;
   padding: 0 36px 0 12px;
   width: 100%;
@@ -1976,7 +1986,7 @@ code {
 .toggleRow {
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   cursor: pointer;
   display: flex;
   gap: 16px;
@@ -2037,7 +2047,7 @@ code {
 .latencyPanel,
 .vadPanel {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   padding: 12px 14px;
 }
 
@@ -2066,7 +2076,7 @@ code {
 .latencyPanel dl div,
 .vadPanel dl div {
   background: var(--subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   padding: 8px;
 }
 
@@ -2225,7 +2235,7 @@ code {
   }
 
   .canvas {
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
   }
 
   .thread {
@@ -2245,7 +2255,7 @@ code {
   }
 
   .dialog {
-    border-radius: 22px;
+    border-radius: var(--radius-panel);
     padding: 32px 16px 20px;
   }
 
@@ -2396,7 +2406,7 @@ code {
 
 .usageEconomy {
   background: var(--tint-amber);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   font-size: 13px;
   margin: 0;
@@ -2412,7 +2422,7 @@ code {
 .usageStat {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2508,7 +2518,7 @@ code {
 .approvalCard {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2557,7 +2567,7 @@ code {
 
 .approvalDetails {
   background: var(--subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2618,7 +2628,7 @@ code {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text);
   cursor: pointer;
   display: inline-flex;
@@ -2680,7 +2690,7 @@ code {
 
 @media (max-width: 760px) {
   .approvalCard {
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
     padding: 16px 14px 14px;
   }
 
@@ -2823,7 +2833,7 @@ code {
 
 .thinkingElapsed {
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--text-3);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -2886,7 +2896,7 @@ a.railLogo {
 .slidesCard {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   display: grid;
   gap: 14px;
   grid-template-columns: 148px minmax(0, 1fr);
@@ -2902,7 +2912,7 @@ a.railLogo {
 .slidesThumb {
   aspect-ratio: 16 / 9;
   background: var(--subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   display: grid;
   overflow: hidden;
   place-items: center;
@@ -3057,7 +3067,7 @@ a.railLogo {
 }
 
 .connNotice {
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   font-size: 13.5px;
   margin: 16px 0 0;
   padding: 10px 14px;
@@ -3076,7 +3086,7 @@ a.railLogo {
 .connEmpty {
   background: var(--canvas);
   border: 1px dashed var(--border-strong);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   padding: 16px 18px;
 }
 
@@ -3094,7 +3104,7 @@ a.railLogo {
 
 .connTools {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -3196,7 +3206,7 @@ a.railLogo {
 .connServer {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -3272,7 +3282,7 @@ a.railLogo {
 
 .connError {
   background: var(--danger-soft);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--danger);
   font-size: 13px;
   padding: 8px 12px;
@@ -3343,7 +3353,7 @@ a.railLogo {
 .connCard {
   background: var(--canvas);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3423,7 +3433,7 @@ a.railLogo {
 .connInput {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   min-height: 42px;
   min-width: 0;
   padding: 9px 12px;
@@ -3453,7 +3463,7 @@ textarea.connInput {
 .connSegment button {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   font-size: 13.5px;
   font-weight: 500;
@@ -3469,7 +3479,7 @@ textarea.connInput {
 
 .connWarn {
   background: var(--tint-amber);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--warning);
   font-size: 12.5px;
   line-height: 1.45;
@@ -3572,7 +3582,7 @@ textarea.connInput {
   align-items: center;
   background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
   border: 1.5px dashed var(--accent);
-  border-radius: 22px;
+  border-radius: var(--radius-panel);
   color: var(--accent);
   display: flex;
   font-size: 14px;
@@ -3597,7 +3607,7 @@ textarea.connInput {
   align-items: center;
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   display: inline-flex;
   gap: 8px;
@@ -3728,7 +3738,7 @@ button.attachmentChip.sent:hover {
 
 .attachmentImage {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: block;
   height: 120px;
   overflow: hidden;
@@ -3757,7 +3767,7 @@ button.attachmentChip.sent:hover {
   align-items: center;
   align-self: flex-start;
   background: var(--accent-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--accent);
   display: inline-flex;
   font-size: 12px;
@@ -3831,7 +3841,7 @@ button.attachmentChip.sent:hover {
   animation: rise 180ms ease-out;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   bottom: 24px;
   box-shadow: var(--shadow-pop);
   color: var(--text);
@@ -3905,7 +3915,7 @@ button.attachmentChip.sent:hover {
 .secretPrompt {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -3928,7 +3938,7 @@ button.attachmentChip.sent:hover {
 .secretBadge {
   align-items: center;
   background: var(--accent-soft);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--accent);
   display: inline-flex;
   flex: none;
@@ -3967,7 +3977,7 @@ button.attachmentChip.sent:hover {
 
 .secretHow {
   background: var(--subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -4021,7 +4031,7 @@ button.attachmentChip.sent:hover {
 .secretInput {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   flex: 1;
   font: inherit;
@@ -4056,7 +4066,7 @@ button.attachmentChip.sent:hover {
 .secretReveal {
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   cursor: pointer;
   flex: none;
@@ -4100,7 +4110,7 @@ button.attachmentChip.sent:hover {
 .secretHost {
   align-items: center;
   background: var(--tint-sage);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--text);
   display: inline-flex;
   font-family: var(--mono);
@@ -4121,7 +4131,7 @@ button.attachmentChip.sent:hover {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   cursor: pointer;
   display: inline-flex;
@@ -4171,7 +4181,7 @@ button.attachmentChip.sent:hover {
 
 .secretError {
   background: var(--danger-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--danger);
   font-size: 13.5px;
   line-height: 1.45;
@@ -4240,7 +4250,7 @@ button.attachmentChip.sent:hover {
 .secretRow {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -4276,7 +4286,7 @@ button.attachmentChip.sent:hover {
 
 .secretWarn {
   background: var(--tint-amber);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--warning);
   font-size: 12px;
   font-weight: 500;
@@ -4311,7 +4321,7 @@ button.attachmentChip.sent:hover {
 
 .secretConfirm {
   background: var(--danger-soft);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4327,7 +4337,7 @@ button.attachmentChip.sent:hover {
 
 .secretPanelForm {
   background: var(--subtle);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   padding: 14px;
 }
 
@@ -4343,7 +4353,7 @@ button.attachmentChip.sent:hover {
 
 @media (max-width: 760px) {
   .secretPrompt {
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
     padding: 16px 14px 14px;
   }
 
@@ -4432,7 +4442,7 @@ button.attachmentChip.sent:hover {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
@@ -4501,7 +4511,7 @@ button.attachmentChip.sent:hover {
 .identInput {
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   font: inherit;
   font-size: 15px;
@@ -4528,7 +4538,7 @@ button.attachmentChip.sent:hover {
 
 .identError {
   background: var(--danger-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--danger);
   font-size: 13px;
   line-height: 1.45;
@@ -4568,7 +4578,7 @@ button.attachmentChip.sent:hover {
 
 @media (max-width: 560px) {
   .identCard {
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
     padding: 26px 18px 22px;
   }
 }
@@ -4579,7 +4589,7 @@ button.attachmentChip.sent:hover {
 
 .skipLink {
   background: var(--ink);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--ink-text);
   left: 8px;
   padding: 8px 12px;
@@ -4676,7 +4686,7 @@ a.railBtn.active {
   animation: rise 140ms ease-out;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   box-shadow: var(--shadow-pop);
   left: 0;
   padding: 6px;
@@ -4697,7 +4707,7 @@ a.railBtn.active {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text);
   display: flex;
   gap: 10px;
@@ -4760,7 +4770,7 @@ a.railBtn.active {
 
 .sidebarPlace {
   align-items: center;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   display: flex;
   font-weight: 500;
@@ -4844,7 +4854,7 @@ a.railBtn.active {
 
 .screenNavItem {
   align-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   display: flex;
   font-weight: 500;
@@ -4880,7 +4890,7 @@ a.railBtn.active {
 
 .screenNavNote {
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--text-3);
   flex: none;
   font-size: 11px;
@@ -4922,7 +4932,7 @@ a.railBtn.active {
 .screenCanvas {
   background: var(--canvas);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: var(--radius-panel);
   min-height: 0;
   overflow-y: auto;
 }
@@ -4949,7 +4959,7 @@ a.railBtn.active {
 
 .screenOffline {
   background: var(--tint-amber);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   font-size: 13.5px;
   margin: 0 0 18px;
@@ -5018,7 +5028,7 @@ a.railBtn.active {
   }
 
   .screenCanvas {
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
   }
 
   .screenBody {
@@ -5101,7 +5111,7 @@ a.railBtn.active {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   box-shadow: var(--shadow-card);
   color: var(--text-2);
   display: inline-flex;
@@ -5138,7 +5148,7 @@ a.railBtn.active {
   animation: rise 140ms ease-out;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-pop);
   display: flex;
   flex-direction: column;
@@ -5188,7 +5198,7 @@ a.railBtn.active {
 }
 
 .vInspectorNote {
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   font-size: 12.5px;
   line-height: 1.45;
   margin: 0;
@@ -5215,14 +5225,14 @@ a.railBtn.active {
 
 .vInspectorItem {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
 }
 
 .vInspectorItemHead {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   display: flex;
   gap: 8px;
@@ -5290,7 +5300,7 @@ a.railBtn.active {
 
 .vInspectorErrors {
   background: var(--danger-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text);
   font-size: 12.5px;
   margin: 0 0 8px;
@@ -5299,7 +5309,7 @@ a.railBtn.active {
 
 .vInspectorWarn {
   background: var(--tint-amber);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   font-size: 12.5px;
   margin: 0 0 8px;
   padding: 6px 10px;
@@ -5316,7 +5326,7 @@ a.railBtn.active {
 
 .vInspectorSource {
   background: var(--subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   font-family: var(--mono);
   font-size: 11.5px;
   line-height: 1.5;
@@ -5362,7 +5372,7 @@ a.railBtn.active {
 
 .approvalRisk {
   background: color-mix(in srgb, var(--danger, #b4483c) 12%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--danger, #b4483c);
   font-size: 11.5px;
   font-weight: 600;
@@ -5458,3 +5468,20 @@ a.railBtn.active {
   display: none;
 }
 
+
+/* Press feedback, shared with the website: every button answers the click at once. */
+.darkBtn:active:not(:disabled),
+.ghostBtn:active:not(:disabled),
+.approvalBtn:active:not(:disabled),
+.iconBtn:active:not(:disabled),
+.queueBtn:active:not(:disabled),
+.railBtn:active:not(:disabled),
+.roundBtn:active:not(:disabled),
+.starterRow button:active:not(:disabled),
+.segmented button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .darkBtn:active, .ghostBtn:active, .approvalBtn:active, .iconBtn:active, .queueBtn:active,
+  .railBtn:active, .roundBtn:active, .starterRow button:active, .segmented button:active { transform: none; }
+}

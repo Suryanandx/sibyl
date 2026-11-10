@@ -44,7 +44,7 @@
   aspect-ratio: 16 / 10;
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   overflow: hidden;
   position: relative;
 }
@@ -140,7 +140,7 @@
   width: fit-content;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text);
   display: inline-flex;
   gap: 10px;

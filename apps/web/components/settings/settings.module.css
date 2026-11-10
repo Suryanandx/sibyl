@@ -141,7 +141,7 @@
 .roleOption {
   align-items: flex-start;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   cursor: pointer;
   display: flex;
   gap: 10px;

@@ -4,7 +4,7 @@
 
 .card {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   background: var(--surface);
   display: flex;
   flex-direction: column;
@@ -203,7 +203,7 @@ video.outputLarge {
 .previewPending {
   align-items: center;
   background: var(--subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   display: flex;
   flex-direction: column;
@@ -269,7 +269,7 @@ video.outputLarge {
 .chipOn {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 99px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   cursor: pointer;
   font: inherit;
@@ -309,7 +309,7 @@ video.outputLarge {
 .picker {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   bottom: calc(100% + 6px);
   box-shadow: var(--shadow-pop);
   left: 0;
@@ -403,7 +403,7 @@ video.outputLarge {
   align-items: center;
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 99px;
+  border-radius: var(--radius-ctl);
   display: inline-flex;
   font-size: 12px;
   gap: 6px;
@@ -467,7 +467,7 @@ video.outputLarge {
   align-items: center;
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 99px;
+  border-radius: var(--radius-ctl);
   color: var(--text);
   cursor: pointer;
   display: inline-flex;
@@ -493,7 +493,7 @@ video.outputLarge {
 .popover {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   bottom: calc(100% + 8px);
   box-shadow: var(--shadow-pop);
   left: 0;
@@ -622,7 +622,7 @@ video.outputLarge {
 .tile {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   cursor: pointer;
   display: flex;
@@ -662,7 +662,7 @@ video.outputLarge {
 
 .tileBadge {
   background: var(--surface);
-  border-radius: 99px;
+  border-radius: var(--radius-tag);
   bottom: 6px;
   color: var(--text-2);
   font-size: 11px;
@@ -707,7 +707,7 @@ video.outputLarge {
 .detail {
   align-self: start;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: flex;
   flex-direction: column;
   gap: 10px;

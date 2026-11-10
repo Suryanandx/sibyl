@@ -168,7 +168,7 @@
   align-self: flex-start;
   background: var(--tint-amber);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--warning);
   cursor: pointer;
   font: inherit;

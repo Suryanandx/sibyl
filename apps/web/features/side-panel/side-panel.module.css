@@ -134,7 +134,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   color: var(--text-2);
   cursor: pointer;
   display: inline-flex;
@@ -169,7 +169,7 @@
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   cursor: pointer;
   display: inline-flex;
@@ -258,7 +258,7 @@
 .source {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.5;
@@ -279,7 +279,7 @@
 .pdf {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   height: max(420px, calc(100dvh - 300px));
   width: 100%;
 }
@@ -294,7 +294,7 @@
 .video {
   background: var(--subtle);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   display: block;
   max-height: calc(100dvh - 220px);
   max-width: 100%;
@@ -344,7 +344,7 @@
 .urlCard {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-box);
   display: grid;
   gap: 10px;
   padding: 16px;

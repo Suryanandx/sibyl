@@ -78,7 +78,7 @@
 
 .stats div {
   background: var(--canvas);
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   padding: 8px 10px;
 }
 
@@ -191,7 +191,7 @@ textarea.short {
 .testResult {
   background: var(--canvas);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   display: grid;
   gap: 6px;
   padding: 12px 14px;
@@ -235,7 +235,7 @@ textarea.short {
 .event {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   display: grid;
   gap: 8px;
   padding: 12px 16px;

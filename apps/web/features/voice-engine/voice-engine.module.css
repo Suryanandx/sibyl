@@ -10,7 +10,7 @@
 .engine {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   cursor: pointer;
   display: flex;

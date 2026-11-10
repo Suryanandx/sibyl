@@ -10,7 +10,7 @@
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text);
   cursor: pointer;
   display: inline-flex;
@@ -23,8 +23,16 @@
   justify-content: center;
   padding: 0 14px;
   text-decoration: none;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
   white-space: nowrap;
+}
+
+.btn:active:not(:disabled):not(.link) {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled) { transform: none; }
 }
 
 .btn:hover:not(:disabled) {
@@ -109,7 +117,7 @@
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -144,7 +152,7 @@
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-panel);
   color: var(--text-2);
   display: flex;
   flex-direction: column;
@@ -219,7 +227,7 @@
 .control {
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-ctl);
   color: var(--text);
   font: inherit;
   font-size: 14px;
@@ -286,7 +294,7 @@ select.control {
 .badge {
   align-items: center;
   background: var(--subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-tag);
   color: var(--text-2);
   display: inline-flex;
   flex: none;
@@ -335,7 +343,7 @@ select.control {
 .notice {
   align-items: flex-start;
   background: var(--subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: var(--text);
   display: flex;
   font-size: 13.5px;
@@ -382,7 +390,7 @@ select.control {
 .dialog {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-pop);
   display: flex;
   flex-direction: column;
@@ -426,7 +434,7 @@ select.control {
 
 .tabs {
   background: var(--subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-box);
   display: inline-flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -439,7 +447,7 @@ select.control {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-ctl);
   color: var(--text-2);
   cursor: pointer;
   display: inline-flex;
@@ -539,7 +547,7 @@ select.control {
 .listItem {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-box);
   color: inherit;
   cursor: pointer;
   display: flex;
@@ -599,7 +607,7 @@ select.control {
   }
 
   .dialog {
-    border-radius: 18px;
+    border-radius: var(--radius-panel);
     padding: 18px;
   }
 
@@ -615,7 +623,7 @@ select.control {
   animation: toastRise 180ms ease-out;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
+  border-radius: var(--radius-panel);
   bottom: 24px;
   box-shadow: var(--shadow-pop);
   color: var(--text);
