@@ -4,6 +4,8 @@ Some answers are easier to see than to hear. Alongside its spoken reply, Sibyl c
 
 ![A typed question answered with a bar chart of smartphone market share, with a table and sources further down](assets/screens/chat-visual.png)
 
+![Recorded live: a question about smartphone market share; Sibyl searches the web, then answers with a bar chart, a table and its sources (waiting is sped up)](assets/demo-assistant.gif)
+
 ## When visuals appear
 
 - **Typed messages** are answered by the deep brain directly: text plus, when it helps, one visual.

@@ -6,7 +6,7 @@ and **budget**. They run on Sibyl's own brain, with the same tools, skills,
 knowledge, approvals and budgets as everything else — there is no second agent
 runtime. An agent only shapes one brain call; the gateway enforces the rest.
 
-![The Agents screen with four agents, each with its own avatar, autonomy and access, and the templates to start from](assets/screens/agents.png)
+![The Agents screen with an agent, its avatar, autonomy and access, and the templates to start from](assets/screens/agents.png)
 
 ## Using an agent
 

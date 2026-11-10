@@ -12,6 +12,7 @@ const shot = (file, alt, width = 1600, height = 1000) => ({ src: `../assets/scre
 export const PRODUCTS = [
   {
     slug: "assistant",
+    demo: { width: 960, height: 778, alt: "Recorded live: a question about smartphone market share; Sibyl searches the web, then answers with a bar chart, a table and its sources", caption: "Ask in plain words; get a chart, a table and the sources." },
     name: "Sibyl Assistant",
     line: "Chat and live voice, with answers you can see",
     headline: "An assistant you talk to, that answers with charts, tables and sources.",
@@ -20,7 +21,7 @@ export const PRODUCTS = [
       {
         title: "Ask, and see the answer",
         text: "Replies can be charts, tables, plans, option cards and forms, with the sources underneath. Tap the mic and the same chat becomes a live voice conversation.",
-        image: shot("chat-visual.webp", "A question about smartphone market share answered with a bar chart, a table and two sources"),
+        image: shot("chat-visual.webp", "A question about smartphone market share answered with a bar chart, a table and its source"),
         docs: ["../docs/generative-ui.html", "Visual answers"]
       },
       {
@@ -66,6 +67,7 @@ export const PRODUCTS = [
   },
   {
     slug: "meet",
+    demo: { width: 1000, height: 626, alt: "Recorded live: a meeting with Sibyl as a participant; the transcript fills in and Sibyl answers a question about the action items", caption: "A meeting with Sibyl in the room, taking notes as you talk." },
     name: "Sibyl Meet",
     line: "Meetings with people and agents, and notes that write themselves",
     headline: "Meetings where people and agents work together, and the notes write themselves.",
@@ -74,7 +76,7 @@ export const PRODUCTS = [
       {
         title: "A page for every meeting",
         text: "Afterwards each meeting has its own page: the overview, key points and AI insight, the transcript, the action items, comments and an Ask AI box. Save the notes to knowledge or share them by link.",
-        image: shot("meeting.webp", "A meeting page with the overview, key points, AI insight, the participants, the recording and comments", 1440, 900),
+        image: shot("meeting.webp", "A meeting page with the overview, key points, the participants, audio playback and comments", 1440, 900),
         docs: ["../docs/meetings.html", "Meetings"]
       },
       {
@@ -86,7 +88,7 @@ export const PRODUCTS = [
       {
         title: "Every meeting in one place",
         text: "Upcoming, live and past meetings in one list, searchable by notes and people. Guests can join by link once the host lets them in.",
-        image: shot("meetings-list.webp", "The Meetings list with two past meetings, their summaries, participants and action items", 1440, 900),
+        image: shot("meetings-list.webp", "The Meetings list with an upcoming meeting and three past ones, their summaries, participants and action items", 1440, 900),
         docs: ["../docs/realtime.html", "Calls with LiveKit"]
       }
     ],
@@ -105,6 +107,7 @@ export const PRODUCTS = [
   },
   {
     slug: "slides",
+    demo: { width: 960, height: 778, alt: "Recorded live: a request for a five-slide deck, the approval card with its estimate, the deck being built, and the finished deck", caption: "Ask for a deck, approve the plan and its price, and it builds." },
     name: "Sibyl Slides",
     line: "Decks from a prompt, your files or connected data",
     headline: "Slide decks from a prompt, your files or your data.",
@@ -113,19 +116,19 @@ export const PRODUCTS = [
       {
         title: "Ask in chat, approve the build",
         text: "Sibyl writes the brief, the number of slides and an estimate, and waits for your approval before it spends anything.",
-        image: shot("slides-approval.webp", "A request for a five-slide launch plan deck and the approval card showing the title, brief, number of slides and an estimate of about $0.003"),
+        image: shot("slides-approval.webp", "A request for a five-slide launch plan deck and the approval card showing the title, brief, number of slides and an estimate of about $0.02"),
         docs: ["../docs/slides.html", "Slides"]
       },
       {
         title: "Your decks in one place",
         text: "Every deck you or your agents made, grouped into spaces. Open one in the editor, or download it as PPTX or PDF.",
-        image: shot("slides-library.webp", "Spaces, Slides with a five-slide deck called Q1 Product Launch Plan, with Open in editor, PPTX and PDF"),
+        image: shot("slides-library.webp", "Spaces, Slides with a five-slide deck called Q1 Product Launch Plan — Falcon in a Launch Plans space, with Open in editor, PPTX and PDF"),
         docs: ["../docs/slides.html", "Slides"]
       },
       {
         title: "Edit it yourself",
         text: "A browser editor with the slide list, text, charts, tables, images and shapes. Change anything, then export again.",
-        image: shot("slides-editor.webp", "The slide editor with five slides on the left and the title slide, Ready to Launch Q1 with Confidence, open", 1600, 1218),
+        image: shot("slides-editor.webp", "The slide editor with five slides on the left and the title slide, Q1 Product Launch Plan: Falcon, open", 1600, 1218),
         docs: ["../docs/slides.html", "Slides"]
       }
     ],
@@ -137,6 +140,7 @@ export const PRODUCTS = [
   },
   {
     slug: "studio",
+    demo: { width: 960, height: 778, alt: "Recorded live: an image of a ceramic cup made in chat, then shown in the side panel with its prompt, model and cost", caption: "Make an image in chat; it lands in the side panel with its cost." },
     name: "Sibyl Studio",
     line: "Images, video and audio in chat, and a Media library",
     headline: "Images, video and audio, made in the chat you already use.",
@@ -157,7 +161,7 @@ export const PRODUCTS = [
       {
         title: "A library for everything you made",
         text: "Spaces → Media keeps the images, videos and audio from chat, agents and your team, with filters by type, model and person, favourites and collections.",
-        image: shot("media-library.webp", "The Media library with three generated images and a short video"),
+        image: shot("media-library.webp", "The Media library with a generated image"),
         docs: ["../docs/media.html", "Media"]
       }
     ],
@@ -175,6 +179,7 @@ export const PRODUCTS = [
   },
   {
     slug: "agents",
+    demo: { width: 960, height: 778, alt: "Recorded live: Research Dot is asked to open Hacker News; its own computer browses, blocks itself from sending data, and it answers with a summary", caption: "An agent uses its own computer, and stops to ask before anything risky." },
     name: "Sibyl Agents",
     line: "Agents you build, with their own face, voice and computer",
     headline: "Agents you build yourself, that work where you can see them.",
@@ -183,7 +188,7 @@ export const PRODUCTS = [
       {
         title: "Your team of agents",
         text: "Start from a template or a blank agent. Each one shows its autonomy and access at a glance, and you can chat with it or open its computer.",
-        image: shot("agents.webp", "The Agents screen with four agents, each with its own avatar, autonomy and access, and the templates to start from"),
+        image: shot("agents.webp", "The Agents screen with an agent, its avatar, autonomy and access, and the templates to start from"),
         docs: ["../docs/agents.html", "Agents"]
       },
       {
@@ -195,13 +200,13 @@ export const PRODUCTS = [
       {
         title: "Watch it work",
         text: "With a computer turned on, an agent opens real web pages in a sandbox on your server. Its screen shows live in the side panel next to the chat.",
-        image: shot("agent-computer-chat.webp", "Research Dot reading a Hacker News thread on its own computer, live in the side panel, next to its answer in the chat"),
+        image: shot("agent-computer-chat.webp", "Research Dot's answer in the chat after using its own computer: a Hacker News story summarised, with its sources"),
         docs: ["../docs/agent-computers.html", "Agent computers"]
       },
       {
         title: "See every step afterwards",
         text: "The computer page keeps a picture of each step it took, grouped by run. Stop it at any time; it also stops on its own when idle.",
-        image: shot("agent-computer.webp", "Research Dot's computer page: the live browser with a Stop button, and What it did with a picture of each step"),
+        image: shot("agent-computer.webp", "Research Dot's computer page: its browser, off between tasks, and What it did with a picture of each step, including a send it was blocked from"),
         docs: ["../docs/agent-computers.html", "Agent computers"]
       }
     ],

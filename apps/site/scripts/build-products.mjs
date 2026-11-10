@@ -52,6 +52,22 @@ function others(p) {
     .join("");
 }
 
+/** A short screen recording of the product working, recorded live from the app (marketing/gifs). */
+function demo(p) {
+  if (!p.demo) return "";
+  const d = p.demo;
+  return `    <figure class="heroArt wrap demoClip">
+      <div class="frame app" style="aspect-ratio: ${d.width} / ${d.height}">
+        <video class="lazyVideo" muted loop playsinline preload="none" poster="../assets/video/demo-${p.slug}-poster.webp" width="${d.width}" height="${d.height}" aria-label="${esc(d.alt)}">
+          <source data-src="../assets/video/demo-${p.slug}.webm" type="video/webm" />
+          <source data-src="../assets/video/demo-${p.slug}.mp4" type="video/mp4" />
+        </video>
+      </div>
+      <figcaption>${esc(d.caption)} Recorded live from the real app; waiting is sped up.</figcaption>
+    </figure>
+`;
+}
+
 function page(p) {
   return `<!doctype html>
 <html lang="en">
@@ -70,6 +86,7 @@ ${header}
       </div>
     </section>
 
+${demo(p)}
     <section class="wrap productSection" aria-labelledby="can-title">
       <h2 id="can-title" class="sectionTitle small">What you can do</h2>
       <div class="feats">
