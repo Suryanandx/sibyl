@@ -2,8 +2,8 @@
 #
 #   S3 (private) ── CloudFront (HTTPS, HTTP/2+3, security headers) ── opensibyl.world
 #
-# www.opensibyl.world, opensibyl.pro and www.opensibyl.pro redirect to
-# https://opensibyl.world. DNS stays at Hostinger; the certificate is ACM (free,
+# www.opensibyl.world redirects to https://opensibyl.world (and any zones in
+# var.redirect_domains, none for now). DNS stays at Hostinger; the certificate is ACM (free,
 # renews itself). GitHub Actions publishes the site with a short-lived role
 # (OIDC), so no AWS keys are stored in GitHub. See README.md in this folder.
 
@@ -281,26 +281,6 @@ resource "hostinger_dns_record" "caa_letsencrypt" {
   depends_on = [hostinger_dns_record.caa_amazon]
 }
 
-moved {
-  from = hostinger_dns_record.caa["opensibyl.pro amazon.com"]
-  to   = hostinger_dns_record.caa_amazon["opensibyl.pro"]
-}
-
-moved {
-  from = hostinger_dns_record.caa["opensibyl.world amazon.com"]
-  to   = hostinger_dns_record.caa_amazon["opensibyl.world"]
-}
-
-moved {
-  from = hostinger_dns_record.caa["opensibyl.pro letsencrypt.org"]
-  to   = hostinger_dns_record.caa_letsencrypt["opensibyl.pro"]
-}
-
-moved {
-  from = hostinger_dns_record.caa["opensibyl.world letsencrypt.org"]
-  to   = hostinger_dns_record.caa_letsencrypt["opensibyl.world"]
-}
-
 # ── Deploy role for GitHub Actions (OIDC, no stored keys) ───────────────────
 
 data "aws_iam_openid_connect_provider" "github" {
@@ -319,7 +299,10 @@ resource "aws_iam_role" "deploy" {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           # Only the main branch of this repository, through the "website" environment.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:environment:website"
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repo}:environment:website",
+            "repo:${var.github_repo_immutable}:environment:website",
+          ]
         }
       }
     }]

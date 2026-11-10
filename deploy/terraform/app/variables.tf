@@ -35,3 +35,9 @@ variable "hostinger_api_token" {
   type        = string
   sensitive   = true
 }
+
+variable "github_repo_immutable" {
+  description = "The same repository in GitHub's immutable subject form (owner@id/name@id). The repository issues OIDC tokens with this prefix; see repos/{repo}/actions/oidc/customization/sub."
+  type        = string
+  default     = "Suryanandx@55799779/sibyl@1451219403"
+}

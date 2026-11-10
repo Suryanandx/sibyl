@@ -1,11 +1,11 @@
 # Infrastructure
 
-Everything Sibyl runs on is defined here in Terraform. DNS for `opensibyl.world` and `opensibyl.pro` stays at Hostinger, managed through the `hostinger/hostinger` provider.
+Everything Sibyl runs on is defined here in Terraform. DNS for `opensibyl.world` stays at Hostinger, managed through the `hostinger/hostinger` provider.
 
 | Stack | What it is | State |
 |---|---|---|
 | `bootstrap` | The S3 bucket for Terraform state (versioned, encrypted, private) | Live |
-| `site` | The website at https://opensibyl.world: private S3 bucket, CloudFront (HTTPS, HTTP/3, security headers), ACM certificate, redirects from `www` and `opensibyl.pro`, DNS, and the GitHub deploy role | Live |
+| `site` | The website at https://opensibyl.world: private S3 bucket, CloudFront (HTTPS, HTTP/3, security headers), ACM certificate, the redirect from `www`, DNS, and the GitHub deploy role | Live |
 | `email` | Sending as `opensibyl.world` through Amazon SES: domain identity, DKIM, MAIL FROM `mail.opensibyl.world`, SPF, DMARC | Live |
 | `app` | The hosted app at https://app.opensibyl.world: EC2 host, data volume with daily snapshots, ECR, deploy role, DNS | **Prepared, not applied** |
 
@@ -34,12 +34,14 @@ State is locked with S3's native lock file, so two applies can't run at once.
 First-time setup, already done:
 
 1. Apply `bootstrap`, which uses local state.
-2. Delete Hostinger's parking `A` record on `@` in both zones. The apex becomes an `ALIAS` to CloudFront, and an `A` record on the same name would conflict.
+2. Delete Hostinger's parking `A` record on `@`. The apex becomes an `ALIAS` to CloudFront, and an `A` record on the same name would conflict.
 3. Apply `site`.
 4. In GitHub, create the environment `website`, restricted to the `main` branch, and add these repository variables from the stack's outputs:
    - `AWS_SITE_DEPLOY_ROLE_ARN`
    - `SITE_BUCKET`
    - `SITE_DISTRIBUTION_ID`
+
+The deploy role trusts GitHub's OIDC token for this repository's `website` environment only. The repository issues tokens with GitHub's immutable subject (`repo:Suryanandx@55799779/sibyl@1451219403:...`), so the trust accepts that form as well as `repo:Suryanandx/sibyl:...`. Check the form with `gh api repos/Suryanandx/sibyl/actions/oidc/customization/sub`.
 
 From then on, every push to `main` that touches `apps/site`, `docs` or `README.md` rebuilds and publishes the site, then checks it's live.
 

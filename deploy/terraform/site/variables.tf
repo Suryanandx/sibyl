@@ -11,9 +11,9 @@ variable "primary_domain" {
 }
 
 variable "redirect_domains" {
-  description = "Other zones at Hostinger whose apex and www redirect to the primary domain."
+  description = "Other zones at Hostinger whose apex and www redirect to the primary domain (none for now)."
   type        = list(string)
-  default     = ["opensibyl.pro"]
+  default     = []
 }
 
 variable "github_repo" {
@@ -26,4 +26,10 @@ variable "hostinger_api_token" {
   description = "Hostinger API token (DNS). Pass with TF_VAR_hostinger_api_token; never commit it."
   type        = string
   sensitive   = true
+}
+
+variable "github_repo_immutable" {
+  description = "The same repository in GitHub's immutable subject form (owner@id/name@id). The repository issues OIDC tokens with this prefix; see repos/{repo}/actions/oidc/customization/sub."
+  type        = string
+  default     = "Suryanandx@55799779/sibyl@1451219403"
 }
