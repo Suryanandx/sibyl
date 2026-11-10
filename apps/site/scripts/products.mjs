@@ -12,7 +12,7 @@ const shot = (file, alt, width = 1600, height = 1000) => ({ src: `../assets/scre
 export const PRODUCTS = [
   {
     slug: "assistant",
-    demo: { width: 960, height: 778, alt: "Recorded live: a question about smartphone market share; Sibyl searches the web, then answers with a bar chart, a table and its sources", caption: "Ask in plain words; get a chart, a table and the sources." },
+    demo: { width: 1900, height: 1600, alt: "Recorded live: a question about smartphone market share; Sibyl searches the web, then answers with a bar chart, a table and its sources", caption: "Ask in plain words; get a chart, a table and the sources." },
     name: "Sibyl Assistant",
     line: "Chat and live voice, with answers you can see",
     headline: "An assistant you talk to, that answers with charts, tables and sources.",
@@ -67,7 +67,7 @@ export const PRODUCTS = [
   },
   {
     slug: "meet",
-    demo: { width: 1000, height: 626, alt: "Recorded live: a meeting with Sibyl as a participant; the transcript fills in and Sibyl answers a question about the action items", caption: "A meeting with Sibyl in the room, taking notes as you talk." },
+    demo: { width: 1920, height: 1200, alt: "Recorded live: a meeting with Sibyl as a participant; the transcript fills in and Sibyl answers a question about the action items", caption: "A meeting with Sibyl in the room, taking notes as you talk." },
     name: "Sibyl Meet",
     line: "Meetings with people and agents, and notes that write themselves",
     headline: "Meetings where people and agents work together, and the notes write themselves.",
@@ -107,7 +107,7 @@ export const PRODUCTS = [
   },
   {
     slug: "slides",
-    demo: { width: 960, height: 778, alt: "Recorded live: a request for a five-slide deck, the approval card with its estimate, the deck being built, and the finished deck", caption: "Ask for a deck, approve the plan and its price, and it builds." },
+    demo: { width: 1900, height: 1600, alt: "Recorded live: a request for a five-slide deck, the approval card with its estimate, the deck being built, and the finished deck", caption: "Ask for a deck, approve the plan and its price, and it builds." },
     name: "Sibyl Slides",
     line: "Decks from a prompt, your files or connected data",
     headline: "Slide decks from a prompt, your files or your data.",
@@ -140,7 +140,7 @@ export const PRODUCTS = [
   },
   {
     slug: "studio",
-    demo: { width: 960, height: 778, alt: "Recorded live: an image of a ceramic cup made in chat, then shown in the side panel with its prompt, model and cost", caption: "Make an image in chat; it lands in the side panel with its cost." },
+    demo: { width: 1900, height: 1600, alt: "Recorded live: an image of a ceramic cup made in chat, then shown in the side panel with its prompt, model and cost", caption: "Make an image in chat; it lands in the side panel with its cost." },
     name: "Sibyl Studio",
     line: "Images, video and audio in chat, and a Media library",
     headline: "Images, video and audio, made in the chat you already use.",
@@ -179,7 +179,7 @@ export const PRODUCTS = [
   },
   {
     slug: "agents",
-    demo: { width: 960, height: 778, alt: "Recorded live: Research Dot is asked to open Hacker News; its own computer browses, blocks itself from sending data, and it answers with a summary", caption: "An agent uses its own computer, and stops to ask before anything risky." },
+    demo: { width: 1900, height: 1600, alt: "Recorded live: Research Dot is asked to open Hacker News; its own computer browses, blocks itself from sending data, and it answers with a summary", caption: "An agent uses its own computer, and stops to ask before anything risky." },
     name: "Sibyl Agents",
     line: "Agents you build, with their own face, voice and computer",
     headline: "Agents you build yourself, that work where you can see them.",

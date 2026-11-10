@@ -95,6 +95,7 @@
 .prose li + li { margin-top: 4px; }
 .prose li > ul, .prose li > ol { margin-top: 4px; }
 .prose img { border: 1px solid var(--border); border-radius: var(--radius-media); }
+.prose video.demoVideo { display: block; width: 100%; height: auto; margin: 4px 0; border: 1px solid var(--border); border-radius: var(--radius-media); background: var(--subtle); }
 .prose blockquote { margin: 16px 0; padding: 2px 0 2px 16px; border-left: 2px solid var(--accent); color: var(--text-2); }
 .prose hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
 .prose :not(pre) > code {

@@ -82,6 +82,13 @@ function rewriteLink(href, fromPath) {
   return `${GITHUB}/${isDir ? "tree" : "blob"}/HEAD/${target.replace(/\/$/, "")}${suffix}`;
 }
 
+
+/** A demo GIF (docs/assets/demo-<product>.gif) becomes the site's sharp MP4/WebM clip; GitHub keeps the GIF. */
+function demoVideo(slug, alt) {
+  const v = `../assets/video/demo-${slug}`;
+  return `<video class="lazyVideo demoVideo" muted loop playsinline preload="none" poster="${v}-poster.webp" aria-label="${esc(alt)}"><source data-src="${v}.mp4" type="video/mp4" /></video>`;
+}
+
 function render(slug) {
   const path = sources.get(slug);
   let md = readFileSync(join(REPO, path), "utf8");
@@ -117,6 +124,8 @@ function render(slug) {
         return `<a href="${esc(url)}"${title ? ` title="${esc(title)}"` : ""}${ext ? ' rel="noopener"' : ""}>${inner}</a>`;
       },
       image({ href, title, text }) {
+        const demo = href.match(/(?:^|\/)demo-([a-z-]+)\.gif$/);
+        if (demo) { rewriteLink(href, path); return demoVideo(demo[1], text); }
         const url = rewriteLink(href, path);
         return `<img src="${esc(url)}" alt="${esc(text)}"${title ? ` title="${esc(title)}"` : ""} loading="lazy" decoding="async">`;
       },
@@ -129,7 +138,9 @@ function render(slug) {
         // Raw HTML in the Markdown (rare): keep simple tags (the README's screenshot table),
         // drop layout wrappers, and point image paths at the copied files.
         if (/<\/?(p|picture|source|div)\b/i.test(text)) return "";
-        return text.replace(/\b(src|href)="([^"]*)"/g, (m, attr, url) => `${attr}="${esc(rewriteLink(url, path))}"`);
+        return text
+          .replace(/<img src="([^"]*\/)?demo-([a-z-]+)\.gif" alt="([^"]*)"\s*\/?>/g, (m, dir, slug, alt) => { rewriteLink(`${dir || ""}demo-${slug}.gif`, path); return demoVideo(slug, alt); })
+          .replace(/\b(src|href)="([^"]*)"/g, (m, attr, url) => (/^\.\.\/assets\/video\//.test(url) ? m : `${attr}="${esc(rewriteLink(url, path))}"`));
       }
     }
   });

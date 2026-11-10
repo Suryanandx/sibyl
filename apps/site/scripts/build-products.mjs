@@ -59,7 +59,6 @@ function demo(p) {
   return `    <figure class="heroArt wrap demoClip">
       <div class="frame app" style="aspect-ratio: ${d.width} / ${d.height}">
         <video class="lazyVideo" muted loop playsinline preload="none" poster="../assets/video/demo-${p.slug}-poster.webp" width="${d.width}" height="${d.height}" aria-label="${esc(d.alt)}">
-          <source data-src="../assets/video/demo-${p.slug}.webm" type="video/webm" />
           <source data-src="../assets/video/demo-${p.slug}.mp4" type="video/mp4" />
         </video>
       </div>
