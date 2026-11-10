@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="apps/site/">Website</a> ·
+  <a href="https://opensibyl.world">Website</a> ·
   <a href="docs/getting-started.md">Get started</a> ·
   <a href="docs/agents.md">Agents</a> ·
   <a href="docs/voice.md">Voice</a> ·
@@ -37,7 +37,9 @@ Every Sibyl product runs in the same install on your own server. They share one 
 
 A new product joins every week. Sibyl Phone is next; it ships once it has been tested on a real phone line.
 
-![Sibyl answering with a table it researched, with follow-up questions](docs/assets/sibyl-hero.png)
+![Recorded live in Sibyl: a question about smartphone market share; Sibyl searches the web, then answers with a bar chart, a table and its sources](docs/assets/demo-assistant.gif)
+
+<sub>Recorded live from the app; waiting is sped up. More on <a href="https://opensibyl.world">opensibyl.world</a>.</sub>
 
 ## What Sibyl does
 
@@ -61,20 +63,33 @@ A new product joins every week. Sibyl Phone is next; it ships once it has been t
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/assets/screens/agent-computer-chat.png" alt="An agent at work: Research Dot reads a Hacker News thread on its own computer, which runs live in the side panel next to the chat" /><br /><sub>An agent browsing on its own computer, live in the side panel</sub></td>
+    <td width="50%"><img src="docs/assets/screens/agent-computer-chat.png" alt="Research Dot's answer in the chat after using its own computer: a Hacker News story summarised, with its sources" /><br /><sub>An agent's answer after browsing on its own computer</sub></td>
     <td width="50%"><img src="docs/assets/screens/chat-visual-dark.png" alt="A typed question answered with a bar chart of smartphone market share, in dark mode" /><br /><sub>A visual answer with its sources (dark mode)</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/screens/agents.png" alt="The Agents screen with four agents, each with its own avatar, autonomy and access" /><br /><sub>Agents you build, each with its own face and rules</sub></td>
-    <td><img src="docs/assets/screens/meeting.png" alt="A meeting page with the summary, key points, AI insight, the recording and comments" /><br /><sub>A meeting page written by the note-taker</sub></td>
+    <td><img src="docs/assets/screens/agents.png" alt="The Agents screen with an agent, its avatar, autonomy and access, and templates to start from" /><br /><sub>Agents you build, each with its own face and rules</sub></td>
+    <td><img src="docs/assets/screens/meeting.png" alt="A meeting page with the summary, key points, participants, audio playback and comments" /><br /><sub>A meeting page written by the note-taker</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/screens/media-library.png" alt="The Media library with three generated images and a short video" /><br /><sub>Images and video made in chat, kept in Media</sub></td>
+    <td><img src="docs/assets/screens/media-library.png" alt="The Media library with a generated image, filters and the Create button" /><br /><sub>Images and video made in chat, kept in Media</sub></td>
     <td><img src="docs/assets/screens/slides-library.png" alt="The Slides library with a five-slide deck made in chat, with PPTX and PDF downloads" /><br /><sub>A deck made in chat, ready to edit or export</sub></td>
   </tr>
 </table>
 
-![A chart with its sources, in dark mode](docs/assets/sibyl-visual.png)
+### See it working
+
+Each of these was recorded live from the app (waiting is sped up).
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/demo-agents.gif" alt="Research Dot is asked to open Hacker News; its own computer browses, blocks itself from sending data, and it answers with a summary" /><br /><sub>Agents: it uses its own computer and stops before anything risky</sub></td>
+    <td width="50%"><img src="docs/assets/demo-slides.gif" alt="A request for a five-slide deck, the approval card with its estimate, the deck being built, and the finished deck" /><br /><sub>Slides: approve the plan and its price, and the deck builds</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/demo-studio.gif" alt="An image of a ceramic cup made in chat, then shown in the side panel with its prompt, model and cost" /><br /><sub>Studio: an image made in chat, with its cost</sub></td>
+    <td><img src="docs/assets/demo-meet.gif" alt="A meeting with Sibyl as a participant; the transcript fills in and Sibyl answers a question about the action items" /><br /><sub>Meet: Sibyl in the room, taking notes as you talk</sub></td>
+  </tr>
+</table>
 
 ## Quickstart
 

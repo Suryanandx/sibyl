@@ -73,6 +73,16 @@ Teams, agents and the enterprise edition.
 - Model prices are taken from what a typical provider charges, so preset estimates match the bill. Presets show the price per 100 typed messages and per 100 voice turns.
 - Settings → Usage shows the average reply cost.
 
+### Website and design
+
+- [opensibyl.world](https://opensibyl.world): the landing page, a page per product and the docs, served from AWS (private S3 behind CloudFront, HTTPS) and published by GitHub Actions over OIDC. The infrastructure is in Terraform (`deploy/terraform`); a stack for the hosted app is prepared but not applied.
+- Every product page has a short demo recorded live from the app, and the matching docs pages show it as a GIF. The landing page opens with a one-minute film, with captions.
+- One design language across the website and the app: boxed corners (`--radius-tag`, `--radius-ctl`, `--radius-box`, `--radius-panel`), shared motion tokens, and a quick press on every button, off when reduced motion is on.
+
+### Email
+
+- One mailer and one layout for every email Sibyl sends: sign-in and invitations, notifications and budget alerts. HTML and plain text, light and dark, a line saying why the reader got it, and no tracking pixels. Set `SIBYL_SMTP_URL` and `SIBYL_SMTP_FROM`; Amazon SES set-up is in [configuration](docs/configuration.md#email).
+
 ### App
 
 - Every place is a screen with its own address. Back and Forward work, and dialogs are only used for short tasks.

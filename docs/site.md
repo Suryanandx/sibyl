@@ -4,7 +4,7 @@ The public site lives in `apps/site/`. It is plain static HTML, so any static ho
 
 | Path | What it is |
 | --- | --- |
-| `index.html`, `site.css`, `site.js` | The landing page. `site.js` runs the theme toggle, the Products menu and the phone menu, the product index, install tabs, copy buttons and lazy video. |
+| `index.html`, `site.css`, `site.js` | The landing page. `site.js` runs the theme toggle, the Products menu and the phone menu, the product index, install tabs, copy buttons, lazy video, the hero film's sound button, reveal-on-scroll, the printing receipt and the hero's contour shader. |
 | `products/` | One page per product (Assistant, Meet, Slides, Studio, Agents), generated from `scripts/products.mjs` (below). |
 | `docs/` | The docs site, generated from the repo's Markdown (below). `docs.css` and `docs.js` (search, "On this page") are hand-written; the `.html` pages and `search-index.json` are generated. |
 | `assets/` | Font, brand marks, paintings, painted loops, app clips and screenshots (`assets/screens/`). |
@@ -22,7 +22,9 @@ Open <http://localhost:3110> for the landing page, <http://localhost:3110/produc
 
 ## Deploy
 
-Publish the `apps/site` folder as the site root. All paths are relative, so it also works from a sub-path such as `https://<user>.github.io/sibyl/`.
+The site is live at [opensibyl.world](https://opensibyl.world). Every push to `main` that touches `apps/site`, `docs` or the README runs `.github/workflows/site.yml`: it rebuilds the docs, fails if the committed pages are out of date, uploads the folder to a private S3 bucket, refreshes CloudFront and checks the live pages. AWS access is a short-lived role over GitHub OIDC; no keys are stored in GitHub. The bucket, CDN, certificate, DNS records at Hostinger and the deploy role are Terraform in `deploy/terraform/site` (see [its README](../deploy/terraform/README.md)).
+
+Any other static host works too: publish the `apps/site` folder as the site root. All paths are relative, so it also works from a sub-path such as `https://<user>.github.io/sibyl/`.
 
 ## The docs site
 
@@ -100,7 +102,13 @@ Paintings are served as WebP at 960 and 1920 px wide and lazy-loaded.
 
 ## Painted loops
 
-Two paintings move: the hero landscape (clouds and grass) and the curtain room in **Talk or type**. Both were made with `google/veo-3.1-lite` through `POST /api/v1/videos` (image-to-video, 8 s, 1080p, no audio). The painting is used as both the first and the last frame, so the clip loops without a seam. Each cost **$0.40** (as reported by OpenRouter). They are re-encoded to 1280 px VP9 WebM (about 0.6–0.8 MB) with an H.264 MP4 fallback. The poster (the painting itself) shows first. The hero clip starts only after the page has loaded, and every clip plays only while it is on screen.
+Two paintings move: the landscape (clouds and grass), which opened the page before the film and is kept in `assets/video/`, and the curtain room in **Talk or type**. Both were made with `google/veo-3.1-lite` through `POST /api/v1/videos` (image-to-video, 8 s, 1080p, no audio). The painting is used as both the first and the last frame, so the clip loops without a seam. Each cost **$0.40** (as reported by OpenRouter). They are re-encoded to 1280 px VP9 WebM (about 0.6–0.8 MB) with an H.264 MP4 fallback. The poster (the painting itself) shows first. The hero clip starts only after the page has loaded, and every clip plays only while it is on screen.
+
+## The hero film and the product demos
+
+The landing page opens with **Sibyl in one minute** (`assets/video/intro-film.*`): a 16:9 film made from real product screens, with an AI-generated male voiceover (OpenAI `gpt-audio` through OpenRouter) and AI-generated music (`google/lyria-3-pro-preview`). The web copies are 1280 × 720 H.264 MP4 and VP9 WebM (about 2.5 and 2.1 MB) with a WebP poster, and `intro-film.vtt` holds captions made from the script's own timings. It plays muted while it is on screen; **Sound on** restarts it with the voiceover. The caption under it says the voice and music are AI-generated.
+
+Each product page opens with a short demo recorded live from the app (`assets/video/demo-<product>.*`, 960 px MP4 and WebM, 0.2–1.1 MB, with a poster), and the matching docs page shows the same recording as a GIF (`docs/assets/demo-<product>.gif`, 720 px, 10 fps, 0.6–3.4 MB). They were recorded with Playwright `recordVideo` against a local install of the current code, with real OpenRouter models, and waiting is sped up, which the captions say.
 
 ## App clips and screenshots
 
@@ -115,12 +123,16 @@ Screenshots of Skills, Integrations and Models settings are WebP at 1280 × 800.
 
 ### Screenshots of the real app (`assets/screens/`, `docs/assets/screens/`)
 
-Taken on 2026-11-10 from a fresh install of the current code (grouped rail, light mode unless noted) with a temporary data folder and a local test owner, "Alex Morgan". The content was made through the app itself with real OpenRouter models: four agents from the templates (one with a computer, running the `sibyl-computer:1.64.1` image), a knowledge base of six of Sibyl's own docs, chats with a chart, a knowledge answer and an agent browsing Hacker News, three images and a short video in Create mode, a five-slide deck from the Slides engine (Docker), and a routine waiting for approval in the Inbox. The whole run cost **$1.51** on OpenRouter (Settings → Usage), of which $1.08 was the model scout's first catalog check. The meeting screenshots come from the realtime test install of the same day (LiveKit dev server, a fake camera and microphone).
+Most were retaken on 2026-11-10 after the design change to boxed corners, from a local install of the current code with a local test owner. The content was made through the app with real OpenRouter models: chats with a chart and an image, an agent (Research Dot) that used its computer, a five-slide deck from the Slides engine (Docker), and meetings with notes from the realtime layer (LiveKit). A few leftover test chats were hidden in the history while capturing; nothing else on screen was changed. They are 1600 × 1000 (meetings 1440 × 900, the slide editor 1600 × 1218): PNG for the README and docs, WebP for the site.
+
+Six images are from the earlier set: the Inbox with a routine waiting for approval, the knowledge base and the knowledge answer, the meeting room, onboarding and the getting-started checklist.
+
+The earlier set was taken on 2026-11-10 from a fresh install of the current code (grouped rail, light mode unless noted) with a temporary data folder and a local test owner, "Alex Morgan". The content was made through the app itself with real OpenRouter models: four agents from the templates (one with a computer, running the `sibyl-computer:1.64.1` image), a knowledge base of six of Sibyl's own docs, chats with a chart, a knowledge answer and an agent browsing Hacker News, three images and a short video in Create mode, a five-slide deck from the Slides engine (Docker), and a routine waiting for approval in the Inbox. The whole run cost **$1.51** on OpenRouter (Settings → Usage), of which $1.08 was the model scout's first catalog check. The meeting screenshots come from the realtime test install of the same day (LiveKit dev server, a fake camera and microphone).
 
 Captured with headless Chromium (Playwright) at 1440 × 900, device scale 2, then scaled to 1600 px wide: palette PNG for the README and docs (`docs/assets/screens/`, about 1.6 MB for 19 images), WebP for the site (`apps/site/assets/screens/`, about 0.8 MB). Test e-mail addresses are hidden.
 
 ## Page weight
 
-The landing page is about 1.3 MB on first load, counting the hero loop, which starts after the page has loaded. Before that, the first paint needs the HTML, CSS, JS, font and hero poster: about 0.3 MB. Everything else loads as you scroll. A docs page is the HTML (20–60 KB) plus the shared CSS, JS and font; the search index (about 220 KB) loads only when you search.
+The first paint needs the HTML, CSS, JS, font and the film's poster: about 0.1 MB. The film (2.1 MB WebM) starts only after the page has loaded and while it is on screen. Everything else loads as you scroll. A docs page is the HTML (20–60 KB) plus the shared CSS, JS and font; the search index (about 220 KB) loads only when you search.
 
 Total generation cost for the current assets: about **$3.02** ($2.22 paintings, $0.80 loops), plus **$1.51** for the screenshot run. The comparison tests and the replaced photo set add about $0.96.

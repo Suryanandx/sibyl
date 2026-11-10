@@ -140,7 +140,8 @@
 </tr>
 </tbody></table></div>
 <p>A new product joins every week. Sibyl Phone is next; it ships once it has been tested on a real phone line.</p>
-<p><img src="assets/sibyl-hero.png" alt="Sibyl answering with a table it researched, with follow-up questions" loading="lazy" decoding="async"></p>
+<p><img src="assets/demo-assistant.gif" alt="Recorded live in Sibyl: a question about smartphone market share; Sibyl searches the web, then answers with a bar chart, a table and its sources" loading="lazy" decoding="async"></p>
+<p><sub>Recorded live from the app; waiting is sped up. More on <a href="https://opensibyl.world">opensibyl.world</a>.</sub></p>
 <h2 id="what-sibyl-does"><a class="anchor" href="#what-sibyl-does" aria-hidden="true" tabindex="-1">#</a>What Sibyl does</h2>
 <p><strong>Talk or type, in one conversation.</strong> Type and you get a normal chat reply with text and visuals. Turn on the mic for a live voice conversation: a fast <em>voice brain</em> starts answering out loud about 2–3 seconds after you stop talking (<a href="voice.html#measured-latency">measured</a>) and hands careful work to a <em>deep brain</em>. Old chats pick up where they left off. With the optional <a href="realtime.html">LiveKit layer</a> you get WebRTC voice, group calls where people and agents talk together, and phone calls.</p>
 <p><strong>Answers you can see and use.</strong> Replies can include charts, tables, plans, option cards and forms, built with <a href="https://github.com/thesysdev/openui" rel="noopener">OpenUI</a>. Buttons and forms send your choice back to Sibyl.</p>
@@ -153,19 +154,29 @@
 <p><strong>Built for teams.</strong> Workspaces, invitations, roles (owner, admin, member, viewer), two-step sign-in and per-workspace budgets are all free. The enterprise edition, <a href="https://valnoraelric.com" rel="noopener">Agent Serve</a> by valnoraelric.com, adds custom roles, policies, an audit log, SSO and SCIM, advanced usage controls and call recordings.</p>
 <div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
   <tr>
-    <td width="50%"><img src="assets/agent-computer-chat.png" alt="An agent at work: Research Dot reads a Hacker News thread on its own computer, which runs live in the side panel next to the chat" /><br /><sub>An agent browsing on its own computer, live in the side panel</sub></td>
+    <td width="50%"><img src="assets/agent-computer-chat.png" alt="Research Dot's answer in the chat after using its own computer: a Hacker News story summarised, with its sources" /><br /><sub>An agent's answer after browsing on its own computer</sub></td>
     <td width="50%"><img src="assets/chat-visual-dark.png" alt="A typed question answered with a bar chart of smartphone market share, in dark mode" /><br /><sub>A visual answer with its sources (dark mode)</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/agents.png" alt="The Agents screen with four agents, each with its own avatar, autonomy and access" /><br /><sub>Agents you build, each with its own face and rules</sub></td>
-    <td><img src="assets/meeting.png" alt="A meeting page with the summary, key points, AI insight, the recording and comments" /><br /><sub>A meeting page written by the note-taker</sub></td>
+    <td><img src="assets/agents.png" alt="The Agents screen with an agent, its avatar, autonomy and access, and templates to start from" /><br /><sub>Agents you build, each with its own face and rules</sub></td>
+    <td><img src="assets/meeting.png" alt="A meeting page with the summary, key points, participants, audio playback and comments" /><br /><sub>A meeting page written by the note-taker</sub></td>
   </tr>
   <tr>
-    <td><img src="assets/media-library.png" alt="The Media library with three generated images and a short video" /><br /><sub>Images and video made in chat, kept in Media</sub></td>
+    <td><img src="assets/media-library.png" alt="The Media library with a generated image, filters and the Create button" /><br /><sub>Images and video made in chat, kept in Media</sub></td>
     <td><img src="assets/slides-library.png" alt="The Slides library with a five-slide deck made in chat, with PPTX and PDF downloads" /><br /><sub>A deck made in chat, ready to edit or export</sub></td>
   </tr>
-</table></div><p><img src="assets/sibyl-visual.png" alt="A chart with its sources, in dark mode" loading="lazy" decoding="async"></p>
-<h2 id="quickstart"><a class="anchor" href="#quickstart" aria-hidden="true" tabindex="-1">#</a>Quickstart</h2>
+</table></div><h3 id="see-it-working"><a class="anchor" href="#see-it-working" aria-hidden="true" tabindex="-1">#</a>See it working</h3>
+<p>Each of these was recorded live from the app (waiting is sped up).</p>
+<div class="tableWrap" tabindex="0" role="region" aria-label="Table"><table>
+  <tr>
+    <td width="50%"><img src="assets/demo-agents.gif" alt="Research Dot is asked to open Hacker News; its own computer browses, blocks itself from sending data, and it answers with a summary" /><br /><sub>Agents: it uses its own computer and stops before anything risky</sub></td>
+    <td width="50%"><img src="assets/demo-slides.gif" alt="A request for a five-slide deck, the approval card with its estimate, the deck being built, and the finished deck" /><br /><sub>Slides: approve the plan and its price, and the deck builds</sub></td>
+  </tr>
+  <tr>
+    <td><img src="assets/demo-studio.gif" alt="An image of a ceramic cup made in chat, then shown in the side panel with its prompt, model and cost" /><br /><sub>Studio: an image made in chat, with its cost</sub></td>
+    <td><img src="assets/demo-meet.gif" alt="A meeting with Sibyl as a participant; the transcript fills in and Sibyl answers a question about the action items" /><br /><sub>Meet: Sibyl in the room, taking notes as you talk</sub></td>
+  </tr>
+</table></div><h2 id="quickstart"><a class="anchor" href="#quickstart" aria-hidden="true" tabindex="-1">#</a>Quickstart</h2>
 <p>You need Node.js 22.13 or newer and an <a href="https://openrouter.ai/keys" rel="noopener">OpenRouter</a> API key. pnpm comes through corepack, which ships with Node up to version 24 (on Node 25 or newer, run <code>npm install -g corepack</code> first).</p>
 <div class="codeBlock"><span class="codeLang">bash</span><pre><code class="language-bash">git clone https://github.com/Suryanandx/sibyl.git
 cd sibyl
@@ -431,7 +442,7 @@ docker compose up --build</code></pre><button type="button" class="btn btnLine b
       <a class="next" href="getting-started.html"><span>Next</span>Getting started</a>
     </nav>
   </main>
-  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#what-sibyl-does">What Sibyl does</a></li><li class="d2"><a href="#quickstart">Quickstart</a></li><li class="d3"><a href="#with-docker">With Docker</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#models-and-costs">Models and costs</a></li><li class="d2"><a href="#configuration">Configuration</a></li><li class="d2"><a href="#editions">Editions</a></li><li class="d2"><a href="#privacy">Privacy</a></li><li class="d2"><a href="#roadmap">Roadmap</a></li><li class="d2"><a href="#contributing">Contributing</a></li><li class="d2"><a href="#license">License</a></li></ul></aside>
+  <aside class="docsToc" aria-labelledby="toc-title"><p class="tocTitle" id="toc-title">On this page</p><ul><li class="d2"><a href="#what-sibyl-does">What Sibyl does</a></li><li class="d3"><a href="#see-it-working">See it working</a></li><li class="d2"><a href="#quickstart">Quickstart</a></li><li class="d3"><a href="#with-docker">With Docker</a></li><li class="d2"><a href="#how-it-works">How it works</a></li><li class="d2"><a href="#models-and-costs">Models and costs</a></li><li class="d2"><a href="#configuration">Configuration</a></li><li class="d2"><a href="#editions">Editions</a></li><li class="d2"><a href="#privacy">Privacy</a></li><li class="d2"><a href="#roadmap">Roadmap</a></li><li class="d2"><a href="#contributing">Contributing</a></li><li class="d2"><a href="#license">License</a></li></ul></aside>
 </div>
 
   <footer class="footer">
